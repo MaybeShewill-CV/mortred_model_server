@@ -19,7 +19,7 @@
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
 
-namespace jinq {
+namespace mortred {
 namespace common {
 
 class CvUtils {
@@ -449,6 +449,6 @@ static inline cv::Mat stack_multiple_ddpm_images(const std::vector<cv::Mat>& mul
 
 };
 }  // namespace common
-}  // namespace jinq
+}  // namespace mortred
 
 #endif //MORTRED_MODEL_SERVER_CV_UTILS_H

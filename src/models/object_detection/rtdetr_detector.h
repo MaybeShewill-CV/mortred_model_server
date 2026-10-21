@@ -17,12 +17,12 @@
 #include "models/backend/tensor.h"
 #include "models/io/object_detection.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace object_detection {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT> class RtdetrDetector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class RtdetrDetector : public mortred::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     RtdetrDetector();
     ~RtdetrDetector() override = default;
@@ -32,11 +32,11 @@ template <typename INPUT, typename OUTPUT> class RtdetrDetector : public jinq::m
 
   protected:
     // request image -> named input tensors
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
+    std::vector<mortred::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
     // named output tensors + request geometry -> task output
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext &context, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext &context, OUTPUT &output) override;
 
     // model specific keys from [RTDETR.params]
     StatusCode on_init(const toml::table &params) override;
@@ -44,7 +44,7 @@ template <typename INPUT, typename OUTPUT> class RtdetrDetector : public jinq::m
 
 } // namespace object_detection
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "rtdetr_detector.inl"
 

@@ -11,14 +11,14 @@
 #include "models/feature_point/superpoint.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace factory {
 namespace feature_point {
 
-using jinq::models::BaseAiModel;
+using mortred::models::BaseAiModel;
 
-using jinq::models::feature_point::LightGlue;
-using jinq::models::feature_point::SuperPoint;
+using mortred::models::feature_point::LightGlue;
+using mortred::models::feature_point::SuperPoint;
 
 template <typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_superpoint_extractor() {
@@ -30,17 +30,17 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_lightglue_matcher() {
     return std::make_unique<LightGlue<INPUT, OUTPUT>>();
 }
 
-using Output = jinq::models::io_define::feature_point::std_feature_point_output;
-using jinq::server::ImageInput;
-using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
+using Output = mortred::models::io_define::feature_point::std_feature_point_output;
+using mortred::server::ImageInput;
+using Entry = mortred::factory::cv_catalog::CvModelEntry<Output>;
 
 /*** request-overridable SuperPoint parameters. NOTE: nms_radius is a PIXEL
  * distance (not an IoU) - deliberately named differently from the detection
  * family's nms_threshold to keep cross-family key semantics honest */
-inline const std::vector<jinq::models::backend::ParamSpec> &feature_point_param_specs() {
-    static const std::vector<jinq::models::backend::ParamSpec> specs = {
-        jinq::models::backend::ParamSpec::f32("score_threshold").range(0.001, 1.0).desc("interest point confidence threshold"),
-        jinq::models::backend::ParamSpec::i32("nms_radius").range(1, 50).desc("NMS suppression radius in pixels"),
+inline const std::vector<mortred::models::backend::ParamSpec> &feature_point_param_specs() {
+    static const std::vector<mortred::models::backend::ParamSpec> specs = {
+        mortred::models::backend::ParamSpec::f32("score_threshold").range(0.001, 1.0).desc("interest point confidence threshold"),
+        mortred::models::backend::ParamSpec::i32("nms_radius").range(1, 50).desc("NMS suppression radius in pixels"),
     };
     return specs;
 }
@@ -48,15 +48,15 @@ inline const std::vector<jinq::models::backend::ParamSpec> &feature_point_param_
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
         Entry{"superpoint", "SuperPoint feature detection", "SUPERPOINT_FP_SERVER",
-              &create_superpoint_extractor<ImageInput, Output>, &jinq::server::response::fill_feature_points,
+              &create_superpoint_extractor<ImageInput, Output>, &mortred::server::response::fill_feature_points,
               feature_point_param_specs(), "superpoint"},
     };
     return entries;
 }
 
-using MatchInput = jinq::models::io_define::common_io::pair_mat_input;
-using MatchOutput = jinq::models::io_define::feature_point::std_feature_point_match_output;
-using MatchEntry = jinq::factory::model_catalog::ModelCatalogEntry<MatchInput, MatchOutput>;
+using MatchInput = mortred::models::io_define::common_io::pair_mat_input;
+using MatchOutput = mortred::models::io_define::feature_point::std_feature_point_match_output;
+using MatchEntry = mortred::factory::model_catalog::ModelCatalogEntry<MatchInput, MatchOutput>;
 
 inline const std::vector<MatchEntry> &match_catalog() {
     static const std::vector<MatchEntry> entries = {
@@ -67,6 +67,6 @@ inline const std::vector<MatchEntry> &match_catalog() {
 
 } // namespace feature_point
 } // namespace factory
-} // namespace jinq
+} // namespace mortred
 
 #endif

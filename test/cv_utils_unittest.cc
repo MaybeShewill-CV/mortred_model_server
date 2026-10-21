@@ -12,8 +12,8 @@
 #include "common/cv_utils.h"
 #include "models/model_io_define.h"
 
-using jinq::common::CvUtils;
-using jinq::models::io_define::object_detection::bbox;
+using mortred::common::CvUtils;
+using mortred::models::io_define::object_detection::bbox;
 
 TEST(cv_utils, calc_iou) {
     bbox a;

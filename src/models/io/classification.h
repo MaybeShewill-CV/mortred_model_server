@@ -15,7 +15,7 @@
 
 #include <opencv2/core.hpp>
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace io_define {
 namespace classification {
@@ -32,6 +32,6 @@ using std_classification_output = cls_output;
 } // namespace classification
 } // namespace io_define
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_IO_CLASSIFICATION_H

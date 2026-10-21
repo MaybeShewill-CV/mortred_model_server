@@ -15,10 +15,10 @@
 
 #include "models/backend/param_spec.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
 
-using ParamViolation = jinq::models::backend::ParamViolation;
+using ParamViolation = mortred::models::backend::ParamViolation;
 
 /*** Request-level output options of the unified envelope.
  *
@@ -106,6 +106,6 @@ inline std::vector<ParamViolation> parse_output_options(const rapidjson::Value &
 }
 
 } // namespace server
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_SERVER_OUTPUT_OPTIONS_H

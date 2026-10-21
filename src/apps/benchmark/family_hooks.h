@@ -15,21 +15,21 @@
 #include "common/cv_utils.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace apps {
 namespace benchmark {
 
-using ClassificationOutput = jinq::models::io_define::classification::std_classification_output;
-using ObjectOutput = jinq::models::io_define::object_detection::std_object_detection_output;
-using FaceOutput = jinq::models::io_define::object_detection::std_face_detection_output;
-using SegOutput = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
-using OcrOutput = jinq::models::io_define::ocr::std_text_regions_output;
-using MattingOutput = jinq::models::io_define::matting::std_matting_output;
-using EnhancementOutput = jinq::models::io_define::enhancement::std_enhancement_output;
-using FeaturePointOutput = jinq::models::io_define::feature_point::std_feature_point_output;
-using EmbeddingOutput = jinq::models::io_define::feature_embedding::std_feature_embedding_output;
-using DepthOutput = jinq::models::io_define::mono_depth_estimation::std_mde_output;
-using AmgOutput = jinq::models::io_define::segment_anything::std_sam_amg_output;
+using ClassificationOutput = mortred::models::io_define::classification::std_classification_output;
+using ObjectOutput = mortred::models::io_define::object_detection::std_object_detection_output;
+using FaceOutput = mortred::models::io_define::object_detection::std_face_detection_output;
+using SegOutput = mortred::models::io_define::scene_segmentation::std_scene_segmentation_output;
+using OcrOutput = mortred::models::io_define::ocr::std_text_regions_output;
+using MattingOutput = mortred::models::io_define::matting::std_matting_output;
+using EnhancementOutput = mortred::models::io_define::enhancement::std_enhancement_output;
+using FeaturePointOutput = mortred::models::io_define::feature_point::std_feature_point_output;
+using EmbeddingOutput = mortred::models::io_define::feature_embedding::std_feature_embedding_output;
+using DepthOutput = mortred::models::io_define::mono_depth_estimation::std_mde_output;
+using AmgOutput = mortred::models::io_define::segment_anything::std_sam_amg_output;
 
 inline ImageFamilyHooks<ClassificationOutput> classification_hooks() {
     ImageFamilyHooks<ClassificationOutput> hooks;
@@ -56,7 +56,7 @@ inline ImageFamilyHooks<ObjectOutput> object_detection_hooks() {
     hooks.handle_output = [](const cv::Mat &src, const ObjectOutput &out, const std::string &image_path,
                              const std::string &model_id) {
         cv::Mat vis = src.clone();
-        jinq::common::CvUtils::vis_object_detection(vis, out, 80);
+        mortred::common::CvUtils::vis_object_detection(vis, out, 80);
         const std::string output_path = result_image_path(
             "../demo_data/model_test_input/object_detection", image_path, model_id);
         cv::imwrite(output_path, vis);
@@ -72,7 +72,7 @@ inline ImageFamilyHooks<FaceOutput> face_detection_hooks() {
     hooks.handle_output = [](const cv::Mat &src, const FaceOutput &out, const std::string &image_path,
                              const std::string &model_id) {
         cv::Mat vis = src.clone();
-        jinq::common::CvUtils::vis_object_detection(vis, out, 80);
+        mortred::common::CvUtils::vis_object_detection(vis, out, 80);
         const std::string output_path = result_image_path(
             "../demo_data/model_test_input/object_detection", image_path, model_id);
         cv::imwrite(output_path, vis);
@@ -88,7 +88,7 @@ inline ImageFamilyHooks<SegOutput> scene_segmentation_hooks() {
     hooks.handle_output = [](const cv::Mat &, const SegOutput &out, const std::string &image_path,
                              const std::string &model_id) {
         cv::Mat color;
-        jinq::common::CvUtils::colorize_segmentation_mask(out.segmentation_result, color, 80);
+        mortred::common::CvUtils::colorize_segmentation_mask(out.segmentation_result, color, 80);
         const std::string output_path = result_image_path(
             "../demo_data/model_test_input/scene_segmentation", image_path, model_id);
         cv::imwrite(output_path, color);
@@ -104,7 +104,7 @@ inline ImageFamilyHooks<OcrOutput> ocr_hooks() {
     hooks.handle_output = [](const cv::Mat &src, const OcrOutput &out, const std::string &image_path,
                              const std::string &model_id) {
         cv::Mat vis = src.clone();
-        jinq::common::CvUtils::vis_text_detection(vis, out);
+        mortred::common::CvUtils::vis_text_detection(vis, out);
         const std::string output_path = result_image_path("../demo_data/model_test_input/ocr", image_path, model_id);
         cv::imwrite(output_path, vis);
         LOG(INFO) << "detection result image has been written into: " << output_path;
@@ -147,7 +147,7 @@ inline ImageFamilyHooks<FeaturePointOutput> feature_point_hooks() {
     hooks.handle_output = [](const cv::Mat &src, const FeaturePointOutput &out, const std::string &image_path,
                              const std::string &model_id) {
         cv::Mat vis = src.clone();
-        jinq::common::CvUtils::vis_feature_points(vis, out, 4);
+        mortred::common::CvUtils::vis_feature_points(vis, out, 4);
         const std::string output_path =
             result_image_path("../demo_data/model_test_input/feature_point", image_path, model_id);
         cv::imwrite(output_path, vis);
@@ -198,7 +198,7 @@ inline ImageFamilyHooks<AmgOutput> sam_amg_hooks() {
             return;
         }
         const auto counts = static_cast<int>(out.segmentations.size());
-        auto color_pool = jinq::common::CvUtils::generate_color_map(counts + 1);
+        auto color_pool = mortred::common::CvUtils::generate_color_map(counts + 1);
         cv::Mat color_mask = cv::Mat::zeros(out.segmentations[0].size(), CV_8UC3);
         for (size_t idx = 0; idx < out.segmentations.size(); ++idx) {
             const auto &mask = out.segmentations[idx];
@@ -230,6 +230,6 @@ inline ImageFamilyHooks<AmgOutput> sam_amg_hooks() {
 
 } // namespace benchmark
 } // namespace apps
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_APPS_BENCHMARK_FAMILY_HOOKS_H

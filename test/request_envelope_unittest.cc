@@ -14,12 +14,12 @@
 #include "models/backend/param_spec.h"
 #include "server/parsed_request.h"
 
-using jinq::models::backend::ParamSpec;
-using jinq::models::io_define::common_io::byte_source;
-using jinq::server::parse_raw_request;
-using jinq::server::OutputOptions;
-using jinq::server::parse_request_envelope;
-using jinq::common::StatusCode;
+using mortred::models::backend::ParamSpec;
+using mortred::models::io_define::common_io::byte_source;
+using mortred::server::parse_raw_request;
+using mortred::server::OutputOptions;
+using mortred::server::parse_request_envelope;
+using mortred::common::StatusCode;
 
 namespace {
 
@@ -194,7 +194,7 @@ TEST(request_envelope, param_type_range_and_scalar_errors) {
 
 TEST(request_envelope, param_count_over_capacity_reports_params_root) {
     std::string params = "\"params\":{";
-    for (size_t idx = 0; idx <= jinq::models::backend::ParamSet::k_max_params; ++idx) {
+    for (size_t idx = 0; idx <= mortred::models::backend::ParamSet::k_max_params; ++idx) {
         if (idx != 0) {
             params += ",";
         }

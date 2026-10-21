@@ -30,7 +30,7 @@
 #include "common/request_envelope.h"
 #include "common/status_code.h"
 
-namespace jinq {
+namespace mortred {
 namespace common {
 
 struct ResponseItem {
@@ -214,6 +214,6 @@ inline DecodeResult<UnifiedResponse> decode_response(std::string_view body) {
 } // namespace envelope
 
 } // namespace common
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_COMMON_RESPONSE_ENVELOPE_H

@@ -18,12 +18,12 @@
 #include "common/file_path_util.h"
 #include "common/time_stamp.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 
-using jinq::common::StatusCode;
-using jinq::common::FilePathUtil;
-using jinq::common::Timestamp;
+using mortred::common::StatusCode;
+using mortred::common::FilePathUtil;
+using mortred::common::Timestamp;
 
 namespace clip {
 

@@ -19,15 +19,15 @@
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace segment_anything {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /***
  * FastSAM segmentation model: image -> everything mask.
  */
-template <typename INPUT, typename OUTPUT> class FastSamSegmentor : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class FastSamSegmentor : public mortred::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     FastSamSegmentor();
     ~FastSamSegmentor() override = default;
@@ -36,14 +36,14 @@ template <typename INPUT, typename OUTPUT> class FastSamSegmentor : public jinq:
     FastSamSegmentor &operator=(const FastSamSegmentor &transformer) = delete;
 
   private:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
+    std::vector<mortred::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode on_init(const toml::table &params) override;
 
-    const jinq::models::backend::NamedTensor *find_output(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+    const mortred::models::backend::NamedTensor *find_output(const std::vector<mortred::models::backend::NamedTensor> &outputs,
                                                           const std::string &name) const;
 
     cv::Mat upscale_mask_image(const cv::Mat &mask, const cv::Size &source_size) const;
@@ -60,7 +60,7 @@ template <typename INPUT, typename OUTPUT> class FastSamSegmentor : public jinq:
 
 } // namespace segment_anything
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "fast_sam_segmentor.inl"
 

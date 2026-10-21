@@ -5,7 +5,7 @@ Run from project root: python3 scripts/register_gpu_preprocess.py
 import re, os, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NS = "jinq::models::backend"
+NS = "mortred::models::backend"
 
 # descriptor template
 def desc(resize, norm, color, dtype="F32", nhwc="false", pad="114", extra=""):

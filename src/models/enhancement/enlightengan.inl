@@ -19,14 +19,14 @@
 #include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace enhancement {
 
-using jinq::common::CvUtils;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
-using jinq::models::io_define::enhancement::std_enhancement_output;
+using mortred::common::CvUtils;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
+using mortred::models::io_define::enhancement::std_enhancement_output;
 
 namespace {
 
@@ -88,9 +88,9 @@ template <typename INPUT, typename OUTPUT> StatusCode EnlightenGan<INPUT, OUTPUT
     // output H/W is ceil(src/16)*16; empty decode hint keeps JPEG reduce off
     this->set_image_decode_hint(cv::Size(), 1.0f);
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE,
         .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f, 0.5f, 0.5f}, .std = {0.5f, 0.5f, 0.5f}},
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .output_dtype = input_src_info->dtype,
         .output_nhwc = false,
@@ -143,7 +143,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> EnlightenGan
     std::vector<NamedTensor> tensors;
     NamedTensor input_src;
     input_src.name = "input_src";
-    input_src.tensor = jinq::models::backend::Tensor::make<float>({1, 3, network_size.height, network_size.width});
+    input_src.tensor = mortred::models::backend::Tensor::make<float>({1, 3, network_size.height, network_size.width});
     const auto input_src_chw_data = CvUtils::convert_to_chw_vec(output_src);
     if (input_src_chw_data.size() * sizeof(float) != input_src.tensor.byte_size()) {
         LOG(ERROR) << "preprocessed enlighten gan src tensor size mismatch";
@@ -153,13 +153,13 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> EnlightenGan
 
     NamedTensor input_gray;
     input_gray.name = "input_gray";
-    input_gray.tensor = jinq::models::backend::Tensor::make<float>({1, 1, network_size.height, network_size.width});
+    input_gray.tensor = mortred::models::backend::Tensor::make<float>({1, 1, network_size.height, network_size.width});
     if (!copy_mat_to_buffer(output_gray, input_gray.tensor.buffer)) {
         LOG(ERROR) << "preprocessed enlighten gan gray tensor size mismatch";
         return {};
     }
-    jinq::models::backend::DType src_dtype = jinq::models::backend::DType::F32;
-    jinq::models::backend::DType gray_dtype = jinq::models::backend::DType::F32;
+    mortred::models::backend::DType src_dtype = mortred::models::backend::DType::F32;
+    mortred::models::backend::DType gray_dtype = mortred::models::backend::DType::F32;
     // dtype adaptation reads the engine's expected input dtypes; before init()
     // there is no engine and F32 is the correct default (contract tests drive
     // preprocess on a default-constructed model)
@@ -172,8 +172,8 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> EnlightenGan
             }
         }
     }
-    auto src_cast = jinq::models::backend::named_tensor_as(std::move(input_src), src_dtype);
-    auto gray_cast = jinq::models::backend::named_tensor_as(std::move(input_gray), gray_dtype);
+    auto src_cast = mortred::models::backend::named_tensor_as(std::move(input_src), src_dtype);
+    auto gray_cast = mortred::models::backend::named_tensor_as(std::move(input_gray), gray_dtype);
     if (!src_cast.ok() || !gray_cast.ok()) {
         LOG(ERROR) << (src_cast.ok() ? gray_cast.error : src_cast.error);
         return {};
@@ -185,12 +185,12 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> EnlightenGan
 
 template <typename INPUT, typename OUTPUT>
 StatusCode EnlightenGan<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                    const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                    const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "enlighten gan output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto source_status = jinq::models::backend::validated_source_size(context, "enlighten gan");
+    const auto source_status = mortred::models::backend::validated_source_size(context, "enlighten gan");
     if (source_status != StatusCode::OK) {
         return source_status;
     }
@@ -201,10 +201,10 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
         LOG(ERROR) << "enlighten gan network size unresolved: " << network_size;
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
-    jinq::models::backend::F32OutputView output_view;
-    const auto output_status = jinq::models::backend::validated_f32_first_output(
-        outputs, {jinq::models::backend::DType::F32, 4, {1, 3, network_size.height, network_size.width},
-                  jinq::models::backend::TensorLayout::Nchw}, "enlighten gan",
+    mortred::models::backend::F32OutputView output_view;
+    const auto output_status = mortred::models::backend::validated_f32_first_output(
+        outputs, {mortred::models::backend::DType::F32, 4, {1, 3, network_size.height, network_size.width},
+                  mortred::models::backend::TensorLayout::Nchw}, "enlighten gan",
         &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
@@ -249,8 +249,8 @@ StatusCode EnlightenGan<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
 }
 
 template <typename INPUT, typename OUTPUT>
-EnlightenGan<INPUT, OUTPUT>::EnlightenGan() : jinq::models::BackendCvModel<INPUT, OUTPUT>("ENLIGHTENGAN") {}
+EnlightenGan<INPUT, OUTPUT>::EnlightenGan() : mortred::models::BackendCvModel<INPUT, OUTPUT>("ENLIGHTENGAN") {}
 
 } // namespace enhancement
 } // namespace models
-} // namespace jinq
+} // namespace mortred

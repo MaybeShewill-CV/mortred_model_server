@@ -17,7 +17,7 @@
 #include <cstdlib>
 #include <string>
 
-namespace jinq {
+namespace mortred {
 namespace server {
 
 enum class ContentTypeKind { Json, RawBody, Unsupported };
@@ -94,6 +94,6 @@ inline bool queue_would_overflow(size_t waiting_jobs, size_t n_items, int max_qu
 }
 
 }  // namespace server
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_SERVER_REQUEST_ADMISSION_H

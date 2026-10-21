@@ -17,17 +17,17 @@
 #include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace scene_segmentation {
 
-using SegmentationOutput = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using SegmentationOutput = mortred::models::io_define::scene_segmentation::std_scene_segmentation_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode BiseNetV2<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto input_info =
-        jinq::models::backend::SessionIoValidator(this->session()).input().f32().allow_fp16().rank(4).nhwc().channels(3).static_shape().validate();
+        mortred::models::backend::SessionIoValidator(this->session()).input().f32().allow_fp16().rank(4).nhwc().channels(3).static_shape().validate();
     if (!input_info.ok()) {
         LOG(ERROR) << "unexpected bisenetv2 input shape: " << input_info.error << ", expected static [N,H,W,3] (nhwc)";
         return StatusCode::MODEL_INIT_FAILED;
@@ -38,11 +38,11 @@ template <typename INPUT, typename OUTPUT> StatusCode BiseNetV2<INPUT, OUTPUT>::
         LOG(ERROR) << "invalid bisenetv2 input tensor size: " << input_info.error;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "bisenetv2"));
+    this->set_image_decode_hint(_m_input_size_host, mortred::models::cv_input::parse_image_decode_upscale(params, "bisenetv2"));
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
         .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f, 0.5f, 0.5f}, .std = {0.5f, 0.5f, 0.5f}},
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .output_dtype = input_info.value.dtype,
         .output_nhwc = true,
@@ -65,7 +65,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> BiseNetV2<IN
     cv::subtract(tmp, cv::Scalar(0.5, 0.5, 0.5), tmp);
     cv::divide(tmp, cv::Scalar(0.5, 0.5, 0.5), tmp);
 
-    auto result = jinq::models::backend::ImagePipeline(tmp).nhwc(this->session().inputs().front());
+    auto result = mortred::models::backend::ImagePipeline(tmp).nhwc(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};
@@ -75,25 +75,25 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> BiseNetV2<IN
 
 template <typename INPUT, typename OUTPUT>
 StatusCode BiseNetV2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                 const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                 const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "bisenetv2 output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto source_status = jinq::models::backend::validated_source_size(context, "bisenetv2");
+    const auto source_status = mortred::models::backend::validated_source_size(context, "bisenetv2");
     if (source_status != StatusCode::OK) {
         return source_status;
     }
-    jinq::models::backend::F32OutputView output_view;
+    mortred::models::backend::F32OutputView output_view;
     const auto height = context.network_size.height;
     const auto width = context.network_size.width;
     const bool nchw = outputs.front().tensor.shape.size() == 4;
-    const auto output_status = jinq::models::backend::validated_f32_first_output(
+    const auto output_status = mortred::models::backend::validated_f32_first_output(
         outputs,
-        nchw ? jinq::models::backend::TensorContract{jinq::models::backend::DType::F32, 4,
+        nchw ? mortred::models::backend::TensorContract{mortred::models::backend::DType::F32, 4,
                                                      {1, -1, height, width},
-                                                     jinq::models::backend::TensorLayout::Nchw}
-             : jinq::models::backend::TensorContract{jinq::models::backend::DType::F32, 3,
+                                                     mortred::models::backend::TensorLayout::Nchw}
+             : mortred::models::backend::TensorContract{mortred::models::backend::DType::F32, 3,
                                                       {height, width, -1}},
         "bisenetv2", &output_view);
     if (output_status != StatusCode::OK) {
@@ -132,8 +132,8 @@ StatusCode BiseNetV2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> 
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-BiseNetV2<INPUT, OUTPUT>::BiseNetV2() : jinq::models::BackendCvModel<INPUT, OUTPUT>("BISENETV2") {}
+BiseNetV2<INPUT, OUTPUT>::BiseNetV2() : mortred::models::BackendCvModel<INPUT, OUTPUT>("BISENETV2") {}
 
 } // namespace scene_segmentation
 } // namespace models
-} // namespace jinq
+} // namespace mortred

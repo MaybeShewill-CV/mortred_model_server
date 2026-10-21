@@ -18,9 +18,9 @@
 
 #include "common/status_code.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 class BaseAiServer {
 public:
     /***

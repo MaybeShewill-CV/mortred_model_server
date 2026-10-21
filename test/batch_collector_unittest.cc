@@ -26,14 +26,14 @@
 #include "server/sync_request_graph.h"
 #include "server/worker_pool.h"
 
-using jinq::common::StatusCode;
-using jinq::models::io_define::common_io::base64_input;
-using jinq::models::io_define::common_io::byte_source;
-using jinq::server::BatchCollector;
-using jinq::server::BatchRequestState;
-using jinq::server::PrometheusMetrics;
-using jinq::server::WorkerPool;
-using jinq::server::assemble_batch_slots;
+using mortred::common::StatusCode;
+using mortred::models::io_define::common_io::base64_input;
+using mortred::models::io_define::common_io::byte_source;
+using mortred::server::BatchCollector;
+using mortred::server::BatchRequestState;
+using mortred::server::PrometheusMetrics;
+using mortred::server::WorkerPool;
+using mortred::server::assemble_batch_slots;
 
 namespace {
 

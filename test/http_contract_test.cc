@@ -12,8 +12,8 @@
 #include "common/status_code.h"
 #include "server/http_status.h"
 
-using jinq::common::StatusCode;
-using jinq::server::http_status_of;
+using mortred::common::StatusCode;
+using mortred::server::http_status_of;
 
 TEST(http_contract, success_maps_to_200) { EXPECT_EQ(http_status_of(StatusCode::OK), 200); }
 
@@ -45,11 +45,11 @@ TEST(http_contract, server_errors_map_to_5xx) {
 }
 
 TEST(http_contract, process_level_status_uses_unified_envelope) {
-    jinq::common::UnifiedResponse resp;
+    mortred::common::UnifiedResponse resp;
     resp.task_id = "abc";
-    resp.status = jinq::common::to_underlying(StatusCode::UNAUTHORIZED);
-    resp.status_str = jinq::common::status_code_to_str(StatusCode::UNAUTHORIZED);
-    const auto body = jinq::common::envelope::encode(resp);
+    resp.status = mortred::common::to_underlying(StatusCode::UNAUTHORIZED);
+    resp.status_str = mortred::common::status_code_to_str(StatusCode::UNAUTHORIZED);
+    const auto body = mortred::common::envelope::encode(resp);
     EXPECT_NE(body.find("\"status\":401"), std::string::npos);
     EXPECT_NE(body.find("\"status_str\":\"unauthorized\""), std::string::npos);
     EXPECT_NE(body.find("\"task_id\":\"abc\""), std::string::npos);
@@ -60,7 +60,7 @@ TEST(http_contract, process_level_status_uses_unified_envelope) {
 }
 
 TEST(http_contract, unified_response_body_contains_envelope) {
-    jinq::common::UnifiedResponse resp;
+    mortred::common::UnifiedResponse resp;
     resp.task_id = "trace-1";
     resp.status = 0;
     resp.status_str = "OK";
@@ -69,17 +69,17 @@ TEST(http_contract, unified_response_body_contains_envelope) {
     resp.server_time_ms = 41.25;
     resp.partial = false;
 
-    jinq::common::ResponseItem ok_item;
+    mortred::common::ResponseItem ok_item;
     ok_item.status = 0;
     ok_item.data.SetObject();
     ok_item.data.AddMember("boxes", 3, ok_item.data.GetAllocator());
     resp.results.push_back(std::move(ok_item));
 
-    jinq::common::ResponseItem failed_item;
-    failed_item.status = jinq::common::to_underlying(StatusCode::MODEL_EMPTY_INPUT_IMAGE);
+    mortred::common::ResponseItem failed_item;
+    failed_item.status = mortred::common::to_underlying(StatusCode::MODEL_EMPTY_INPUT_IMAGE);
     resp.results.push_back(std::move(failed_item));
 
-    const auto body = jinq::common::envelope::encode(resp);
+    const auto body = mortred::common::envelope::encode(resp);
     EXPECT_NE(body.find("\"status\":0"), std::string::npos);
     EXPECT_NE(body.find("\"status_str\":\"OK\""), std::string::npos);
     EXPECT_NE(body.find("\"task_id\":\"trace-1\""), std::string::npos);

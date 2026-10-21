@@ -27,17 +27,17 @@
 #include "models/io/common_input.h"
 #include "server/output_options.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
 
-using jinq::models::backend::ParamSet;
-using jinq::models::backend::ParamSpec;
-using jinq::models::backend::ParamValue;
-using jinq::models::backend::ParamViolation;
-using jinq::models::io_define::common_io::byte_source;
-using jinq::common::StatusCode;
-using jinq::common::envelope::DecodeResult;
-using jinq::common::envelope::Request;
+using mortred::models::backend::ParamSet;
+using mortred::models::backend::ParamSpec;
+using mortred::models::backend::ParamValue;
+using mortred::models::backend::ParamViolation;
+using mortred::models::io_define::common_io::byte_source;
+using mortred::common::StatusCode;
+using mortred::common::envelope::DecodeResult;
+using mortred::common::envelope::Request;
 
 struct ParsedRequest {
     std::string req_id;
@@ -91,7 +91,7 @@ inline void bind_params(const rapidjson::Value &params, const std::vector<ParamS
         candidates.emplace_back(key, std::move(value));
     }
     ParamSet validated;
-    const auto param_violations = jinq::models::backend::validate_params(specs, candidates, &validated);
+    const auto param_violations = mortred::models::backend::validate_params(specs, candidates, &validated);
     for (const auto &violation : param_violations) {
         request->violations.push_back(
             {violation.pointer == "/" ? "/params" : "/params" + violation.pointer, violation.message});
@@ -130,7 +130,7 @@ inline ParsedRequest bind_parsed_request(DecodeResult<Request> decoded,
     for (size_t image_idx = 0; image_idx < decoded.value.images.size(); ++image_idx) {
         auto &image = decoded.value.images[image_idx];
         byte_source item;
-        item.data = jinq::common::base64::decode(image);
+        item.data = mortred::common::base64::decode(image);
         if (item.data.empty()) {
             request.violations.push_back(
                 {"/images/" + std::to_string(image_idx), "image is not valid base64-encoded data"});
@@ -179,7 +179,7 @@ inline void apply_raw_headers(const std::string &params_header, const std::strin
 
 /*** JSON encoding: decode the wire envelope, then bind ParamSpec / options. */
 inline ParsedRequest parse_request_envelope(const std::string &body, const std::vector<ParamSpec> &specs) {
-    return detail::bind_parsed_request(jinq::common::envelope::decode_request(body), specs);
+    return detail::bind_parsed_request(mortred::common::envelope::decode_request(body), specs);
 }
 
 /*** Raw-body encoding of the SAME envelope: Content-Type image-anything (or
@@ -213,6 +213,6 @@ inline ParsedRequest parse_raw_request(std::string body, const std::string &req_
 }
 
 } // namespace server
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_SERVER_PARSED_REQUEST_H

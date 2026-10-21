@@ -29,9 +29,9 @@ void print_usage(const char *exe) {
 } // namespace
 
 int main(int argc, char **argv) {
-    jinq::apps::ModelCli cli;
+    mortred::apps::ModelCli cli;
     std::string err;
-    if (!jinq::apps::parse_model_cli(argc, argv, &cli, &err)) {
+    if (!mortred::apps::parse_model_cli(argc, argv, &cli, &err)) {
         std::fprintf(stderr, "%s\n", err.c_str());
         print_usage(argv[0]);
         return -1;
@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
         return 0;
     }
     if (cli.list) {
-        jinq::apps::ProductIndex::print_list(stdout);
+        mortred::apps::ProductIndex::print_list(stdout);
         return 0;
     }
     if (cli.model.empty() || cli.rest_argc() < 2) {
@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
     FLAGS_alsologtostderr = true;
     FLAGS_colorlogtostderr = true;
 
-    const auto *entry = jinq::apps::ProductIndex::find(cli.model);
+    const auto *entry = mortred::apps::ProductIndex::find(cli.model);
     if (entry == nullptr) {
         LOG(ERROR) << "unknown --model '" << cli.model << "' (see --list)";
         return -1;

@@ -15,17 +15,17 @@
 #include "models/backend/model_runtime.h"
 #include <opencv2/opencv.hpp>
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace feature_embedding {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
-using FeatureEmbeddingOutput = jinq::models::io_define::feature_embedding::std_feature_embedding_output;
-using jinq::models::backend::NamedTensor;
+using FeatureEmbeddingOutput = mortred::models::io_define::feature_embedding::std_feature_embedding_output;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode Dinov2<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto input_info =
-        jinq::models::backend::SessionIoValidator(this->session()).input().f32().allow_fp16().rank(4).nchw().channels(3).static_shape().validate();
+        mortred::models::backend::SessionIoValidator(this->session()).input().f32().allow_fp16().rank(4).nchw().channels(3).static_shape().validate();
     if (!input_info.ok()) {
         LOG(ERROR) << "unexpected feature embedding input shape: " << input_info.error << ", expected static [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
@@ -54,12 +54,12 @@ template <typename INPUT, typename OUTPUT> StatusCode Dinov2<INPUT, OUTPUT>::on_
         }
         _m_default_pooling = value;
     }
-    this->set_image_decode_hint(_m_input_tensor_size, jinq::models::cv_input::parse_image_decode_upscale(params, "dinov2"));
+    this->set_image_decode_hint(_m_input_tensor_size, mortred::models::cv_input::parse_image_decode_upscale(params, "dinov2"));
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
         // CPU chain converts to RGB first (bgr_to_rgb before subtract)
-        .norm = jinq::models::backend::rgb_norm(1.0f / 255.0f, {0.48145466f, 0.4578275f, 0.40821073f}, {0.26862954f, 0.26130258f, 0.27577711f}),
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .norm = mortred::models::backend::rgb_norm(1.0f / 255.0f, {0.48145466f, 0.4578275f, 0.40821073f}, {0.26862954f, 0.26130258f, 0.27577711f}),
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .output_dtype = input_info.value.dtype,
         .output_nhwc = false,
@@ -70,7 +70,7 @@ template <typename INPUT, typename OUTPUT> StatusCode Dinov2<INPUT, OUTPUT>::on_
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> Dinov2<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // rgb -> resize -> [0,1] -> clip mean/std, emitted as f32 nchw
-    auto result = jinq::models::backend::ImagePipeline(input_image)
+    auto result = mortred::models::backend::ImagePipeline(input_image)
                       .bgr_to_rgb()
                       .resize(_m_input_tensor_size)
                       .to_float()
@@ -87,13 +87,13 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> Dinov2<INPUT
 
 template <typename INPUT, typename OUTPUT>
 StatusCode Dinov2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                              const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                              const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "feature embedding model output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto output_rank = outputs.front().tensor.shape.size();
-    auto output_view = jinq::models::backend::OutputReader(outputs, outputs.front().name)
+    auto output_view = mortred::models::backend::OutputReader(outputs, outputs.front().name)
                            .f32()
                            .shape(output_rank == 1 ? std::vector<int64_t>{-1}
                                    : output_rank == 3 ? std::vector<int64_t>{1, -1, -1}
@@ -111,7 +111,7 @@ StatusCode Dinov2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &ou
     const int64_t dim = output_rank == 3 ? tensor.shape[2] : tensor.element_count();
     const int64_t token_count = output_rank == 3 ? tensor.shape[1] : 1;
     if (dim <= 0 || token_count <= 0) {
-        LOG(ERROR) << "invalid feature embedding output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
+        LOG(ERROR) << "invalid feature embedding output shape: " << mortred::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
 
@@ -157,8 +157,8 @@ StatusCode Dinov2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &ou
 
 /************* Export Function Sets *************/
 
-template <typename INPUT, typename OUTPUT> Dinov2<INPUT, OUTPUT>::Dinov2() : jinq::models::BackendCvModel<INPUT, OUTPUT>("DINOV2") {}
+template <typename INPUT, typename OUTPUT> Dinov2<INPUT, OUTPUT>::Dinov2() : mortred::models::BackendCvModel<INPUT, OUTPUT>("DINOV2") {}
 
 } // namespace feature_embedding
 } // namespace models
-} // namespace jinq
+} // namespace mortred

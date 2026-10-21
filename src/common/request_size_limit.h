@@ -11,7 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace jinq {
+namespace mortred {
 namespace common {
 
 /***
@@ -21,6 +21,6 @@ namespace common {
 inline constexpr size_t k_default_request_size_limit_mb = 64;
 
 }  // namespace common
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_COMMON_REQUEST_SIZE_LIMIT_H

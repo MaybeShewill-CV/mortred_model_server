@@ -641,7 +641,7 @@ void SupervisorApp::process(WFHttpTask* task) {
     // boot badge); the rest of the management API requires the supervisor
     // bearer token
     if (is_api && path != "/api/v1/health" && path != "/api/v1/version" &&
-        !jinq::common::is_bearer_authorized(
+        !mortred::common::is_bearer_authorized(
             header_value(task->get_req(), "Authorization"), auth_token_)) {
         task->get_resp()->add_header_pair("WWW-Authenticate", "Bearer realm=\"Mortred\"");
         reply_json(task, 401, json_error("unauthorized"));
@@ -770,12 +770,12 @@ bool SupervisorApp::init(const SupervisorInitOptions& options) {
                      "Generate with: mortredctl init-trust\n");
         return false;
     }
-    if (!jinq::common::listen_host_permitted(cfg_.supervisor.api_host)) {
+    if (!mortred::common::listen_host_permitted(cfg_.supervisor.api_host)) {
         std::fprintf(stderr,
                      "mortred-supervisor: refusing to listen on %s (MORTRED_EXPOSE=%s). "
                      "Bind 127.0.0.1; containers: MORTRED_EXPOSE=docker\n",
                      cfg_.supervisor.api_host.c_str(),
-                     jinq::common::mortred_expose_mode().c_str());
+                     mortred::common::mortred_expose_mode().c_str());
         return false;
     }
 
@@ -864,7 +864,7 @@ bool SupervisorApp::init(const SupervisorInitOptions& options) {
 bool SupervisorApp::listen() {
     WFServerParams params = SERVER_PARAMS_DEFAULT;
     params.request_size_limit =
-        jinq::common::k_default_request_size_limit_mb * 1024 * 1024;
+        mortred::common::k_default_request_size_limit_mb * 1024 * 1024;
     server_ = std::make_unique<WFHttpServer>(
         &params, [this](WFHttpTask* task) { process(task); });
     if (server_->start(cfg_.supervisor.api_host.c_str(),
@@ -992,7 +992,7 @@ int SupervisorApp::run() {
                  "mortred-supervisor listening on http://%s:%d (managed servers: %zu, auth enabled, "
                  "expose=%s)\n",
                  cfg_.supervisor.api_host.c_str(), cfg_.supervisor.api_port,
-                 catalog_.entries().size(), jinq::common::mortred_expose_mode().c_str());
+                 catalog_.entries().size(), mortred::common::mortred_expose_mode().c_str());
 
     supervisor_->autostart_all();
 

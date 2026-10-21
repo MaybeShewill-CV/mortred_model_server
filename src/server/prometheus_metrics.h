@@ -23,7 +23,7 @@
 
 #include "common/status_code.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
 
 class PrometheusMetrics {
@@ -97,7 +97,7 @@ class PrometheusMetrics {
     void inc_inference_requests(int status) {
         std::lock_guard<std::mutex> lock(mutex_);
         inference_requests_[std::to_string(status)]++;
-        if (status == jinq::common::to_underlying(jinq::common::StatusCode::MODEL_OUTPUT_CONTRACT_FAILED)) {
+        if (status == mortred::common::to_underlying(mortred::common::StatusCode::MODEL_OUTPUT_CONTRACT_FAILED)) {
             model_output_contract_failures_++;
         }
     }
@@ -399,6 +399,6 @@ class PrometheusMetrics {
 };
 
 } // namespace server
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_SERVER_PROMETHEUS_METRICS_H

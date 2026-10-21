@@ -21,19 +21,19 @@
 #include "common/file_path_util.h"
 #include "models/diffusion/ddpm_unet.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 
-using jinq::common::CvUtils;
-using jinq::common::FilePathUtil;
-using jinq::common::StatusCode;
+using mortred::common::CvUtils;
+using mortred::common::FilePathUtil;
+using mortred::common::StatusCode;
 
 namespace diffusion {
 
-using jinq::models::io_define::diffusion::std_ddpm_input;
-using jinq::models::io_define::diffusion::std_ddpm_output;
-using jinq::models::io_define::diffusion::std_ddpm_unet_input;
-using jinq::models::io_define::diffusion::std_ddpm_unet_output;
+using mortred::models::io_define::diffusion::std_ddpm_input;
+using mortred::models::io_define::diffusion::std_ddpm_output;
+using mortred::models::io_define::diffusion::std_ddpm_unet_input;
+using mortred::models::io_define::diffusion::std_ddpm_unet_output;
 using DenoiseModel = DDPMSamplerDenoiseModel;
 
 namespace ddpm_sampler_impl {
@@ -602,4 +602,4 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& outp
 
 } // namespace diffusion
 } // namespace models
-} // namespace jinq
+} // namespace mortred

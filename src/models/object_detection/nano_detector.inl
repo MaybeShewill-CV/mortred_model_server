@@ -15,13 +15,13 @@
 #include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace object_detection {
 
-using DetectionOutput = jinq::models::io_define::object_detection::std_object_detection_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using DetectionOutput = mortred::models::io_define::object_detection::std_object_detection_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode NanoDetector<INPUT, OUTPUT>::on_init(const toml::table &params) {
     _m_detection_params.score_threshold = 0.4f;
@@ -55,12 +55,12 @@ template <typename INPUT, typename OUTPUT> StatusCode NanoDetector<INPUT, OUTPUT
     }
     this->set_image_decode_hint(_m_input_size_host, parse_image_decode_upscale(params, "nanodet"));
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
         // CPU chain stays BGR: register the chain arrays verbatim and let
         // bgr_norm do the reversal (the literal once shipped them verbatim,
         // swapping B/R means on the GPU decode path)
-        .norm = jinq::models::backend::bgr_norm(1.0f / 255.0f, {0.406f, 0.456f, 0.485f}, {0.225f, 0.224f, 0.229f}),
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::BGR,
+        .norm = mortred::models::backend::bgr_norm(1.0f / 255.0f, {0.406f, 0.456f, 0.485f}, {0.225f, 0.224f, 0.229f}),
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::BGR,
         .pad_value = 114,
         .output_dtype = input_info.dtype,
         .output_nhwc = false,
@@ -71,7 +71,7 @@ template <typename INPUT, typename OUTPUT> StatusCode NanoDetector<INPUT, OUTPUT
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> NanoDetector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // resize / colour / normalize, emitted as f32 nchw
-    auto result = jinq::models::backend::ImagePipeline(input_image)
+    auto result = mortred::models::backend::ImagePipeline(input_image)
                       .resize(_m_input_size_host)
                       .to_float()
                       .scale(1.0f / 255.0f)
@@ -87,12 +87,12 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> NanoDetector
 
 template <typename INPUT, typename OUTPUT>
 StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                    const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                    const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     const int num_points = static_cast<int>(_m_center_priors.size());
     const int num_channels = _m_detection_params.class_nums + (_m_reg_max + 1) * 4;
     F32OutputView output_view;
     const auto output_status = backend::validated_f32_named_output(
-        outputs, "output", {jinq::models::backend::DType::F32, 3, {1, num_points, num_channels}}, "nanodet", &output_view);
+        outputs, "output", {mortred::models::backend::DType::F32, 3, {1, num_points, num_channels}}, "nanodet", &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
     }
@@ -122,7 +122,7 @@ StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
         if (score > decode_threshold) {
             const float *bbox_pred = tensor_preds_host + idx * num_channels + _m_detection_params.class_nums;
             const auto obj_box_coords = refine_bbox_coords(bbox_pred, ct_x, ct_y, stride, context, geometry_scale);
-            jinq::models::io_define::object_detection::bbox obj_box;
+            mortred::models::io_define::object_detection::bbox obj_box;
             obj_box.score = score;
             obj_box.class_id = cur_label;
             obj_box.bbox = cv::Rect2f(obj_box_coords[0], obj_box_coords[1], obj_box_coords[2], obj_box_coords[3]);
@@ -137,7 +137,7 @@ StatusCode NanoDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTenso
 
 template <typename INPUT, typename OUTPUT>
 std::vector<float> NanoDetector<INPUT, OUTPUT>::refine_bbox_coords(const float *preds, int x, int y, int stride,
-                                                                   const jinq::models::backend::InferenceContext &context,
+                                                                   const mortred::models::backend::InferenceContext &context,
                                                                    const GeometryScale &geometry_scale) const {
     const auto ct_x = static_cast<float>(x * stride);
     const auto ct_y = static_cast<float>(y * stride);
@@ -209,8 +209,8 @@ void NanoDetector<INPUT, OUTPUT>::activation_function_softmax(const float *src, 
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-NanoDetector<INPUT, OUTPUT>::NanoDetector() : jinq::models::BackendCvModel<INPUT, OUTPUT>("NanoDet") {}
+NanoDetector<INPUT, OUTPUT>::NanoDetector() : mortred::models::BackendCvModel<INPUT, OUTPUT>("NanoDet") {}
 
 } // namespace object_detection
 } // namespace models
-} // namespace jinq
+} // namespace mortred

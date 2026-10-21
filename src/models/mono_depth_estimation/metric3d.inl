@@ -18,13 +18,13 @@
 #include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace mono_depth_estimation {
 
-using MdeOutput = jinq::models::io_define::mono_depth_estimation::std_mde_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using MdeOutput = mortred::models::io_define::mono_depth_estimation::std_mde_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode Metric3D<INPUT, OUTPUT>::on_init(const toml::table &params) {
     if (params.contains("focal_length")) {
@@ -48,12 +48,12 @@ template <typename INPUT, typename OUTPUT> StatusCode Metric3D<INPUT, OUTPUT>::o
     }
     _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
     _m_input_size_host.width = static_cast<int>(input_info.shape[3]);
-    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "metric3d"));
+    this->set_image_decode_hint(_m_input_size_host, mortred::models::cv_input::parse_image_decode_upscale(params, "metric3d"));
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::KEEP_RATIO_PAD_CENTER,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::KEEP_RATIO_PAD_CENTER,
         // CPU chain converts to RGB first (cvtColor before subtract)
-        .norm = jinq::models::backend::rgb_norm(1.0f, {123.675f, 116.28f, 103.53f}, {58.395f, 57.12f, 57.375f}),
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .norm = mortred::models::backend::rgb_norm(1.0f, {123.675f, 116.28f, 103.53f}, {58.395f, 57.12f, 57.375f}),
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .pad_with_mean = true,
         .output_dtype = input_info.dtype,
@@ -126,7 +126,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> Metric3D<INP
 
     // geometry (keep-ratio resize + pad) stays hand-written: ImagePipeline
     // has no padding step; only the packing goes through the toolkit
-    auto result = jinq::models::backend::ImagePipeline(tmp).nchw(this->session().inputs().front());
+    auto result = mortred::models::backend::ImagePipeline(tmp).nchw(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};
@@ -136,31 +136,31 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> Metric3D<INP
 
 template <typename INPUT, typename OUTPUT>
 StatusCode Metric3D<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     const auto *depth_tensor = find_output(outputs, "prediction");
     const auto *confidence_tensor = find_output(outputs, "confidence");
     if (depth_tensor == nullptr || confidence_tensor == nullptr) {
         LOG(ERROR) << "metric3d outputs 'prediction'/'confidence' missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto source_status = jinq::models::backend::validated_source_size(context, "metric3d");
+    const auto source_status = mortred::models::backend::validated_source_size(context, "metric3d");
     if (source_status != StatusCode::OK) {
         return source_status;
     }
-    jinq::models::backend::F32OutputView depth_view;
-    const auto depth_status = jinq::models::backend::validated_f32_named_output(
+    mortred::models::backend::F32OutputView depth_view;
+    const auto depth_status = mortred::models::backend::validated_f32_named_output(
         outputs, "prediction",
-        {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
-         jinq::models::backend::TensorLayout::Nchw},
+        {mortred::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
+         mortred::models::backend::TensorLayout::Nchw},
         "metric3d", &depth_view);
     if (depth_status != StatusCode::OK) {
         return depth_status;
     }
-    jinq::models::backend::F32OutputView confidence_view;
-    const auto confidence_status = jinq::models::backend::validated_f32_named_output(
+    mortred::models::backend::F32OutputView confidence_view;
+    const auto confidence_status = mortred::models::backend::validated_f32_named_output(
         outputs, "confidence",
-        {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
-         jinq::models::backend::TensorLayout::Nchw},
+        {mortred::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
+         mortred::models::backend::TensorLayout::Nchw},
         "metric3d", &confidence_view);
     if (confidence_status != StatusCode::OK) {
         return confidence_status;
@@ -195,15 +195,15 @@ StatusCode Metric3D<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
     MdeOutput internal_out;
     internal_out.depth_map = depth_map.clone();
     internal_out.confidence_map = confidence_map.clone();
-    jinq::common::CvUtils::colorize_depth_map(depth_map, internal_out.colorized_depth_map);
+    mortred::common::CvUtils::colorize_depth_map(depth_map, internal_out.colorized_depth_map);
     output = std::move(internal_out);
     return StatusCode::OK;
 }
 
 /************* Export Function Sets *************/
 
-template <typename INPUT, typename OUTPUT> Metric3D<INPUT, OUTPUT>::Metric3D() : jinq::models::BackendCvModel<INPUT, OUTPUT>("METRIC3D") {}
+template <typename INPUT, typename OUTPUT> Metric3D<INPUT, OUTPUT>::Metric3D() : mortred::models::BackendCvModel<INPUT, OUTPUT>("METRIC3D") {}
 
 } // namespace mono_depth_estimation
 } // namespace models
-} // namespace jinq
+} // namespace mortred

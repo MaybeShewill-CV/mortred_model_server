@@ -18,14 +18,14 @@
 #include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace object_detection {
 
-using FaceBBox = jinq::models::io_define::object_detection::face_bbox;
-using FaceOutput = jinq::models::io_define::object_detection::std_face_detection_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using FaceBBox = mortred::models::io_define::object_detection::face_bbox;
+using FaceOutput = mortred::models::io_define::object_detection::std_face_detection_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 namespace {
 
@@ -70,9 +70,9 @@ template <typename INPUT, typename OUTPUT> StatusCode LibFaceDetector<INPUT, OUT
     // Stretch to toml [H,W] (or native size), then right/bottom zero-pad /32.
     // Path B still needs type=tensorrt at serving time; onnx stays CPU decode.
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE_PAD_TO_MULTIPLE,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE_PAD_TO_MULTIPLE,
         .norm = {.scale = 1.0f},
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::BGR,
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::BGR,
         .pad_value = 0,
         .output_dtype = input_info.dtype,
         .output_nhwc = false,
@@ -102,7 +102,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> LibFaceDetec
                            cv::Scalar(0, 0, 0));
         working = std::move(canvas);
     }
-    auto result = jinq::models::backend::ImagePipeline(working).to_float().nchw(this->session().inputs().front());
+    auto result = mortred::models::backend::ImagePipeline(working).to_float().nchw(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};
@@ -112,7 +112,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> LibFaceDetec
 
 template <typename INPUT, typename OUTPUT>
 StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                       const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                       const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     const int pad_w = context.network_size.width;
     const int pad_h = context.network_size.height;
     if (pad_w <= 0 || pad_h <= 0 || pad_w % kYuNetAlign != 0 || pad_h % kYuNetAlign != 0) {
@@ -135,10 +135,10 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
     const float decode_threshold = decode_score_threshold(_m_detection_params, context);
     for (const int stride : kYuNetStrides) {
         const std::string stride_s = std::to_string(stride);
-        const auto *cls = jinq::models::backend::find_output(outputs, "cls_" + stride_s);
-        const auto *obj = jinq::models::backend::find_output(outputs, "obj_" + stride_s);
-        const auto *bbox = jinq::models::backend::find_output(outputs, "bbox_" + stride_s);
-        const auto *kps = jinq::models::backend::find_output(outputs, "kps_" + stride_s);
+        const auto *cls = mortred::models::backend::find_output(outputs, "cls_" + stride_s);
+        const auto *obj = mortred::models::backend::find_output(outputs, "obj_" + stride_s);
+        const auto *bbox = mortred::models::backend::find_output(outputs, "bbox_" + stride_s);
+        const auto *kps = mortred::models::backend::find_output(outputs, "kps_" + stride_s);
         if (cls == nullptr || obj == nullptr || bbox == nullptr || kps == nullptr) {
             LOG(ERROR) << "libface YuNet heads missing for stride " << stride;
             return StatusCode::MODEL_EMPTY_OUTPUT;
@@ -148,13 +148,13 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
         const int rows = pad_h / stride;
         const int64_t anchors = static_cast<int64_t>(rows) * static_cast<int64_t>(cols);
         std::string contract_error;
-        if (!jinq::models::backend::validate_output_tensor(*cls, {jinq::models::backend::DType::F32, 3, {1, anchors, 1}},
+        if (!mortred::models::backend::validate_output_tensor(*cls, {mortred::models::backend::DType::F32, 3, {1, anchors, 1}},
                                                            &contract_error) ||
-            !jinq::models::backend::validate_output_tensor(*obj, {jinq::models::backend::DType::F32, 3, {1, anchors, 1}},
+            !mortred::models::backend::validate_output_tensor(*obj, {mortred::models::backend::DType::F32, 3, {1, anchors, 1}},
                                                            &contract_error) ||
-            !jinq::models::backend::validate_output_tensor(*bbox, {jinq::models::backend::DType::F32, 3, {1, anchors, 4}},
+            !mortred::models::backend::validate_output_tensor(*bbox, {mortred::models::backend::DType::F32, 3, {1, anchors, 4}},
                                                            &contract_error) ||
-            !jinq::models::backend::validate_output_tensor(*kps, {jinq::models::backend::DType::F32, 3, {1, anchors, 10}},
+            !mortred::models::backend::validate_output_tensor(*kps, {mortred::models::backend::DType::F32, 3, {1, anchors, 10}},
                                                            &contract_error)) {
             LOG(ERROR) << "libface output contract failed at stride " << stride << ": " << contract_error;
             return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
@@ -164,14 +164,14 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
         const float *obj_data = nullptr;
         const float *bbox_data = nullptr;
         const float *kps_data = nullptr;
-        if (!jinq::models::backend::get_f32_data(cls->tensor, &cls_data, &contract_error) ||
-            !jinq::models::backend::get_f32_data(obj->tensor, &obj_data, &contract_error) ||
-            !jinq::models::backend::get_f32_data(bbox->tensor, &bbox_data, &contract_error) ||
-            !jinq::models::backend::get_f32_data(kps->tensor, &kps_data, &contract_error) ||
-            !jinq::models::backend::require_finite_f32(cls_data, cls->tensor.element_count(), cls->name, &contract_error) ||
-            !jinq::models::backend::require_finite_f32(obj_data, obj->tensor.element_count(), obj->name, &contract_error) ||
-            !jinq::models::backend::require_finite_f32(bbox_data, bbox->tensor.element_count(), bbox->name, &contract_error) ||
-            !jinq::models::backend::require_finite_f32(kps_data, kps->tensor.element_count(), kps->name, &contract_error)) {
+        if (!mortred::models::backend::get_f32_data(cls->tensor, &cls_data, &contract_error) ||
+            !mortred::models::backend::get_f32_data(obj->tensor, &obj_data, &contract_error) ||
+            !mortred::models::backend::get_f32_data(bbox->tensor, &bbox_data, &contract_error) ||
+            !mortred::models::backend::get_f32_data(kps->tensor, &kps_data, &contract_error) ||
+            !mortred::models::backend::require_finite_f32(cls_data, cls->tensor.element_count(), cls->name, &contract_error) ||
+            !mortred::models::backend::require_finite_f32(obj_data, obj->tensor.element_count(), obj->name, &contract_error) ||
+            !mortred::models::backend::require_finite_f32(bbox_data, bbox->tensor.element_count(), bbox->name, &contract_error) ||
+            !mortred::models::backend::require_finite_f32(kps_data, kps->tensor.element_count(), kps->name, &contract_error)) {
             LOG(ERROR) << "libface output contract failed at stride " << stride << ": " << contract_error;
             return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
         }
@@ -251,8 +251,8 @@ StatusCode LibFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-LibFaceDetector<INPUT, OUTPUT>::LibFaceDetector() : jinq::models::BackendCvModel<INPUT, OUTPUT>("LIBFACE") {}
+LibFaceDetector<INPUT, OUTPUT>::LibFaceDetector() : mortred::models::BackendCvModel<INPUT, OUTPUT>("LIBFACE") {}
 
 } // namespace object_detection
 } // namespace models
-} // namespace jinq
+} // namespace mortred

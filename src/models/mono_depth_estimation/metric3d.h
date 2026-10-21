@@ -16,12 +16,12 @@
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace mono_depth_estimation {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT> class Metric3D : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class Metric3D : public mortred::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     Metric3D();
     ~Metric3D() override = default;
@@ -30,14 +30,14 @@ template <typename INPUT, typename OUTPUT> class Metric3D : public jinq::models:
     Metric3D &operator=(const Metric3D &transformer) = delete;
 
   private:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
+    std::vector<mortred::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode on_init(const toml::table &params) override;
 
-    const jinq::models::backend::NamedTensor *find_output(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+    const mortred::models::backend::NamedTensor *find_output(const std::vector<mortred::models::backend::NamedTensor> &outputs,
                                                           const std::string &name) const;
 
     void calculate_pad_info(int &pad_h, int &pad_w, const cv::Size &source_size) const;
@@ -54,7 +54,7 @@ template <typename INPUT, typename OUTPUT> class Metric3D : public jinq::models:
 
 } // namespace mono_depth_estimation
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "metric3d.inl"
 

@@ -9,14 +9,14 @@
 #include "models/mono_depth_estimation/depth_anything.h"
 #include "models/mono_depth_estimation/metric3d.h"
 
-namespace jinq {
+namespace mortred {
 namespace factory {
 namespace mono_depth_estimation {
 
-using jinq::models::BaseAiModel;
+using mortred::models::BaseAiModel;
 
-using jinq::models::mono_depth_estimation::DepthAnything;
-using jinq::models::mono_depth_estimation::Metric3D;
+using mortred::models::mono_depth_estimation::DepthAnything;
+using mortred::models::mono_depth_estimation::Metric3D;
 
 template <typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_metric3d_estimator() {
@@ -28,31 +28,31 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_depth_anything_estimator() {
     return std::make_unique<DepthAnything<INPUT, OUTPUT>>();
 }
 
-using Output = jinq::models::io_define::mono_depth_estimation::std_mde_output;
-using jinq::server::ImageInput;
-using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
+using Output = mortred::models::io_define::mono_depth_estimation::std_mde_output;
+using mortred::server::ImageInput;
+using Entry = mortred::factory::cv_catalog::CvModelEntry<Output>;
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
         Entry{"depth_vits14", "Depth Anything ViT-S/14", "DEPTH_ANYTHING_ESTIMATION_SERVER",
-              &create_depth_anything_estimator<ImageInput, Output>, &jinq::server::response::fill_depth_estimation, {},
+              &create_depth_anything_estimator<ImageInput, Output>, &mortred::server::response::fill_depth_estimation, {},
               "depth_anything"},
         Entry{"depth_vitb14", "Depth Anything ViT-B/14", "DEPTH_ANYTHING_ESTIMATION_SERVER",
-              &create_depth_anything_estimator<ImageInput, Output>, &jinq::server::response::fill_depth_estimation, {},
+              &create_depth_anything_estimator<ImageInput, Output>, &mortred::server::response::fill_depth_estimation, {},
               "depth_anything"},
         Entry{"depth_vitl14", "Depth Anything ViT-L/14", "DEPTH_ANYTHING_ESTIMATION_SERVER",
-              &create_depth_anything_estimator<ImageInput, Output>, &jinq::server::response::fill_depth_estimation, {},
+              &create_depth_anything_estimator<ImageInput, Output>, &mortred::server::response::fill_depth_estimation, {},
               "depth_anything"},
         Entry{"metric3d_512", "Metric3D 512x1088", "METRIC3D_ESTIMATION_SERVER", &create_metric3d_estimator<ImageInput, Output>,
-              &jinq::server::response::fill_depth_estimation, {}, "metric3d"},
+              &mortred::server::response::fill_depth_estimation, {}, "metric3d"},
         Entry{"metric3d_1088", "Metric3D 1088x1920", "METRIC3D_ESTIMATION_SERVER", &create_metric3d_estimator<ImageInput, Output>,
-              &jinq::server::response::fill_depth_estimation, {}, "metric3d"},
+              &mortred::server::response::fill_depth_estimation, {}, "metric3d"},
     };
     return entries;
 }
 
 } // namespace mono_depth_estimation
 } // namespace factory
-} // namespace jinq
+} // namespace mortred
 
 #endif

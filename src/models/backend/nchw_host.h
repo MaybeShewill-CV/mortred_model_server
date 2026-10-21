@@ -12,7 +12,7 @@
 #include <cstring>
 #include <vector>
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
@@ -51,6 +51,6 @@ inline bool permute_nhwc_to_nchw_bytes(const uint8_t* src, uint8_t* dst, int64_t
 
 }  // namespace backend
 }  // namespace models
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_MODELS_BACKEND_NCHW_HOST_H

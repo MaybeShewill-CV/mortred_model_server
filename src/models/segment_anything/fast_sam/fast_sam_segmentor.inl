@@ -16,13 +16,13 @@
 #include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace segment_anything {
 
-using jinq::common::CvUtils;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using mortred::common::CvUtils;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 namespace {
 
@@ -100,7 +100,7 @@ std::vector<NamedTensor> FastSamSegmentor<INPUT, OUTPUT>::preprocess(const cv::M
 
     // the keep-ratio geometry above stays hand-written (ImagePipeline has no
     // padding step); only the packing goes through the toolkit
-    auto packed = jinq::models::backend::ImagePipeline(result).nchw(this->session().inputs().front());
+    auto packed = mortred::models::backend::ImagePipeline(result).nchw(this->session().inputs().front());
     if (!packed.ok()) {
         LOG(ERROR) << packed.error;
         return {};
@@ -128,28 +128,28 @@ cv::Mat FastSamSegmentor<INPUT, OUTPUT>::upscale_mask_image(const cv::Mat &mask,
 
 template <typename INPUT, typename OUTPUT>
 StatusCode FastSamSegmentor<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                        const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                        const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     const auto *output0 = find_output(outputs, "output0");
     const auto *output1 = find_output(outputs, "output1");
     if (output0 == nullptr || output1 == nullptr) {
         LOG(ERROR) << "fastsam outputs 'output0'/'output1' missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto source_status = jinq::models::backend::validated_source_size(context, "fastsam");
+    const auto source_status = mortred::models::backend::validated_source_size(context, "fastsam");
     if (source_status != StatusCode::OK) {
         return source_status;
     }
-    jinq::models::backend::F32OutputView preds_view;
-    const auto preds_status = jinq::models::backend::validated_f32_named_output(
-        outputs, "output0", {jinq::models::backend::DType::F32, 3, {1, -1, -1}}, "fastsam", &preds_view);
+    mortred::models::backend::F32OutputView preds_view;
+    const auto preds_status = mortred::models::backend::validated_f32_named_output(
+        outputs, "output0", {mortred::models::backend::DType::F32, 3, {1, -1, -1}}, "fastsam", &preds_view);
     if (preds_status != StatusCode::OK) {
         return preds_status;
     }
-    jinq::models::backend::F32OutputView protos_view;
-    const auto protos_status = jinq::models::backend::validated_f32_named_output(
+    mortred::models::backend::F32OutputView protos_view;
+    const auto protos_status = mortred::models::backend::validated_f32_named_output(
         outputs, "output1",
-        {jinq::models::backend::DType::F32, 4, {1, -1, _m_preds_mask_size.height, _m_preds_mask_size.width},
-         jinq::models::backend::TensorLayout::Nchw},
+        {mortred::models::backend::DType::F32, 4, {1, -1, _m_preds_mask_size.height, _m_preds_mask_size.width},
+         mortred::models::backend::TensorLayout::Nchw},
         "fastsam", &protos_view);
     if (protos_status != StatusCode::OK) {
         return protos_status;
@@ -249,8 +249,8 @@ StatusCode FastSamSegmentor<INPUT, OUTPUT>::postprocess(const std::vector<NamedT
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-FastSamSegmentor<INPUT, OUTPUT>::FastSamSegmentor() : jinq::models::BackendCvModel<INPUT, OUTPUT>("FAST_SAM") {}
+FastSamSegmentor<INPUT, OUTPUT>::FastSamSegmentor() : mortred::models::BackendCvModel<INPUT, OUTPUT>("FAST_SAM") {}
 
 } // namespace segment_anything
 } // namespace models
-} // namespace jinq
+} // namespace mortred

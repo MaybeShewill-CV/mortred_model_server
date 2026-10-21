@@ -25,7 +25,7 @@
 #include "glog/logging.h"
 #endif
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 namespace gpu_jpeg {
@@ -550,4 +550,4 @@ std::string render_decode_metrics() {
 }  // namespace gpu_jpeg
 }  // namespace backend
 }  // namespace models
-}  // namespace jinq
+}  // namespace mortred

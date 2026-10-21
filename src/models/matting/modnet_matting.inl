@@ -18,17 +18,17 @@
 #include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace matting {
 
-using MattingOutput = jinq::models::io_define::matting::std_matting_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using MattingOutput = mortred::models::io_define::matting::std_matting_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode ModNetMatting<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto input_info =
-        jinq::models::backend::SessionIoValidator(this->session()).input().f32().allow_fp16().rank(4).nchw().channels(3).static_shape().validate();
+        mortred::models::backend::SessionIoValidator(this->session()).input().f32().allow_fp16().rank(4).nchw().channels(3).static_shape().validate();
     if (!input_info.ok()) {
         LOG(ERROR) << "unexpected modnet input shape: " << input_info.error << ", expected static [N,3,H,W] (nchw)";
         return StatusCode::MODEL_INIT_FAILED;
@@ -39,11 +39,11 @@ template <typename INPUT, typename OUTPUT> StatusCode ModNetMatting<INPUT, OUTPU
         LOG(ERROR) << "invalid modnet input tensor size: " << input_info.error;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "modnet"));
+    this->set_image_decode_hint(_m_input_size_host, mortred::models::cv_input::parse_image_decode_upscale(params, "modnet"));
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
         .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f, 0.5f, 0.5f}, .std = {0.5f, 0.5f, 0.5f}},
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .output_dtype = input_info.value.dtype,
         .output_nhwc = false,
@@ -54,7 +54,7 @@ template <typename INPUT, typename OUTPUT> StatusCode ModNetMatting<INPUT, OUTPU
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> ModNetMatting<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
 
-    auto result = jinq::models::backend::ImagePipeline(input_image)
+    auto result = mortred::models::backend::ImagePipeline(input_image)
                       .bgr_to_rgb()
                       .resize(_m_input_size_host)
                       .to_float()
@@ -71,19 +71,19 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> ModNetMattin
 
 template <typename INPUT, typename OUTPUT>
 StatusCode ModNetMatting<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                     const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                     const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "modnet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto source_status = jinq::models::backend::validated_source_size(context, "modnet");
+    const auto source_status = mortred::models::backend::validated_source_size(context, "modnet");
     if (source_status != StatusCode::OK) {
         return source_status;
     }
-    jinq::models::backend::F32OutputView output_view;
-    const auto output_status = jinq::models::backend::validated_f32_first_output(
-        outputs, {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
-                  jinq::models::backend::TensorLayout::Nchw}, "modnet",
+    mortred::models::backend::F32OutputView output_view;
+    const auto output_status = mortred::models::backend::validated_f32_first_output(
+        outputs, {mortred::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
+                  mortred::models::backend::TensorLayout::Nchw}, "modnet",
         &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
@@ -104,8 +104,8 @@ StatusCode ModNetMatting<INPUT, OUTPUT>::postprocess(const std::vector<NamedTens
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-ModNetMatting<INPUT, OUTPUT>::ModNetMatting() : jinq::models::BackendCvModel<INPUT, OUTPUT>("MODNET_MATTING") {}
+ModNetMatting<INPUT, OUTPUT>::ModNetMatting() : mortred::models::BackendCvModel<INPUT, OUTPUT>("MODNET_MATTING") {}
 
 } // namespace matting
 } // namespace models
-} // namespace jinq
+} // namespace mortred

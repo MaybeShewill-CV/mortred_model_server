@@ -16,20 +16,20 @@
 #include "models/base_model.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace diffusion {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 template<typename INPUT, typename OUTPUT>
 class DDPMUNet;
 
 using DDPMSamplerDenoiseModel = DDPMUNet<
-    jinq::models::io_define::diffusion::std_ddpm_unet_input,
-    jinq::models::io_define::diffusion::std_ddpm_unet_output>;
+    mortred::models::io_define::diffusion::std_ddpm_unet_input,
+    mortred::models::io_define::diffusion::std_ddpm_unet_output>;
 
 template <typename INPUT, typename OUTPUT>
-class DDPMSampler : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
+class DDPMSampler : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
      * constructor
@@ -88,7 +88,7 @@ class DDPMSampler : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 };
 } // namespace diffusion
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "ddpm_sampler.inl"
 

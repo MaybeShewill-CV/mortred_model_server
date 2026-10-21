@@ -31,11 +31,11 @@
 
 #include "common/status_code.h"
 
-namespace jinq {
+namespace mortred {
 namespace common {
 namespace envelope {
 
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 inline constexpr const char *k_req_id = "req_id";
 inline constexpr const char *k_images = "images";
@@ -202,6 +202,6 @@ inline std::string encode(const Request &request) {
 
 } // namespace envelope
 } // namespace common
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_COMMON_REQUEST_ENVELOPE_H

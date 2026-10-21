@@ -33,10 +33,10 @@
 #include "models/base_model.h"
 #include "models/cv_image_input.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 namespace detail {
 
@@ -277,7 +277,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                 return PreparedInput::invalid(prepared.status, prepared.error.empty() ? "input image is empty" : prepared.error);
             }
             prepared.inputs = preprocess(image);
-            jinq::common::stage_timing::mark("pre");
+            mortred::common::stage_timing::mark("pre");
             if (prepared.inputs.empty()) {
                 return PreparedInput::invalid(StatusCode::MODEL_EMPTY_INPUT_IMAGE, "model preprocess produced no input tensors");
             }
@@ -695,9 +695,9 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                         reinterpret_cast<const unsigned char*>(input.image.data.data()),
                         input.image.data.size(), net_w > 0 ? net_w : 0, net_h > 0 ? net_h : 0,
                         *_gpu_preprocess_desc, &gpu_err);
-                    jinq::common::stage_timing::mark("decode");
+                    mortred::common::stage_timing::mark("decode");
                     if (gpu_result.valid) {
-                        jinq::common::stage_timing::annotate("decoder", "jpeggpu-zero-copy");
+                        mortred::common::stage_timing::annotate("decoder", "jpeggpu-zero-copy");
                         backend::NamedTensor nt;
                         nt.name = input_info.name;
                         nt.tensor.dtype = _gpu_preprocess_desc->output_dtype;
@@ -712,8 +712,8 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                             ? backend::TensorLayout::Nhwc : backend::TensorLayout::Nchw;
                         nt.tensor.device_data = gpu_result.device_input;
                         nt.tensor.device_ready_event = gpu_result.ready_event;
-                        jinq::common::stage_timing::mark("pre");
-                        jinq::common::stage_timing::mark("h2d");
+                        mortred::common::stage_timing::mark("pre");
+                        mortred::common::stage_timing::mark("h2d");
                         std::vector<backend::NamedTensor> gpu_inputs{nt};
                         if (_m_session->inputs().size() == 2 && _gpu_preprocess_desc->secondary_gray_output) {
                             // EnlightenGAN-style second input: single-channel
@@ -729,7 +729,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                         }
                         std::vector<backend::NamedTensor> outputs;
                         const auto run_status = _m_session->run(gpu_inputs, outputs);
-                        jinq::common::stage_timing::mark("sess");
+                        mortred::common::stage_timing::mark("sess");
                         // session->run synchronizes before returning, so this
                         // worker's slot buffers are idle and may be reused by
                         // the next request that checks this worker out.
@@ -747,7 +747,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                                 input, cv::Size(gpu_result.out_w, gpu_result.out_h),
                                 cv::Size(gpu_result.src_w, gpu_result.src_h));
                             const StatusCode post_status = postprocess(outputs, ctx, output);
-                            jinq::common::stage_timing::mark("post");
+                            mortred::common::stage_timing::mark("post");
                             return post_status;
                         }
                     }
@@ -761,12 +761,12 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
         }
         std::vector<backend::NamedTensor> outputs;
         const auto run_status = _m_session->run(prepared.inputs, outputs);
-        jinq::common::stage_timing::mark("sess");
+        mortred::common::stage_timing::mark("sess");
         if (run_status != StatusCode::OK) {
             return run_status;
         }
         const StatusCode post_status = postprocess(outputs, prepared.context, output);
-        jinq::common::stage_timing::mark("post");
+        mortred::common::stage_timing::mark("post");
         return post_status;
     }
 
@@ -785,11 +785,11 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
 };
 
 } // namespace backend
-// BackendCvModel has lived under jinq::models since the unified backend was
+// BackendCvModel has lived under mortred::models since the unified backend was
 // introduced. Keep that public spelling as an alias while the implementation
 // is consistently colocated with the backend runtime namespace.
 using backend::BackendCvModel;
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_BACKEND_BACKEND_CV_MODEL_H

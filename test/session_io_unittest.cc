@@ -5,12 +5,12 @@
 
 #include "models/backend/session_io.h"
 
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::TensorInfo;
-using jinq::models::backend::apply_configured_io_names;
-using jinq::models::backend::match_required_inputs;
-using jinq::models::backend::require_output_count;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::TensorInfo;
+using mortred::models::backend::apply_configured_io_names;
+using mortred::models::backend::match_required_inputs;
+using mortred::models::backend::require_output_count;
 
 namespace {
 

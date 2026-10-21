@@ -13,10 +13,10 @@
 
 #include "models/backend/param_spec.h"
 
-using jinq::models::backend::ParamSet;
-using jinq::models::backend::ParamSpec;
-using jinq::models::backend::ParamValue;
-using jinq::models::backend::validate_params;
+using mortred::models::backend::ParamSet;
+using mortred::models::backend::ParamSpec;
+using mortred::models::backend::ParamValue;
+using mortred::models::backend::validate_params;
 
 namespace {
 

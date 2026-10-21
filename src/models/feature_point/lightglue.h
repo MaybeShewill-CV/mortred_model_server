@@ -21,14 +21,14 @@
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace feature_point {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 template <typename INPUT, typename OUTPUT>
-class LightGlue : public jinq::models::backend::MultiSessionModel<LightGlue<INPUT, OUTPUT>, INPUT, OUTPUT> {
-    using Base = jinq::models::backend::MultiSessionModel<LightGlue<INPUT, OUTPUT>, INPUT, OUTPUT>;
+class LightGlue : public mortred::models::backend::MultiSessionModel<LightGlue<INPUT, OUTPUT>, INPUT, OUTPUT> {
+    using Base = mortred::models::backend::MultiSessionModel<LightGlue<INPUT, OUTPUT>, INPUT, OUTPUT>;
     friend Base;
 
   public:
@@ -45,8 +45,8 @@ class LightGlue : public jinq::models::backend::MultiSessionModel<LightGlue<INPU
         std::vector<float> descriptors;
     };
 
-    StatusCode classify_extractor_outputs(const std::vector<jinq::models::backend::NamedTensor> &outputs) const;
-    StatusCode classify_matcher_outputs(const std::vector<jinq::models::backend::NamedTensor> &outputs) const;
+    StatusCode classify_extractor_outputs(const std::vector<mortred::models::backend::NamedTensor> &outputs) const;
+    StatusCode classify_matcher_outputs(const std::vector<mortred::models::backend::NamedTensor> &outputs) const;
     StatusCode classify_feature_layout(const FeaturePoints &src_features, const FeaturePoints &dst_features) const;
 
   private:
@@ -54,20 +54,20 @@ class LightGlue : public jinq::models::backend::MultiSessionModel<LightGlue<INPU
 
     StatusCode run_sessions(const INPUT &input, OUTPUT &output) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     cv::Mat preprocess_image(const cv::Mat &input_image) const;
 
     StatusCode extract_feature_points(const cv::Mat &input_image, FeaturePoints &feature_points) const;
 
     StatusCode match_feature_points(const FeaturePoints &src_features, const FeaturePoints &dst_features,
-                                    jinq::models::io_define::feature_point::std_feature_point_match_output &matches) const;
+                                    mortred::models::io_define::feature_point::std_feature_point_match_output &matches) const;
 
-    const jinq::models::backend::NamedTensor *find_output(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+    const mortred::models::backend::NamedTensor *find_output(const std::vector<mortred::models::backend::NamedTensor> &outputs,
                                                           const std::string &name) const;
 
-    static std::vector<jinq::models::backend::SessionSpec> sessions();
+    static std::vector<mortred::models::backend::SessionSpec> sessions();
 
     float _m_extract_score_threshold = 0.0f;
     float _m_match_score_threshold = 0.0f;
@@ -76,7 +76,7 @@ class LightGlue : public jinq::models::backend::MultiSessionModel<LightGlue<INPU
 
 } // namespace feature_point
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "lightglue.inl"
 

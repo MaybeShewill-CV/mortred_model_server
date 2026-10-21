@@ -5,8 +5,8 @@
 
 #include "models/backend/nchw_host.h"
 
-using jinq::models::backend::nchw_shape_from_nhwc4;
-using jinq::models::backend::permute_nhwc_to_nchw_bytes;
+using mortred::models::backend::nchw_shape_from_nhwc4;
+using mortred::models::backend::permute_nhwc_to_nchw_bytes;
 
 TEST(NchwHost, RemapsRank4ShapeAndLeavesOthers) {
     EXPECT_EQ(nchw_shape_from_nhwc4({1, 8, 16, 3}), (std::vector<int64_t>{1, 3, 8, 16}));

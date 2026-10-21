@@ -14,11 +14,11 @@
 #include "models/backend/tensor.h"
 #include "toml/toml.hpp"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /*** status-only result used by operations that do not produce a value */
 struct RuntimeStatus {
@@ -191,6 +191,6 @@ class SessionIoValidator {
 
 } // namespace backend
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_BACKEND_MODEL_RUNTIME_H

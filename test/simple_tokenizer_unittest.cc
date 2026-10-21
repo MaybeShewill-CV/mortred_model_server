@@ -12,8 +12,8 @@
 #include "common/status_code.h"
 #include "models/clip/simple_tokenizer.h"
 
-using jinq::common::StatusCode;
-using jinq::models::clip::SimpleTokenizer;
+using mortred::common::StatusCode;
+using mortred::models::clip::SimpleTokenizer;
 
 static toml::table build_tokenizer_cfg() {
     return std::move(

@@ -17,13 +17,13 @@
 #include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace feature_point {
 
-using FeatureOutput = jinq::models::io_define::feature_point::std_feature_point_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using FeatureOutput = mortred::models::io_define::feature_point::std_feature_point_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode SuperPoint<INPUT, OUTPUT>::on_init(const toml::table &params) {
     if (params.contains("model_score_threshold")) {
@@ -44,11 +44,11 @@ template <typename INPUT, typename OUTPUT> StatusCode SuperPoint<INPUT, OUTPUT>:
         LOG(ERROR) << "superpoint input size " << _m_input_size_host << " must be a multiple of the cell size " << _m_cell_size;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "superpoint"));
+    this->set_image_decode_hint(_m_input_size_host, mortred::models::cv_input::parse_image_decode_upscale(params, "superpoint"));
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
         .norm = {.scale = 1.0f / 255.0f},
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::GRAY,
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::GRAY,
         .pad_value = 114,
         .output_dtype = input_info.dtype,
         .output_nhwc = false,
@@ -69,7 +69,7 @@ const NamedTensor *SuperPoint<INPUT, OUTPUT>::find_output(const std::vector<Name
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> SuperPoint<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // resize -> gray -> [0,1] (f32 nchw)
-    auto result = jinq::models::backend::ImagePipeline(input_image)
+    auto result = mortred::models::backend::ImagePipeline(input_image)
                       .resize(_m_input_size_host)
                       .bgr_to_gray()
                       .to_float()
@@ -127,7 +127,7 @@ void SuperPoint<INPUT, OUTPUT>::decode_fp_location_and_score(const NamedTensor &
                     const int interest_pt_x = col * _m_cell_size + col_ext_index;
                     const int interest_pt_y = row * _m_cell_size + row_ext_index;
                     if (score >= score_threshold) {
-                        jinq::models::io_define::feature_point::fp key_pt;
+                        mortred::models::io_define::feature_point::fp key_pt;
                         key_pt.location = cv::Point2f(static_cast<float>(interest_pt_x), static_cast<float>(interest_pt_y));
                         key_pt.score = score;
                         key_points.push_back(key_pt);
@@ -139,7 +139,7 @@ void SuperPoint<INPUT, OUTPUT>::decode_fp_location_and_score(const NamedTensor &
 
     // nms interest points
     std::sort(key_points.begin(), key_points.end(),
-              [](const jinq::models::io_define::feature_point::fp &pt1, const jinq::models::io_define::feature_point::fp &pt2) {
+              [](const mortred::models::io_define::feature_point::fp &pt1, const mortred::models::io_define::feature_point::fp &pt2) {
                   return pt1.score > pt2.score;
               });
     auto iter = key_points.begin();
@@ -222,31 +222,31 @@ void SuperPoint<INPUT, OUTPUT>::decode_fp_descriptor(const NamedTensor &desc, Fe
 
 template <typename INPUT, typename OUTPUT>
 StatusCode SuperPoint<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                  const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                  const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     const auto *semi = find_output(outputs, "output_1");
     const auto *desc = find_output(outputs, "output_2");
     if (semi == nullptr || desc == nullptr) {
         LOG(ERROR) << "superpoint outputs 'output_1'/'output_2' missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    jinq::models::backend::GeometryScale geometry_scale;
+    mortred::models::backend::GeometryScale geometry_scale;
     std::string geometry_error;
-    if (!jinq::models::backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
+    if (!mortred::models::backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
         LOG(ERROR) << "superpoint " << geometry_error;
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
     const auto grid_height = context.network_size.height / _m_cell_size;
     const auto grid_width = context.network_size.width / _m_cell_size;
-    auto semi_status = jinq::models::backend::validated_f32_named_output(
+    auto semi_status = mortred::models::backend::validated_f32_named_output(
         outputs, "output_1",
-        {jinq::models::backend::DType::F32, 4, {1, 65, grid_height, grid_width}, jinq::models::backend::TensorLayout::Nchw},
+        {mortred::models::backend::DType::F32, 4, {1, 65, grid_height, grid_width}, mortred::models::backend::TensorLayout::Nchw},
         "superpoint");
     if (semi_status != StatusCode::OK) {
         return semi_status;
     }
-    const auto desc_status = jinq::models::backend::validated_f32_named_output(
+    const auto desc_status = mortred::models::backend::validated_f32_named_output(
         outputs, "output_2",
-        {jinq::models::backend::DType::F32, 4, {1, 256, grid_height, grid_width}, jinq::models::backend::TensorLayout::Nchw},
+        {mortred::models::backend::DType::F32, 4, {1, 256, grid_height, grid_width}, mortred::models::backend::TensorLayout::Nchw},
         "superpoint");
     if (desc_status != StatusCode::OK) {
         return desc_status;
@@ -267,7 +267,7 @@ StatusCode SuperPoint<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
 
     // rescale feature point locations into the user image space
     for (auto &pt : internal_out) {
-        pt.location = jinq::models::backend::scale_point(pt.location, geometry_scale);
+        pt.location = mortred::models::backend::scale_point(pt.location, geometry_scale);
     }
     output = std::move(internal_out);
     return StatusCode::OK;
@@ -276,8 +276,8 @@ StatusCode SuperPoint<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-SuperPoint<INPUT, OUTPUT>::SuperPoint() : jinq::models::BackendCvModel<INPUT, OUTPUT>("SUPERPOINT") {}
+SuperPoint<INPUT, OUTPUT>::SuperPoint() : mortred::models::BackendCvModel<INPUT, OUTPUT>("SUPERPOINT") {}
 
 } // namespace feature_point
 } // namespace models
-} // namespace jinq
+} // namespace mortred

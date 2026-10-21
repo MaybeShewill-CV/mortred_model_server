@@ -15,10 +15,10 @@
 
 #include "common/status_code.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace clip {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /***
  *

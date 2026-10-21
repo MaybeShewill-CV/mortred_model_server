@@ -23,18 +23,18 @@
 #include "models/clip/simple_tokenizer.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace clip {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /***
  * OpenAI CLIP multi-engine model. The visual and text encoders are unified
  * inference sessions, while the BPE tokenizer is model-local preprocessing.
  */
 template <typename INPUT, typename OUTPUT>
-class OpenAiClip : public jinq::models::backend::MultiSessionModel<OpenAiClip<INPUT, OUTPUT>, INPUT, OUTPUT> {
-    using Base = jinq::models::backend::MultiSessionModel<OpenAiClip<INPUT, OUTPUT>, INPUT, OUTPUT>;
+class OpenAiClip : public mortred::models::backend::MultiSessionModel<OpenAiClip<INPUT, OUTPUT>, INPUT, OUTPUT> {
+    using Base = mortred::models::backend::MultiSessionModel<OpenAiClip<INPUT, OUTPUT>, INPUT, OUTPUT>;
     friend Base;
 
   public:
@@ -55,24 +55,24 @@ class OpenAiClip : public jinq::models::backend::MultiSessionModel<OpenAiClip<IN
   protected:
     static StatusCode embedding_shape_status(const std::vector<float> &lhs, const std::vector<float> &rhs);
 
-    StatusCode classify_embedding_output(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+    StatusCode classify_embedding_output(const std::vector<mortred::models::backend::NamedTensor> &outputs,
                                          std::vector<float> &embedding) const;
 
   private:
-    using ClipInput = jinq::models::io_define::clip::clip_input;
-    using ClipOutput = jinq::models::io_define::clip::clip_output;
-    using ClipTaskType = jinq::models::io_define::clip::ClipTaskType;
+    using ClipInput = mortred::models::io_define::clip::clip_input;
+    using ClipOutput = mortred::models::io_define::clip::clip_output;
+    using ClipTaskType = mortred::models::io_define::clip::ClipTaskType;
 
     // the two engines this model needs; MultiSessionModel creates, validates
     // and owns them, this class only drives them
-    static std::vector<jinq::models::backend::SessionSpec> sessions();
+    static std::vector<mortred::models::backend::SessionSpec> sessions();
 
     StatusCode on_init(const toml::table &params) override;
 
     StatusCode run_sessions(const INPUT &input, OUTPUT &output) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode encode_text(const std::string &input_text, std::vector<float> &text_embeddings) const;
 
@@ -80,10 +80,10 @@ class OpenAiClip : public jinq::models::backend::MultiSessionModel<OpenAiClip<IN
 
     void tokenize(const std::string &input_text, std::vector<int32_t> &token_ids) const;
 
-    const jinq::models::backend::NamedTensor *find_output(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+    const mortred::models::backend::NamedTensor *find_output(const std::vector<mortred::models::backend::NamedTensor> &outputs,
                                                           const std::string &name) const;
 
-    static const jinq::models::backend::TensorInfo *find_info(const jinq::models::backend::InferenceSession &session,
+    static const mortred::models::backend::TensorInfo *find_info(const mortred::models::backend::InferenceSession &session,
                                                               const std::string &name);
 
     static bool normalize_embedding(std::vector<float> &embedding);
@@ -97,7 +97,7 @@ class OpenAiClip : public jinq::models::backend::MultiSessionModel<OpenAiClip<IN
 
 } // namespace clip
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "openai_clip.inl"
 

@@ -15,15 +15,15 @@
 
 #include "models/backend/tensor.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace segment_anything {
 
-using jinq::common::StatusCode;
-using jinq::models::backend::InferenceSession;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using jinq::models::backend::TensorInfo;
+using mortred::common::StatusCode;
+using mortred::models::backend::InferenceSession;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using mortred::models::backend::TensorInfo;
 
 class SamPromptDecoder::Impl {
   public:
@@ -41,7 +41,7 @@ class SamPromptDecoder::Impl {
                                                           "has_mask_input"};
         for (const auto &name : required_inputs) {
             const auto *info = find_info(name);
-            if (info == nullptr || info->dtype != jinq::models::backend::DType::F32) {
+            if (info == nullptr || info->dtype != mortred::models::backend::DType::F32) {
                 LOG(ERROR) << "sam decoder input missing or invalid: " << name;
                 return StatusCode::MODEL_INIT_FAILED;
             }
@@ -54,8 +54,8 @@ class SamPromptDecoder::Impl {
         _m_has_orig_size_input = find_info("orig_im_size") != nullptr;
         if (_m_has_orig_size_input) {
             const auto *info = find_info("orig_im_size");
-            if (info->dtype != jinq::models::backend::DType::F32 || info->shape.size() != 1 ||
-                jinq::models::backend::shape_volume(info->shape) != 2) {
+            if (info->dtype != mortred::models::backend::DType::F32 || info->shape.size() != 1 ||
+                mortred::models::backend::shape_volume(info->shape) != 2) {
                 LOG(ERROR) << "invalid sam decoder orig_im_size input: " << info->to_string();
                 return StatusCode::MODEL_INIT_FAILED;
             }
@@ -69,7 +69,7 @@ class SamPromptDecoder::Impl {
             return StatusCode::MODEL_INIT_FAILED;
         }
         for (const auto &item : _m_session->outputs()) {
-            if (item.dtype != jinq::models::backend::DType::F32) {
+            if (item.dtype != mortred::models::backend::DType::F32) {
                 LOG(ERROR) << "invalid sam decoder output: " << item.to_string();
                 return StatusCode::MODEL_INIT_FAILED;
             }
@@ -197,12 +197,12 @@ class SamPromptDecoder::Impl {
 
         const auto *mask_info = find_info("mask_input");
         if (!fill_input(inputs, "mask_input", *mask_info,
-                        std::vector<float>(static_cast<size_t>(jinq::models::backend::shape_volume(mask_info->shape))), mask_info->shape)) {
+                        std::vector<float>(static_cast<size_t>(mortred::models::backend::shape_volume(mask_info->shape))), mask_info->shape)) {
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
         const auto *has_mask_info = find_info("has_mask_input");
         if (!fill_input(inputs, "has_mask_input", *has_mask_info,
-                        std::vector<float>(static_cast<size_t>(jinq::models::backend::shape_volume(has_mask_info->shape))),
+                        std::vector<float>(static_cast<size_t>(mortred::models::backend::shape_volume(has_mask_info->shape))),
                         has_mask_info->shape)) {
             return StatusCode::MODEL_RUN_SESSION_FAILED;
         }
@@ -313,7 +313,7 @@ const NamedTensor *find_named_output(const std::vector<NamedTensor> &outputs, co
 
 StatusCode SamPromptDecoder::classify_full_mask_tensor(const Tensor &tensor) {
     if (tensor.shape.size() != 4 && tensor.shape.size() != 3) {
-        LOG(ERROR) << "invalid sam decoder full mask shape: " << jinq::models::backend::shape_to_string(tensor.shape);
+        LOG(ERROR) << "invalid sam decoder full mask shape: " << mortred::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
     return StatusCode::OK;
@@ -321,7 +321,7 @@ StatusCode SamPromptDecoder::classify_full_mask_tensor(const Tensor &tensor) {
 
 StatusCode SamPromptDecoder::classify_low_res_mask_tensor(const Tensor &tensor) {
     if (tensor.shape.size() != 4) {
-        LOG(ERROR) << "invalid sam decoder low-res mask shape: " << jinq::models::backend::shape_to_string(tensor.shape);
+        LOG(ERROR) << "invalid sam decoder low-res mask shape: " << mortred::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
     return StatusCode::OK;
@@ -345,7 +345,7 @@ StatusCode SamPromptDecoder::classify_decoder_outputs(const std::vector<NamedTen
     return classify_low_res_mask_tensor(low_res_masks->tensor);
 }
 
-SamPromptDecoder::SamPromptDecoder(jinq::models::backend::InferenceSession *session) : _m_pimpl(std::make_unique<Impl>(session)) {}
+SamPromptDecoder::SamPromptDecoder(mortred::models::backend::InferenceSession *session) : _m_pimpl(std::make_unique<Impl>(session)) {}
 
 SamPromptDecoder::~SamPromptDecoder() = default;
 
@@ -369,4 +369,4 @@ bool SamPromptDecoder::is_successfully_initialized() const { return _m_pimpl->is
 
 } // namespace segment_anything
 } // namespace models
-} // namespace jinq
+} // namespace mortred

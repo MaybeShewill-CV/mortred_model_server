@@ -10,7 +10,7 @@
 
 #include "common/status_code.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace object_detection {
 
@@ -159,6 +159,6 @@ inline bool parse_model_input_size(const toml::table &params, cv::Size *out, std
 
 } // namespace object_detection
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_OBJECT_DETECTION_DETECTION_PARAMS_H

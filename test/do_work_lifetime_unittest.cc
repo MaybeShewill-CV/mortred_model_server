@@ -39,14 +39,14 @@
 #include "server/base_server_impl.h"
 #include "server/inference_task.h"
 
-using jinq::common::StatusCode;
-using jinq::models::BaseAiModel;
-using jinq::models::io_define::common_io::base64_input;
-using jinq::models::io_define::common_io::byte_source;
-using jinq::server::BaseAiServer;
-using jinq::server::BaseAiServerImpl;
-using jinq::server::InferenceResult;
-using jinq::server::InferenceTask;
+using mortred::common::StatusCode;
+using mortred::models::BaseAiModel;
+using mortred::models::io_define::common_io::base64_input;
+using mortred::models::io_define::common_io::byte_source;
+using mortred::server::BaseAiServer;
+using mortred::server::BaseAiServerImpl;
+using mortred::server::InferenceResult;
+using mortred::server::InferenceTask;
 
 namespace {
 
@@ -133,7 +133,7 @@ protected:
     void fill_response_data(rapidjson::Document::AllocatorType& allocator,
                             rapidjson::Document& data,
                             const TestOutput& model_output,
-                            const jinq::server::OutputOptions&) override {
+                            const mortred::server::OutputOptions&) override {
         data.SetObject();
         data.AddMember("value", model_output.value, allocator);
     }
@@ -151,7 +151,7 @@ public:
         if (common_status != StatusCode::OK) {
             return common_status;
         }
-        const int worker_nums = jinq::server::parse_worker_nums(section);
+        const int worker_nums = mortred::server::parse_worker_nums(section);
         if (worker_nums <= 0) {
             return StatusCode::SERVER_INIT_FAILED;
         }
@@ -207,7 +207,7 @@ protected:
     void fill_response_data(rapidjson::Document::AllocatorType& allocator,
                             rapidjson::Document& data,
                             const TestOutput& model_output,
-                            const jinq::server::OutputOptions&) override {
+                            const mortred::server::OutputOptions&) override {
         data.SetObject();
         data.AddMember("value", model_output.value, allocator);
     }
@@ -420,7 +420,7 @@ ServerHandle start_server(const std::string& uri, const std::string& extra) {
         const auto status = handle.server->init(std::move(parsed).table());
         if (status != StatusCode::OK) {
             ADD_FAILURE() << "test server init failed: "
-                          << jinq::common::to_underlying(status);
+                          << mortred::common::to_underlying(status);
             return handle;
         }
         if (handle.server->start("127.0.0.1", static_cast<unsigned short>(port)) == 0) {

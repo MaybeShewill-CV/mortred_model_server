@@ -36,7 +36,7 @@
 
 // This binary links common, not libmodels. serve_process still calls the
 // jpeg metrics hook, same as async_job_unittest.
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 namespace gpu_jpeg {
@@ -46,13 +46,13 @@ std::string render_decode_metrics() {
 }  // namespace gpu_jpeg
 }  // namespace backend
 }  // namespace models
-}  // namespace jinq
+}  // namespace mortred
 
-using jinq::common::StatusCode;
-using jinq::models::BaseAiModel;
-using jinq::models::io_define::common_io::base64_input;
-using jinq::server::BaseAiServer;
-using jinq::server::BaseAiServerImpl;
+using mortred::common::StatusCode;
+using mortred::models::BaseAiModel;
+using mortred::models::io_define::common_io::base64_input;
+using mortred::server::BaseAiServer;
+using mortred::server::BaseAiServerImpl;
 
 namespace {
 
@@ -115,7 +115,7 @@ public:
             if (common_status != StatusCode::OK) {
                 return common_status;
             }
-            const int worker_nums = jinq::server::parse_worker_nums(section);
+            const int worker_nums = mortred::server::parse_worker_nums(section);
             if (worker_nums <= 0) {
                 return StatusCode::SERVER_INIT_FAILED;
             }
@@ -150,7 +150,7 @@ public:
         void fill_response_data(rapidjson::Document::AllocatorType& allocator,
                                 rapidjson::Document& data,
                                 const TestOutput& model_output,
-                                const jinq::server::OutputOptions& options) override {
+                                const mortred::server::OutputOptions& options) override {
             (void)options;
             data.SetObject();
             data.AddMember("ok", true, allocator);
@@ -201,7 +201,7 @@ struct HttpResp {
 // JSON images are decoded before the worker runs, so a fixture that wants
 // the model to see `raw` has to send its base64 form.
 std::string wire_b64(const std::string& raw) {
-    return jinq::common::base64::encode(raw);
+    return mortred::common::base64::encode(raw);
 }
 
 std::string to_lower(std::string s) {
@@ -410,7 +410,7 @@ ServerHandle start_server(const std::string& extra = "", int request_size_limit_
         const auto status = handle.server->init(std::move(parsed).table());
         if (status != StatusCode::OK) {
             ADD_FAILURE() << "test server init failed: "
-                          << jinq::common::to_underlying(status);
+                          << mortred::common::to_underlying(status);
             return handle;
         }
         if (handle.server->start("127.0.0.1", static_cast<unsigned short>(port)) == 0) {
@@ -800,7 +800,7 @@ TEST(server_e2e_contract, begin_drain_flips_ready_rejects_new_and_finishes_infli
         EXPECT_EQ(rejected.status, 503) << "iter=" << iter << " body=" << rejected.body;
         auto doc = parse_body(rejected.body);
         ASSERT_FALSE(doc.HasParseError());
-        EXPECT_EQ(doc["status"].GetInt(), jinq::common::to_underlying(StatusCode::NOT_READY));
+        EXPECT_EQ(doc["status"].GetInt(), mortred::common::to_underlying(StatusCode::NOT_READY));
 
         inflight.join();
     }

@@ -17,19 +17,19 @@
 #include "models/backend/backend_cv_model.h"
 #include "models/cv_image_input.h"
 
-using jinq::common::StatusCode;
-using jinq::models::cv_input::ImageInputLimits;
-using jinq::models::cv_input::load_image;
-using jinq::models::io_define::common_io::base64_input;
-using jinq::models::io_define::common_io::byte_source;
-using jinq::models::io_define::common_io::file_input;
-using jinq::models::io_define::common_io::image_input;
-using jinq::models::io_define::common_io::mat_input;
+using mortred::common::StatusCode;
+using mortred::models::cv_input::ImageInputLimits;
+using mortred::models::cv_input::load_image;
+using mortred::models::io_define::common_io::base64_input;
+using mortred::models::io_define::common_io::byte_source;
+using mortred::models::io_define::common_io::file_input;
+using mortred::models::io_define::common_io::image_input;
+using mortred::models::io_define::common_io::mat_input;
 
 // CI (tests-only) builds do not compile models/session.cpp; the wiring tests
 // below instantiate BackendCvModel's vtable but never call init(), so a null
 // factory satisfies the link-time reference without pulling engine headers.
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 std::unique_ptr<InferenceSession> InferenceSession::create(const BackendConfig &config, std::string *err) {
@@ -39,25 +39,25 @@ std::unique_ptr<InferenceSession> InferenceSession::create(const BackendConfig &
 }
 } // namespace backend
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 namespace {
 
-jinq::models::io_define::common_io::byte_source png_source_of(const cv::Mat &image,
+mortred::models::io_define::common_io::byte_source png_source_of(const cv::Mat &image,
                                                               byte_source::origin_kind origin) {
     std::vector<uchar> buffer;
     cv::imencode(".png", image, buffer);
     byte_source source;
     source.origin = origin;
     if (origin == byte_source::origin_kind::base64_text) {
-        source.data = jinq::common::base64::encode(buffer.data(), buffer.size());
+        source.data = mortred::common::base64::encode(buffer.data(), buffer.size());
     } else {
         source.data.assign(buffer.begin(), buffer.end());
     }
     return source;
 }
 
-class StubImageModel : public jinq::models::backend::BackendCvModel<image_input, int> {
+class StubImageModel : public mortred::models::backend::BackendCvModel<image_input, int> {
   public:
     StubImageModel() : BackendCvModel("STUB_IMAGE_MODEL") {}
 
@@ -65,13 +65,13 @@ class StubImageModel : public jinq::models::backend::BackendCvModel<image_input,
     using BackendCvModel::prepare_inputs;
 
   protected:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override {
-        return {jinq::models::backend::NamedTensor{
-            "input", jinq::models::backend::Tensor::make<uint8_t>({1, image.rows, image.cols, image.channels()})}};
+    std::vector<mortred::models::backend::NamedTensor> preprocess(const cv::Mat &image) override {
+        return {mortred::models::backend::NamedTensor{
+            "input", mortred::models::backend::Tensor::make<uint8_t>({1, image.rows, image.cols, image.channels()})}};
     }
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &,
-                           const jinq::models::backend::InferenceContext &, int &) override {
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &,
+                           const mortred::models::backend::InferenceContext &, int &) override {
         return StatusCode::OK;
     }
 };
@@ -107,7 +107,7 @@ TEST(cv_image_input, base64_roundtrip) {
     cv::Mat img(16, 16, CV_8UC3, cv::Scalar(10, 20, 30));
     std::vector<uchar> buf;
     cv::imencode(".jpg", img, buf);
-    auto b64 = jinq::common::base64::encode(buf.data(), buf.size());
+    auto b64 = mortred::common::base64::encode(buf.data(), buf.size());
 
     base64_input in;
     in.input_image_content = b64;
@@ -239,7 +239,7 @@ TEST(cv_image_input, raw_bytes_enforce_pixel_limits) {
 }
 
 TEST(image_input_pipeline, image_input_satisfies_image_input_trait) {
-    EXPECT_TRUE(jinq::models::backend::detail::is_image_input<image_input>::value);
+    EXPECT_TRUE(mortred::models::backend::detail::is_image_input<image_input>::value);
 }
 
 TEST(image_input_pipeline, prepare_inputs_carries_params_and_geometry) {
@@ -248,7 +248,7 @@ TEST(image_input_pipeline, prepare_inputs_carries_params_and_geometry) {
     image_input in;
     in.image = png_source_of(image, byte_source::origin_kind::raw_bytes);
 
-    jinq::models::backend::ParamSet params;
+    mortred::models::backend::ParamSet params;
     params.set_f32("score_threshold", 0.75f);
     in.params = &params;
 

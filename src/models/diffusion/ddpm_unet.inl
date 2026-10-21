@@ -14,22 +14,22 @@
 
 #include "models/backend/f32_output.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace diffusion {
 
-using UnetInput = jinq::models::io_define::diffusion::std_ddpm_unet_input;
-using UnetOutput = jinq::models::io_define::diffusion::std_ddpm_unet_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using UnetInput = mortred::models::io_define::diffusion::std_ddpm_unet_input;
+using UnetOutput = mortred::models::io_define::diffusion::std_ddpm_unet_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT>
-jinq::models::backend::PreparedInput DDPMUNet<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
+mortred::models::backend::PreparedInput DDPMUNet<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
     const auto &input_infos = this->session().inputs();
     const auto xt_info = std::find_if(input_infos.begin(), input_infos.end(),
-                                      [](const jinq::models::backend::TensorInfo &info) { return info.name == "xt"; });
+                                      [](const mortred::models::backend::TensorInfo &info) { return info.name == "xt"; });
     const auto t_info = std::find_if(input_infos.begin(), input_infos.end(),
-                                     [](const jinq::models::backend::TensorInfo &info) { return info.name == "t"; });
+                                     [](const mortred::models::backend::TensorInfo &info) { return info.name == "t"; });
     if (xt_info == input_infos.end() || t_info == input_infos.end()) {
         LOG(ERROR) << "ddpm unet session does not expose the 'xt'/'t' inputs";
         return {};
@@ -39,11 +39,11 @@ jinq::models::backend::PreparedInput DDPMUNet<INPUT, OUTPUT>::prepare_inputs(con
         return {};
     }
 
-    jinq::models::backend::PreparedInput prepared;
+    mortred::models::backend::PreparedInput prepared;
     std::vector<NamedTensor> inputs;
     NamedTensor xt;
     xt.name = "xt";
-    xt.tensor = jinq::models::backend::Tensor::make<float>(xt_info->shape);
+    xt.tensor = mortred::models::backend::Tensor::make<float>(xt_info->shape);
     if (input.xt.size() * sizeof(float) != xt.tensor.byte_size()) {
         LOG(ERROR) << "ddpm unet xt element count " << input.xt.size() << " mismatches session input " << xt_info->to_string();
         return {};
@@ -53,13 +53,13 @@ jinq::models::backend::PreparedInput DDPMUNet<INPUT, OUTPUT>::prepare_inputs(con
 
     NamedTensor timestep;
     timestep.name = "t";
-    if (t_info->dtype == jinq::models::backend::DType::I64) {
-        timestep.tensor = jinq::models::backend::Tensor::make<int64_t>(t_info->shape);
+    if (t_info->dtype == mortred::models::backend::DType::I64) {
+        timestep.tensor = mortred::models::backend::Tensor::make<int64_t>(t_info->shape);
         timestep.tensor.data<int64_t>()[0] = input.timestep;
-    } else if (t_info->dtype == jinq::models::backend::DType::I32) {
+    } else if (t_info->dtype == mortred::models::backend::DType::I32) {
         // TensorRT builders commonly lower scalar int64 timestep inputs to
         // int32; follow the dtype exposed by the deployed engine.
-        timestep.tensor = jinq::models::backend::Tensor::make<int32_t>(t_info->shape);
+        timestep.tensor = mortred::models::backend::Tensor::make<int32_t>(t_info->shape);
         timestep.tensor.data<int32_t>()[0] = static_cast<int32_t>(input.timestep);
     } else {
         LOG(ERROR) << "unsupported ddpm unet timestep dtype: " << t_info->to_string();
@@ -72,14 +72,14 @@ jinq::models::backend::PreparedInput DDPMUNet<INPUT, OUTPUT>::prepare_inputs(con
 
 template <typename INPUT, typename OUTPUT>
 StatusCode DDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
+                                                const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "ddpm unet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    jinq::models::backend::F32OutputView output_view;
-    const auto output_status = jinq::models::backend::validated_f32_first_output(
-        outputs, {jinq::models::backend::DType::F32, 4, {1, -1, -1, -1}, jinq::models::backend::TensorLayout::Nchw}, "ddpm unet", &output_view);
+    mortred::models::backend::F32OutputView output_view;
+    const auto output_status = mortred::models::backend::validated_f32_first_output(
+        outputs, {mortred::models::backend::DType::F32, 4, {1, -1, -1, -1}, mortred::models::backend::TensorLayout::Nchw}, "ddpm unet", &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
     }
@@ -91,8 +91,8 @@ StatusCode DDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
 
 /************* Export Function Sets *************/
 
-template <typename INPUT, typename OUTPUT> DDPMUNet<INPUT, OUTPUT>::DDPMUNet() : jinq::models::BackendCvModel<INPUT, OUTPUT>("DDPM_UNET") {}
+template <typename INPUT, typename OUTPUT> DDPMUNet<INPUT, OUTPUT>::DDPMUNet() : mortred::models::BackendCvModel<INPUT, OUTPUT>("DDPM_UNET") {}
 
 } // namespace diffusion
 } // namespace models
-} // namespace jinq
+} // namespace mortred

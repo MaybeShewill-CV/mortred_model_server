@@ -15,8 +15,8 @@
 #include "glog/logging.h"
 #include "server/worker_pool.h"
 
-using jinq::server::StuckWorkerAction;
-using jinq::server::WorkerPool;
+using mortred::server::StuckWorkerAction;
+using mortred::server::WorkerPool;
 
 namespace {
 

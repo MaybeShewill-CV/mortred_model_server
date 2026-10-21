@@ -8,16 +8,16 @@
 #include "models/backend/gpu_preprocess_desc.h"
 #include "models/backend/model_runtime.h"
 
-using jinq::common::StatusCode;
-using jinq::models::backend::DType;
-using jinq::models::backend::ImagePipeline;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::OutputReader;
-using jinq::models::backend::ParamReader;
-using jinq::models::backend::SessionIoValidator;
-using jinq::models::backend::Tensor;
-using jinq::models::backend::TensorInfo;
-using jinq::models::backend::TensorLayout;
+using mortred::common::StatusCode;
+using mortred::models::backend::DType;
+using mortred::models::backend::ImagePipeline;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::OutputReader;
+using mortred::models::backend::ParamReader;
+using mortred::models::backend::SessionIoValidator;
+using mortred::models::backend::Tensor;
+using mortred::models::backend::TensorInfo;
+using mortred::models::backend::TensorLayout;
 
 namespace {
 
@@ -41,7 +41,7 @@ NamedTensor scores_tensor(const std::string &name) {
     return output;
 }
 
-class FakeSession final : public jinq::models::backend::InferenceSession {
+class FakeSession final : public mortred::models::backend::InferenceSession {
   public:
     FakeSession(std::vector<TensorInfo> inputs, std::vector<TensorInfo> outputs)
         : inputs_(std::move(inputs)), outputs_(std::move(outputs)) {}
@@ -330,7 +330,7 @@ TEST(ImagePipeline, LetterboxPadsCenterAndKeepsRatio) {
 TEST(GpuPreprocessNorm, BuildersDeclareCpuChainChannelOrder) {
     // rgb_norm: the CPU chain converts to RGB first, so its arrays already
     // match the kernel's application order (mean0 -> R)
-    const auto rgb = jinq::models::backend::rgb_norm(1.0f / 255.0f, {0.485f, 0.456f, 0.406f},
+    const auto rgb = mortred::models::backend::rgb_norm(1.0f / 255.0f, {0.485f, 0.456f, 0.406f},
                                                      {0.229f, 0.224f, 0.225f});
     EXPECT_FLOAT_EQ(rgb.scale, 1.0f / 255.0f);
     EXPECT_FLOAT_EQ(rgb.mean[0], 0.485f);
@@ -343,7 +343,7 @@ TEST(GpuPreprocessNorm, BuildersDeclareCpuChainChannelOrder) {
     // must carry the reversed arrays (kernel mean0 -> R gets values[2]).
     // dbnet/nanodet once shipped the BGR array verbatim, swapping B/R means
     // on the GPU decode path; this is the regression fence for that.
-    const auto bgr = jinq::models::backend::bgr_norm(1.0f / 255.0f, {0.485f, 0.456f, 0.406f},
+    const auto bgr = mortred::models::backend::bgr_norm(1.0f / 255.0f, {0.485f, 0.456f, 0.406f},
                                                      {0.229f, 0.224f, 0.225f});
     EXPECT_FLOAT_EQ(bgr.mean[0], 0.406f);  // R <- CPU values[2]
     EXPECT_FLOAT_EQ(bgr.mean[1], 0.456f);

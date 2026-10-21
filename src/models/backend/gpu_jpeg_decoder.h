@@ -15,7 +15,7 @@
 
 #include "models/backend/gpu_preprocess_desc.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 namespace gpu_jpeg {
@@ -83,6 +83,6 @@ class GpuDecodeSlot {
 }  // namespace gpu_jpeg
 }  // namespace backend
 }  // namespace models
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_MODELS_BACKEND_GPU_JPEG_DECODER_H

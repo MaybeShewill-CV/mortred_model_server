@@ -10,13 +10,13 @@
 #include "models/clip/openai_clip.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace factory {
 namespace clip {
 
-using jinq::models::BaseAiModel;
+using mortred::models::BaseAiModel;
 
-using jinq::models::clip::OpenAiClip;
+using mortred::models::clip::OpenAiClip;
 
 template <typename INPUT, typename OUTPUT> std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_openai_clip() {
     return std::make_unique<OpenAiClip<INPUT, OUTPUT>>();
@@ -24,9 +24,9 @@ template <typename INPUT, typename OUTPUT> std::unique_ptr<BaseAiModel<INPUT, OU
 
 // CLIP is consumed directly by benchmarks and in-process callers; it has no generic CV
 // server surface yet, so its catalog entry carries only model identity.
-using ClipInput = jinq::models::io_define::clip::clip_input;
-using ClipOutput = jinq::models::io_define::clip::clip_output;
-using Entry = jinq::factory::model_catalog::ModelCatalogEntry<ClipInput, ClipOutput>;
+using ClipInput = mortred::models::io_define::clip::clip_input;
+using ClipOutput = mortred::models::io_define::clip::clip_output;
+using Entry = mortred::factory::model_catalog::ModelCatalogEntry<ClipInput, ClipOutput>;
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
@@ -36,11 +36,11 @@ inline const std::vector<Entry> &catalog() {
 }
 
 inline std::unique_ptr<BaseAiModel<ClipInput, ClipOutput>> create_model(const std::string &model_section) {
-    return jinq::factory::model_catalog::create_model(catalog(), model_section);
+    return mortred::factory::model_catalog::create_model(catalog(), model_section);
 }
 
 } // namespace clip
 } // namespace factory
-} // namespace jinq
+} // namespace mortred
 
 #endif

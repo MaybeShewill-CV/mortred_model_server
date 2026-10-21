@@ -18,7 +18,7 @@
 
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace mot {
 namespace byte_tracker {
@@ -50,7 +50,7 @@ typedef Eigen::Matrix<float, -1, -1, Eigen::RowMajor> DYNAMIC;
 
 using RESULT_DATA = std::pair<int, DETECTBOX>;
 
-using Object = jinq::models::io_define::object_detection::bbox;
+using Object = mortred::models::io_define::object_detection::bbox;
 
 enum TrackState {
     New = 0,

@@ -15,7 +15,7 @@
 
 #include <opencv2/core.hpp>
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace io_define {
 namespace clip {
@@ -44,6 +44,6 @@ struct clip_output {
 } // namespace clip
 } // namespace io_define
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_IO_CLIP_H

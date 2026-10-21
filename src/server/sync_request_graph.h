@@ -49,9 +49,9 @@ namespace protocol {
 class HttpResponse;
 }
 
-namespace jinq {
+namespace mortred {
 namespace server {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 inline std::string make_sync_waiter_name(const std::string& task_id) {
     static std::atomic<uint64_t> seq{0};
@@ -137,10 +137,10 @@ struct SyncRequestState {
     WORKER worker{};
     std::shared_ptr<BatchRequestState<MODEL_OUTPUT>> batch_state;
     // perf/stage-timing: rides in from InferenceTask, null when untraced
-    std::shared_ptr<jinq::common::stage_timing::StageTrace> trace;
+    std::shared_ptr<mortred::common::stage_timing::StageTrace> trace;
 };
 
 }  // namespace server
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_SERVER_SYNC_REQUEST_GRAPH_H

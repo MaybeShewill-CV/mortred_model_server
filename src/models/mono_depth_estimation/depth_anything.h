@@ -14,12 +14,12 @@
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace mono_depth_estimation {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT> class DepthAnything : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class DepthAnything : public mortred::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     DepthAnything();
     ~DepthAnything() override = default;
@@ -28,10 +28,10 @@ template <typename INPUT, typename OUTPUT> class DepthAnything : public jinq::mo
     DepthAnything &operator=(const DepthAnything &transformer) = delete;
 
   private:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
+    std::vector<mortred::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode on_init(const toml::table &params) override;
 
@@ -41,7 +41,7 @@ template <typename INPUT, typename OUTPUT> class DepthAnything : public jinq::mo
 
 } // namespace mono_depth_estimation
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "depth_anything.inl"
 

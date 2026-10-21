@@ -17,13 +17,13 @@
 #include "models/backend/request_geometry.h"
 #include "models/backend/tensor_contract.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace scene_segmentation {
 
-using SegmentationOutput = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using SegmentationOutput = mortred::models::io_define::scene_segmentation::std_scene_segmentation_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode MsOcrNet<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto &input_info = this->session().inputs().front();
@@ -56,11 +56,11 @@ template <typename INPUT, typename OUTPUT> StatusCode MsOcrNet<INPUT, OUTPUT>::o
                       "params.model_input_image_size)";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "msocrnet"));
+    this->set_image_decode_hint(_m_input_size_host, mortred::models::cv_input::parse_image_decode_upscale(params, "msocrnet"));
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
         .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f, 0.5f, 0.5f}, .std = {0.5f, 0.5f, 0.5f}},
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .output_dtype = input_info.dtype,
         .output_nhwc = _m_input_is_nhwc,
@@ -70,7 +70,7 @@ template <typename INPUT, typename OUTPUT> StatusCode MsOcrNet<INPUT, OUTPUT>::o
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> MsOcrNet<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // bgr -> rgb -> resize -> [0,1] -> (x-0.5)/0.5
-    auto pipeline = jinq::models::backend::ImagePipeline(input_image)
+    auto pipeline = mortred::models::backend::ImagePipeline(input_image)
                         .bgr_to_rgb()
                         .resize(_m_input_size_host)
                         .to_float()
@@ -88,45 +88,45 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> MsOcrNet<INP
 
 template <typename INPUT, typename OUTPUT>
 StatusCode MsOcrNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "msocrnet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto source_status = jinq::models::backend::validated_source_size(context, "msocrnet");
+    const auto source_status = mortred::models::backend::validated_source_size(context, "msocrnet");
     if (source_status != StatusCode::OK) {
         return source_status;
     }
     const auto &tensor = outputs.front().tensor;
     std::string contract_error;
-    if (tensor.dtype != jinq::models::backend::DType::I32 && tensor.dtype != jinq::models::backend::DType::I64) {
+    if (tensor.dtype != mortred::models::backend::DType::I32 && tensor.dtype != mortred::models::backend::DType::I64) {
         LOG(ERROR) << "msocrnet argmax output dtype must be i32/i64, got " << tensor.dtype;
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
     // argmax mask layout: [1,H,W], NCHW [1,1,H,W], or legacy NHWC [1,H,W,1]
-    jinq::models::backend::TensorContract mask_contract;
-    mask_contract.dtype = jinq::models::backend::DType::I32;
+    mortred::models::backend::TensorContract mask_contract;
+    mask_contract.dtype = mortred::models::backend::DType::I32;
     auto try_mask = [&](size_t rank, std::vector<int64_t> shape,
-                        jinq::models::backend::TensorLayout layout = jinq::models::backend::TensorLayout::Unknown) {
+                        mortred::models::backend::TensorLayout layout = mortred::models::backend::TensorLayout::Unknown) {
         mask_contract.rank = rank;
         mask_contract.shape = std::move(shape);
         mask_contract.layout = layout;
-        return jinq::models::backend::validate_output_tensor(outputs.front(), mask_contract, &contract_error);
+        return mortred::models::backend::validate_output_tensor(outputs.front(), mask_contract, &contract_error);
     };
     bool mask_ok = try_mask(3, {1, context.network_size.height, context.network_size.width});
     if (!mask_ok) {
         mask_ok = try_mask(4, {1, 1, context.network_size.height, context.network_size.width},
-                           jinq::models::backend::TensorLayout::Nchw);
+                           mortred::models::backend::TensorLayout::Nchw);
     }
     if (!mask_ok) {
         mask_ok = try_mask(4, {1, context.network_size.height, context.network_size.width, 1});
     }
     if (!mask_ok) {
-        mask_contract.dtype = jinq::models::backend::DType::I64;
+        mask_contract.dtype = mortred::models::backend::DType::I64;
         mask_ok = try_mask(3, {1, context.network_size.height, context.network_size.width});
         if (!mask_ok) {
             mask_ok = try_mask(4, {1, 1, context.network_size.height, context.network_size.width},
-                               jinq::models::backend::TensorLayout::Nchw);
+                               mortred::models::backend::TensorLayout::Nchw);
         }
         if (!mask_ok) {
             mask_ok = try_mask(4, {1, context.network_size.height, context.network_size.width, 1});
@@ -137,7 +137,7 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
     if (tensor.shape.size() != 3 && tensor.shape.size() != 4) {
-        LOG(ERROR) << "unexpected msocrnet output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
+        LOG(ERROR) << "unexpected msocrnet output shape: " << mortred::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
     const auto height = context.network_size.height;
@@ -154,7 +154,7 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
     // i * W, which walks off the heap for every i >= H - the previous loop
     // corrupted the heap and produced a wrong mask at the same time.
     auto *mask_data = seg_mask.ptr<int32_t>();
-    if (tensor.dtype == jinq::models::backend::DType::I32) {
+    if (tensor.dtype == mortred::models::backend::DType::I32) {
         const auto *data = tensor.template data<int32_t>();
         std::memcpy(mask_data, data, static_cast<size_t>(element_count) * sizeof(int32_t));
     } else {
@@ -174,8 +174,8 @@ StatusCode MsOcrNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &
 
 /************* Export Function Sets *************/
 
-template <typename INPUT, typename OUTPUT> MsOcrNet<INPUT, OUTPUT>::MsOcrNet() : jinq::models::BackendCvModel<INPUT, OUTPUT>("MSOCRNET") {}
+template <typename INPUT, typename OUTPUT> MsOcrNet<INPUT, OUTPUT>::MsOcrNet() : mortred::models::BackendCvModel<INPUT, OUTPUT>("MSOCRNET") {}
 
 } // namespace scene_segmentation
 } // namespace models
-} // namespace jinq
+} // namespace mortred

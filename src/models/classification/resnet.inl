@@ -20,17 +20,17 @@
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace classification {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
-using ClassificationOutput = jinq::models::io_define::classification::std_classification_output;
-using jinq::models::backend::NamedTensor;
+using ClassificationOutput = mortred::models::io_define::classification::std_classification_output;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode ResNet<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto input_info =
-        jinq::models::backend::SessionIoValidator(this->session()).input().f32().allow_fp16().rank(4).nhwc().channels(3).static_shape().validate();
+        mortred::models::backend::SessionIoValidator(this->session()).input().f32().allow_fp16().rank(4).nhwc().channels(3).static_shape().validate();
     if (!input_info.ok()) {
         LOG(ERROR) << "unexpected classification input shape: " << input_info.error << ", expected static [N,H,W,3] (nhwc)";
         return StatusCode::MODEL_INIT_FAILED;
@@ -54,7 +54,7 @@ template <typename INPUT, typename OUTPUT> StatusCode ResNet<INPUT, OUTPUT>::on_
 
     if (params.contains("class_name_file")) {
         const std::string file_path = params["class_name_file"].value_or<std::string>("");
-        if (!jinq::common::FilePathUtil::is_file_exist(file_path)) {
+        if (!mortred::common::FilePathUtil::is_file_exist(file_path)) {
             LOG(WARNING) << "class name file: " << file_path << " not exist";
         } else {
             std::ifstream file(file_path, std::ios::in);
@@ -66,14 +66,14 @@ template <typename INPUT, typename OUTPUT> StatusCode ResNet<INPUT, OUTPUT>::on_
             }
         }
     }
-    this->set_image_decode_hint(cv::Size(256, 256), jinq::models::cv_input::parse_image_decode_upscale(params, "resnet"));
+    this->set_image_decode_hint(cv::Size(256, 256), mortred::models::cv_input::parse_image_decode_upscale(params, "resnet"));
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::CENTER_CROP,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::CENTER_CROP,
         // CPU path subtracts caffe-style 0-255 means after to_float, no /255:
         // keep the same units (scale 1) so both paths are numerically equal
         // CPU chain converts to RGB first (bgr_to_rgb before subtract)
-        .norm = jinq::models::backend::rgb_norm(1.0f, {123.68f, 116.78f, 103.94f}, {58.395f, 57.12f, 57.375f}),
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .norm = mortred::models::backend::rgb_norm(1.0f, {123.68f, 116.78f, 103.94f}, {58.395f, 57.12f, 57.375f}),
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .output_dtype = input_info.value.dtype,
         .output_nhwc = true,
@@ -85,7 +85,7 @@ template <typename INPUT, typename OUTPUT> StatusCode ResNet<INPUT, OUTPUT>::on_
 
 template <typename INPUT, typename OUTPUT> cv::Mat ResNet<INPUT, OUTPUT>::preprocess_mat(const cv::Mat &input_image) {
     // resize -> center crop -> rgb -> per channel normalize (f32 nhwc)
-    auto result = jinq::models::backend::ImagePipeline(input_image)
+    auto result = mortred::models::backend::ImagePipeline(input_image)
                       .resize({256, 256})
                       .center_crop(_m_input_tensor_size)
                       .bgr_to_rgb()
@@ -102,7 +102,7 @@ template <typename INPUT, typename OUTPUT> cv::Mat ResNet<INPUT, OUTPUT>::prepro
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> ResNet<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     const cv::Mat tmp = preprocess_mat(input_image);
-    auto result = jinq::models::backend::ImagePipeline(tmp).nhwc(this->session().inputs().front());
+    auto result = mortred::models::backend::ImagePipeline(tmp).nhwc(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};
@@ -112,13 +112,13 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> ResNet<INPUT
 
 template <typename INPUT, typename OUTPUT>
 StatusCode ResNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                              const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                              const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "classification model output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto output_rank = outputs.front().tensor.shape.size();
-    auto output_view = jinq::models::backend::OutputReader(outputs, outputs.front().name)
+    auto output_view = mortred::models::backend::OutputReader(outputs, outputs.front().name)
                            .f32()
                            .shape(output_rank == 1 ? std::vector<int64_t>{-1} : std::vector<int64_t>{1, -1})
                            .finite()
@@ -172,8 +172,8 @@ StatusCode ResNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &ou
 
 /************* Export Function Sets *************/
 
-template <typename INPUT, typename OUTPUT> ResNet<INPUT, OUTPUT>::ResNet() : jinq::models::BackendCvModel<INPUT, OUTPUT>("RESNET") {}
+template <typename INPUT, typename OUTPUT> ResNet<INPUT, OUTPUT>::ResNet() : mortred::models::BackendCvModel<INPUT, OUTPUT>("RESNET") {}
 
 } // namespace classification
 } // namespace models
-} // namespace jinq
+} // namespace mortred

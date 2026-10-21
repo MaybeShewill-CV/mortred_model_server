@@ -18,11 +18,11 @@
 #include "strack.h"
 #include "data_type.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace mot {
 namespace byte_tracker {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 class ByteTracker {
   public:

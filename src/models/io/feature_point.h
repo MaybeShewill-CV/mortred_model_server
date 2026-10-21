@@ -15,7 +15,7 @@
 
 #include <opencv2/core.hpp>
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace io_define {
 namespace feature_point {
@@ -38,6 +38,6 @@ using std_feature_point_match_output = std::vector<matched_fp>;
 } // namespace feature_point
 } // namespace io_define
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_IO_FEATURE_POINT_H

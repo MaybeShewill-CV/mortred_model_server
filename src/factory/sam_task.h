@@ -13,15 +13,15 @@
 #include "models/segment_anything/sam_automask_generator/sam_automask_generator.h"
 #include "models/segment_anything/sam_prediction/sam_predictor.h"
 
-namespace jinq {
+namespace mortred {
 namespace factory {
 namespace segment_anything {
 
-using jinq::models::BaseAiModel;
+using mortred::models::BaseAiModel;
 
-using jinq::models::segment_anything::FastSamSegmentor;
-using jinq::models::segment_anything::SamAutoMaskGenerator;
-using jinq::models::segment_anything::SamPredictor;
+using mortred::models::segment_anything::FastSamSegmentor;
+using mortred::models::segment_anything::SamAutoMaskGenerator;
+using mortred::models::segment_anything::SamPredictor;
 
 template <typename INPUT, typename OUTPUT> std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_sam_predictor() {
     return std::make_unique<SamPredictor<INPUT, OUTPUT>>();
@@ -40,27 +40,27 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_fast_sam_segmentor() {
 // SAM families have distinct IO contracts: the prompt predictor and fast-sam
 // are consumed directly by benchmarks, while the auto mask generator is served
 // over HTTP. Each family therefore keeps its own typed catalog.
-using MatInput = jinq::models::io_define::common_io::mat_input;
-using PromptInput = jinq::models::io_define::segment_anything::sam_prompt_input;
-using PromptOutput = jinq::models::io_define::segment_anything::std_sam_prompt_output;
-using FastSamOutput = jinq::models::io_define::segment_anything::std_fast_sam_output;
-using AmgOutput = jinq::models::io_define::segment_anything::std_sam_amg_output;
-using jinq::server::ImageInput;
+using MatInput = mortred::models::io_define::common_io::mat_input;
+using PromptInput = mortred::models::io_define::segment_anything::sam_prompt_input;
+using PromptOutput = mortred::models::io_define::segment_anything::std_sam_prompt_output;
+using FastSamOutput = mortred::models::io_define::segment_anything::std_fast_sam_output;
+using AmgOutput = mortred::models::io_define::segment_anything::std_sam_amg_output;
+using mortred::server::ImageInput;
 
-using PredictorEntry = jinq::factory::model_catalog::ModelCatalogEntry<PromptInput, PromptOutput>;
-using FastSamEntry = jinq::factory::model_catalog::ModelCatalogEntry<MatInput, FastSamOutput>;
-using AmgEntry = jinq::factory::cv_catalog::CvModelEntry<AmgOutput>;
+using PredictorEntry = mortred::factory::model_catalog::ModelCatalogEntry<PromptInput, PromptOutput>;
+using FastSamEntry = mortred::factory::model_catalog::ModelCatalogEntry<MatInput, FastSamOutput>;
+using AmgEntry = mortred::factory::cv_catalog::CvModelEntry<AmgOutput>;
 
 /*** request-overridable SAM AMG parameters. NOTE: points_per_side changes
  * the compute time drastically (it is the prompt grid density) - requests on
  * async long tasks should account for the longer deadline */
-inline const std::vector<jinq::models::backend::ParamSpec> &sam_amg_param_specs() {
-    static const std::vector<jinq::models::backend::ParamSpec> specs = {
-        jinq::models::backend::ParamSpec::i32("points_per_side").range(1, 64).desc("prompt point grid density (n x n points)"),
-        jinq::models::backend::ParamSpec::f32("pred_iou_thresh").range(0.0, 1.0).desc("mask quality filter"),
-        jinq::models::backend::ParamSpec::f32("stability_score_thresh").range(0.0, 1.0).desc("mask stability filter"),
-        jinq::models::backend::ParamSpec::f32("box_nms_thresh").range(0.0, 1.0).desc("mask NMS IoU threshold"),
-        jinq::models::backend::ParamSpec::i32("min_mask_region_area").range(0, 100000).desc("drop masks smaller than this many pixels"),
+inline const std::vector<mortred::models::backend::ParamSpec> &sam_amg_param_specs() {
+    static const std::vector<mortred::models::backend::ParamSpec> specs = {
+        mortred::models::backend::ParamSpec::i32("points_per_side").range(1, 64).desc("prompt point grid density (n x n points)"),
+        mortred::models::backend::ParamSpec::f32("pred_iou_thresh").range(0.0, 1.0).desc("mask quality filter"),
+        mortred::models::backend::ParamSpec::f32("stability_score_thresh").range(0.0, 1.0).desc("mask stability filter"),
+        mortred::models::backend::ParamSpec::f32("box_nms_thresh").range(0.0, 1.0).desc("mask NMS IoU threshold"),
+        mortred::models::backend::ParamSpec::i32("min_mask_region_area").range(0, 100000).desc("drop masks smaller than this many pixels"),
     };
     return specs;
 }
@@ -82,13 +82,13 @@ inline const std::vector<FastSamEntry> &fast_sam_catalog() {
 inline const std::vector<AmgEntry> &amg_catalog() {
     static const std::vector<AmgEntry> entries = {
         AmgEntry{"SAM_AMG", "SAM automatic mask generator", "SAM_AMG_SERVER", &create_sam_auto_mask_generator<ImageInput, AmgOutput>,
-                 &jinq::server::response::fill_sam_amg, sam_amg_param_specs()},
+                 &mortred::server::response::fill_sam_amg, sam_amg_param_specs()},
     };
     return entries;
 }
 
 } // namespace segment_anything
 } // namespace factory
-} // namespace jinq
+} // namespace mortred
 
 #endif

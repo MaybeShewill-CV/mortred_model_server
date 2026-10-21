@@ -19,11 +19,11 @@
 #include "models/model_io_define.h"
 #include "models/segment_anything/sam_prediction/sam_predictor.h"
 
-using jinq::common::StatusCode;
-using jinq::models::backend::DType;
-using jinq::models::backend::InferenceSession;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::TensorInfo;
+using mortred::common::StatusCode;
+using mortred::models::backend::DType;
+using mortred::models::backend::InferenceSession;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::TensorInfo;
 
 namespace {
 
@@ -46,16 +46,16 @@ struct FakeInput {};
 struct FakeOutput {};
 
 /*** a two-engine model used to exercise the base class; backend keys match CLIP ***/
-class FakeClipModel final : public jinq::models::backend::MultiSessionModel<FakeClipModel, FakeInput, FakeOutput> {
+class FakeClipModel final : public mortred::models::backend::MultiSessionModel<FakeClipModel, FakeInput, FakeOutput> {
   public:
     FakeClipModel() : MultiSessionModel("FAKE_CLIP") {}
 
-    static std::vector<jinq::models::backend::SessionSpec> sessions() {
+    static std::vector<mortred::models::backend::SessionSpec> sessions() {
         return {
-            {"visual", "visual_backend", jinq::models::backend::IoSpec::input("input").f32().rank(4).nchw().channels(3).static_shape(),
-             jinq::models::backend::IoSpec::output("output").f32().rank(2).static_shape()},
-            {"text", "text_backend", jinq::models::backend::IoSpec::input("input").i32().rank(2).static_shape(),
-             jinq::models::backend::IoSpec::output("output").f32().rank(2).static_shape()},
+            {"visual", "visual_backend", mortred::models::backend::IoSpec::input("input").f32().rank(4).nchw().channels(3).static_shape(),
+             mortred::models::backend::IoSpec::output("output").f32().rank(2).static_shape()},
+            {"text", "text_backend", mortred::models::backend::IoSpec::input("input").i32().rank(2).static_shape(),
+             mortred::models::backend::IoSpec::output("output").f32().rank(2).static_shape()},
         };
     }
 
@@ -67,11 +67,11 @@ class FakeClipModel final : public jinq::models::backend::MultiSessionModel<Fake
   protected:
     // postprocess is the only pure virtual hook; this test only exercises
     // session lifecycle, so it is never called
-    StatusCode postprocess(const std::vector<NamedTensor> &, const jinq::models::backend::InferenceContext &, FakeOutput &) override {
+    StatusCode postprocess(const std::vector<NamedTensor> &, const mortred::models::backend::InferenceContext &, FakeOutput &) override {
         return StatusCode::OK;
     }
 
-    std::unique_ptr<InferenceSession> create_session(const jinq::models::backend::SessionSpec &) const override {
+    std::unique_ptr<InferenceSession> create_session(const mortred::models::backend::SessionSpec &) const override {
         auto &queue = const_cast<std::queue<std::unique_ptr<InferenceSession>> &>(pending_);
         if (queue.empty()) {
             return nullptr;
@@ -227,9 +227,9 @@ text_backend = "visual_backend"
 }
 
 TEST(MultiSessionModel, LightGlueMissingMatcherBackendFailsNamed) {
-    using MatchIn = jinq::models::io_define::common_io::pair_mat_input;
-    using MatchOut = jinq::models::io_define::feature_point::std_feature_point_match_output;
-    jinq::models::feature_point::LightGlue<MatchIn, MatchOut> model;
+    using MatchIn = mortred::models::io_define::common_io::pair_mat_input;
+    using MatchOut = mortred::models::io_define::feature_point::std_feature_point_match_output;
+    mortred::models::feature_point::LightGlue<MatchIn, MatchOut> model;
 
     StatusCode status = StatusCode::OK;
     const std::string log = capture_init_log(
@@ -253,9 +253,9 @@ long_side_length = 512
 }
 
 TEST(MultiSessionModel, LightGlueMissingExtractorBackendFailsNamed) {
-    using MatchIn = jinq::models::io_define::common_io::pair_mat_input;
-    using MatchOut = jinq::models::io_define::feature_point::std_feature_point_match_output;
-    jinq::models::feature_point::LightGlue<MatchIn, MatchOut> model;
+    using MatchIn = mortred::models::io_define::common_io::pair_mat_input;
+    using MatchOut = mortred::models::io_define::feature_point::std_feature_point_match_output;
+    mortred::models::feature_point::LightGlue<MatchIn, MatchOut> model;
 
     StatusCode status = StatusCode::OK;
     const std::string log = capture_init_log(
@@ -277,9 +277,9 @@ long_side_length = 512
 }
 
 TEST(MultiSessionModel, SamMissingDecoderBackendFailsNamed) {
-    using SamIn = jinq::models::io_define::segment_anything::sam_prompt_input;
-    using SamOut = jinq::models::io_define::segment_anything::std_sam_prompt_output;
-    jinq::models::segment_anything::SamPredictor<SamIn, SamOut> model;
+    using SamIn = mortred::models::io_define::segment_anything::sam_prompt_input;
+    using SamOut = mortred::models::io_define::segment_anything::std_sam_prompt_output;
+    mortred::models::segment_anything::SamPredictor<SamIn, SamOut> model;
 
     StatusCode status = StatusCode::OK;
     const std::string log = capture_init_log(
@@ -301,9 +301,9 @@ model_file_path = "/nonexistent_encoder.mnn"
 }
 
 TEST(MultiSessionModel, SamMissingEncoderBackendFailsNamed) {
-    using SamIn = jinq::models::io_define::segment_anything::sam_prompt_input;
-    using SamOut = jinq::models::io_define::segment_anything::std_sam_prompt_output;
-    jinq::models::segment_anything::SamPredictor<SamIn, SamOut> model;
+    using SamIn = mortred::models::io_define::segment_anything::sam_prompt_input;
+    using SamOut = mortred::models::io_define::segment_anything::std_sam_prompt_output;
+    mortred::models::segment_anything::SamPredictor<SamIn, SamOut> model;
 
     StatusCode status = StatusCode::OK;
     const std::string log = capture_init_log(

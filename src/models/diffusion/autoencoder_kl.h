@@ -17,12 +17,12 @@
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace diffusion {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT> class AutoEncoderKL : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class AutoEncoderKL : public mortred::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     AutoEncoderKL();
     ~AutoEncoderKL() override = default;
@@ -31,15 +31,15 @@ template <typename INPUT, typename OUTPUT> class AutoEncoderKL : public jinq::mo
     AutoEncoderKL &operator=(const AutoEncoderKL &transformer) = delete;
 
   private:
-    jinq::models::backend::PreparedInput prepare_inputs(const INPUT &input) override;
+    mortred::models::backend::PreparedInput prepare_inputs(const INPUT &input) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 };
 
 } // namespace diffusion
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "autoencoder_kl.inl"
 

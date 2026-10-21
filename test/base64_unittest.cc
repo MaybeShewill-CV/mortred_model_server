@@ -12,8 +12,8 @@
 
 #include "common/base64.h"
 
-using jinq::common::base64::decode;
-using jinq::common::base64::encode;
+using mortred::common::base64::decode;
+using mortred::common::base64::encode;
 
 TEST(base64, encode_rfc4648_vectors) {
     EXPECT_EQ(encode(""), "");

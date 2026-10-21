@@ -17,13 +17,13 @@
 
 #include "common/cv_utils.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace scene_segmentation {
 
-using SegmentationOutput = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using SegmentationOutput = mortred::models::io_define::scene_segmentation::std_scene_segmentation_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode HRNetSegmentation<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto &input_info = this->session().inputs().front();
@@ -36,15 +36,15 @@ template <typename INPUT, typename OUTPUT> StatusCode HRNetSegmentation<INPUT, O
     _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
     _m_input_size_host.width = static_cast<int>(input_info.shape[3]);
     const auto &output_info = this->session().outputs().front();
-    if (output_info.dtype != jinq::models::backend::DType::I32) {
+    if (output_info.dtype != mortred::models::backend::DType::I32) {
         LOG(ERROR) << "unexpected hrnet argmax output dtype: " << output_info.to_string();
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "hrnet"));
+    this->set_image_decode_hint(_m_input_size_host, mortred::models::cv_input::parse_image_decode_upscale(params, "hrnet"));
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
         .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f, 0.5f, 0.5f}, .std = {0.5f, 0.5f, 0.5f}},
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .output_dtype = input_info.dtype,
         .output_nhwc = false,
@@ -56,7 +56,7 @@ template <typename INPUT, typename OUTPUT> StatusCode HRNetSegmentation<INPUT, O
 template <typename INPUT, typename OUTPUT>
 std::vector<NamedTensor> HRNetSegmentation<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // bgr -> rgb -> resize -> [0,1] -> (x-0.5)/0.5, f32 nchw
-    auto result = jinq::models::backend::ImagePipeline(input_image)
+    auto result = mortred::models::backend::ImagePipeline(input_image)
                       .bgr_to_rgb()
                       .resize(_m_input_size_host)
                       .to_float()
@@ -73,12 +73,12 @@ std::vector<NamedTensor> HRNetSegmentation<INPUT, OUTPUT>::preprocess(const cv::
 
 template <typename INPUT, typename OUTPUT>
 StatusCode HRNetSegmentation<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                         const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                         const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "hrnet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto source_status = jinq::models::backend::validated_source_size(context, "hrnet");
+    const auto source_status = mortred::models::backend::validated_source_size(context, "hrnet");
     if (source_status != StatusCode::OK) {
         return source_status;
     }
@@ -88,17 +88,17 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::postprocess(const std::vector<Named
         LOG(ERROR) << "hrnet output rank is " << tensor.shape.size() << ", expected [H,W] or [1,H,W]";
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
-    jinq::models::backend::TensorContract output_contract;
-    output_contract.dtype = jinq::models::backend::DType::I32;
+    mortred::models::backend::TensorContract output_contract;
+    output_contract.dtype = mortred::models::backend::DType::I32;
     output_contract.rank = tensor.shape.size();
     output_contract.shape.assign(output_contract.rank, -1);
-    if (!jinq::models::backend::validate_output_tensor(outputs.front(), output_contract, &contract_error)) {
+    if (!mortred::models::backend::validate_output_tensor(outputs.front(), output_contract, &contract_error)) {
         LOG(ERROR) << "hrnet output contract failed: " << contract_error;
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
     const auto *mask_data = tensor.template data<int32_t>();
     if (tensor.element_count() < static_cast<int64_t>(context.network_size.area())) {
-        LOG(ERROR) << "hrnet mask smaller than the input map: " << jinq::models::backend::shape_to_string(tensor.shape);
+        LOG(ERROR) << "hrnet mask smaller than the input map: " << mortred::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
 
@@ -114,8 +114,8 @@ StatusCode HRNetSegmentation<INPUT, OUTPUT>::postprocess(const std::vector<Named
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-HRNetSegmentation<INPUT, OUTPUT>::HRNetSegmentation() : jinq::models::BackendCvModel<INPUT, OUTPUT>("HRNET_SEGMENTATION") {}
+HRNetSegmentation<INPUT, OUTPUT>::HRNetSegmentation() : mortred::models::BackendCvModel<INPUT, OUTPUT>("HRNET_SEGMENTATION") {}
 
 } // namespace scene_segmentation
 } // namespace models
-} // namespace jinq
+} // namespace mortred

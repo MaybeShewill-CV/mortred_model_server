@@ -13,7 +13,7 @@
 #include <opencv2/core.hpp>
 #include "models/backend/tensor.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
@@ -121,6 +121,6 @@ inline GpuPreprocessDescriptor::Norm bgr_norm(float scale, const std::array<floa
 
 } // namespace backend
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_BACKEND_GPU_PREPROCESS_DESC_H

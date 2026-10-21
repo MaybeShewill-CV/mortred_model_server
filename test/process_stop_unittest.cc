@@ -18,7 +18,7 @@
 
 #include "common/process_stop.h"
 
-using jinq::common::ProcessStop;
+using mortred::common::ProcessStop;
 using std::chrono::duration_cast;
 using std::chrono::milliseconds;
 using std::chrono::steady_clock;

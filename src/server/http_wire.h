@@ -37,9 +37,9 @@
 #include "control/rate_limit/headers.h"
 #include "server/request_admission.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 inline std::string generate_req_id() {
     const auto now = std::chrono::high_resolution_clock::now();
@@ -103,39 +103,39 @@ inline bool is_raw_body_content_type(const std::string& content_type) {
     return content_type_kind(content_type) == ContentTypeKind::RawBody;
 }
 
-inline jinq::common::UnifiedResponse status_envelope(
+inline mortred::common::UnifiedResponse status_envelope(
     const std::string& task_id, StatusCode status,
-    std::vector<jinq::common::ResponseError> errors = {},
+    std::vector<mortred::common::ResponseError> errors = {},
     const std::string& model_name = {}) {
-    jinq::common::UnifiedResponse unified;
+    mortred::common::UnifiedResponse unified;
     unified.task_id = task_id;
-    unified.status = jinq::common::to_underlying(status);
-    unified.status_str = jinq::common::status_code_to_str(status);
+    unified.status = mortred::common::to_underlying(status);
+    unified.status_str = mortred::common::status_code_to_str(status);
     unified.model_name = model_name;
     unified.errors = std::move(errors);
     return unified;
 }
 
-inline jinq::common::UnifiedResponse unified_rejection(
+inline mortred::common::UnifiedResponse unified_rejection(
     const std::string& task_id, StatusCode status,
-    std::vector<jinq::common::ResponseError> errors) {
+    std::vector<mortred::common::ResponseError> errors) {
     return status_envelope(task_id, status, std::move(errors));
 }
 
 inline void reply_unified_json(protocol::HttpResponse* resp,
-                               const jinq::common::UnifiedResponse& unified) {
+                               const mortred::common::UnifiedResponse& unified) {
     resp->set_status_code(std::to_string(http_status_of(
                               static_cast<StatusCode>(unified.status))).c_str());
     resp->add_header_pair("Content-Type", "application/json; charset=utf-8");
     resp->add_header_pair("X-Request-ID", unified.task_id.c_str());
     resp->add_header_pair("Cache-Control", "no-store");
 
-    const auto body = jinq::common::envelope::encode(unified);
+    const auto body = mortred::common::envelope::encode(unified);
     resp->append_output_body(body.data(), body.size());
 }
 
 inline void reply_unified_json(WFHttpTask* task,
-                               const jinq::common::UnifiedResponse& unified) {
+                               const mortred::common::UnifiedResponse& unified) {
     reply_unified_json(task->get_resp(), unified);
 }
 
@@ -149,6 +149,6 @@ inline void reply_unauthorized(WFHttpTask* task, const std::string& model_name) 
 }
 
 }  // namespace server
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_SERVER_HTTP_WIRE_H

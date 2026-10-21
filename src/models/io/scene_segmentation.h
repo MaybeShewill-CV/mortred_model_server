@@ -15,7 +15,7 @@
 
 #include <opencv2/core.hpp>
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace io_define {
 namespace scene_segmentation {
@@ -31,6 +31,6 @@ using std_scene_segmentation_output = seg_output;
 } // namespace scene_segmentation
 } // namespace io_define
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_IO_SCENE_SEGMENTATION_H

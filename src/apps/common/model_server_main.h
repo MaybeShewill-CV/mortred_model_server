@@ -25,9 +25,9 @@
 #include "common/process_stop.h"
 #include "server/abstract_server.h"
 
-namespace jinq {
+namespace mortred {
 namespace apps {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /*** Table lookup that tolerates a case difference between the catalog id and
  * the TOML table name (legacy conf/model tables are uppercase, product ids
@@ -66,11 +66,11 @@ inline const toml::table* find_section_ci(const toml::table& config, const std::
 inline int run_model_server_main(
     int argc, char** argv,
     const std::string& server_section,
-    const std::function<std::unique_ptr<jinq::server::BaseAiServer>(const std::string&)>&
+    const std::function<std::unique_ptr<mortred::server::BaseAiServer>(const std::string&)>&
         make_server) {
     // Arm before glog/Workflow threads so they inherit the blocked SIGINT/SIGTERM
     // mask. Usage-only invocations skip arm() and never wait().
-    jinq::common::ProcessStop process_stop;
+    mortred::common::ProcessStop process_stop;
     if (argc == 2) {
         process_stop.arm();
     }
@@ -154,6 +154,6 @@ inline int run_model_server_main(
 }
 
 }  // namespace apps
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_APPS_MODEL_SERVER_MAIN_H

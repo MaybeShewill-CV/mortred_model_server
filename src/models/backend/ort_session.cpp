@@ -20,11 +20,11 @@
 #include "common/file_path_util.h"
 #include "models/backend/session_io.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 namespace {
 
@@ -86,7 +86,7 @@ StatusCode OrtSession::init(const BackendConfig& config, std::string* err) {
     if (err != nullptr) {
         err->clear();
     }
-    if (!jinq::common::FilePathUtil::is_file_exist(config.model_file_path)) {
+    if (!mortred::common::FilePathUtil::is_file_exist(config.model_file_path)) {
         if (err != nullptr) {
             *err = "onnx model file not exist: " + config.model_file_path;
         }
@@ -336,4 +336,4 @@ StatusCode OrtSession::run(const std::vector<NamedTensor>& inputs,
 
 }  // namespace backend
 }  // namespace models
-}  // namespace jinq
+}  // namespace mortred

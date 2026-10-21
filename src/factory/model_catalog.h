@@ -11,7 +11,7 @@
 #include "models/base_model.h"
 #include "models/catalog/model_entry.h"
 
-namespace jinq {
+namespace mortred {
 namespace factory {
 namespace model_catalog {
 
@@ -21,8 +21,8 @@ namespace model_catalog {
  * separate from CvModelEntry avoids forcing a server section onto models that
  * have no HTTP surface yet.
  */
-template <typename INPUT, typename OUTPUT> struct ModelCatalogEntry : public jinq::models::catalog::ModelEntry {
-    std::function<std::unique_ptr<jinq::models::BaseAiModel<INPUT, OUTPUT>>()> make_model;
+template <typename INPUT, typename OUTPUT> struct ModelCatalogEntry : public mortred::models::catalog::ModelEntry {
+    std::function<std::unique_ptr<mortred::models::BaseAiModel<INPUT, OUTPUT>>()> make_model;
 };
 
 template <typename INPUT, typename OUTPUT>
@@ -35,7 +35,7 @@ const ModelCatalogEntry<INPUT, OUTPUT> *find_entry(const std::vector<ModelCatalo
 }
 
 template <typename INPUT, typename OUTPUT>
-std::unique_ptr<jinq::models::BaseAiModel<INPUT, OUTPUT>> create_model(const std::vector<ModelCatalogEntry<INPUT, OUTPUT>> &entries,
+std::unique_ptr<mortred::models::BaseAiModel<INPUT, OUTPUT>> create_model(const std::vector<ModelCatalogEntry<INPUT, OUTPUT>> &entries,
                                                                        const std::string &model_section) {
     const auto *entry = find_entry(entries, model_section);
     if (entry == nullptr || !entry->make_model) {
@@ -47,6 +47,6 @@ std::unique_ptr<jinq::models::BaseAiModel<INPUT, OUTPUT>> create_model(const std
 
 } // namespace model_catalog
 } // namespace factory
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_FACTORY_MODEL_CATALOG_H

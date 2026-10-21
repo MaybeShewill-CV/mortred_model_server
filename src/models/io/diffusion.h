@@ -15,7 +15,7 @@
 
 #include <opencv2/core.hpp>
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace io_define {
 namespace diffusion {
@@ -125,6 +125,6 @@ using std_ldm_output = ldm_sample_output;
 } // namespace diffusion
 } // namespace io_define
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_IO_DIFFUSION_H

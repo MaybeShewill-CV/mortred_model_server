@@ -16,7 +16,7 @@
 
 #include "glog/logging.h"
 
-namespace jinq {
+namespace mortred {
 namespace factory {
 
 /***
@@ -82,6 +82,6 @@ template<typename BASE>
 using ServerFactory = TypeErasedFactory<BASE>;
 
 }  // namespace factory
-}  // namespace jinq
+}  // namespace mortred
 
 #endif //MORTRED_MODEL_SERVER_BASE_FACTORY_H

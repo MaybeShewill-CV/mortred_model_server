@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace jinq {
+namespace mortred {
 namespace server {
 
 /***
@@ -36,6 +36,6 @@ inline int compute_retry_after_seconds(size_t queue_depth, int64_t run_time_ewma
 }
 
 }  // namespace server
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_SERVER_BACKPRESSURE_H

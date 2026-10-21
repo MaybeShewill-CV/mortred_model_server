@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-namespace jinq {
+namespace mortred {
 namespace apps {
 
 /***
@@ -81,6 +81,6 @@ inline bool parse_model_cli(int argc, char **argv, ModelCli *out, std::string *e
 }
 
 } // namespace apps
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_APPS_CLI_FLAGS_H

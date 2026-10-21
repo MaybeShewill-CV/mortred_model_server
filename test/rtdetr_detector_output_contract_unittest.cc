@@ -4,9 +4,9 @@
 #include "models/io/object_detection.h"
 #include "models/object_detection/rtdetr_detector.h"
 
-using jinq::models::io_define::common_io::mat_input;
-using jinq::models::io_define::object_detection::std_object_detection_output;
-using jinq::models::object_detection::RtdetrDetector;
+using mortred::models::io_define::common_io::mat_input;
+using mortred::models::io_define::object_detection::std_object_detection_output;
+using mortred::models::object_detection::RtdetrDetector;
 
 // one line buys the full seven-variant rejection matrix (missing output /
 // wrong dtype / wrong rank / wrong shape / short buffer / NaN / Inf).

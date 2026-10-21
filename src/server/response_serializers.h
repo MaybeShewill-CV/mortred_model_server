@@ -24,7 +24,7 @@
 #include "models/model_io_define.h"
 #include "server/output_options.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
 namespace response {
 
@@ -47,7 +47,7 @@ inline std::string encode_image(const cv::Mat& image, const char* ext) {
     }
     std::vector<uchar> buffer;
     cv::imencode(ext, image, buffer);
-    return jinq::common::base64::encode(buffer.data(), buffer.size());
+    return mortred::common::base64::encode(buffer.data(), buffer.size());
 }
 
 inline rapidjson::Value make_string(AllocatorType& allocator, const std::string& value) {
@@ -57,7 +57,7 @@ inline rapidjson::Value make_string(AllocatorType& allocator, const std::string&
 /*** Raw base64 image payload: image (already encoded by the model) ***/
 inline void fill_base64_image(AllocatorType &allocator,
                               rapidjson::Document &data,
-                              const jinq::models::io_define::common_io::base64_input &out,
+                              const mortred::models::io_define::common_io::base64_input &out,
                               const OutputOptions &options) {
     (void)options;  // payload is already an encoded image produced by the model
     data.SetObject();
@@ -67,7 +67,7 @@ inline void fill_base64_image(AllocatorType &allocator,
 /*** Classification: class_id / category / scores ***/
 inline void fill_classification(AllocatorType& allocator,
                                 rapidjson::Document& data,
-                                const jinq::models::io_define::classification::std_classification_output& out,
+                                const mortred::models::io_define::classification::std_classification_output& out,
                                 const OutputOptions& options) {
     (void)options;
     data.SetObject();
@@ -83,7 +83,7 @@ inline void fill_classification(AllocatorType& allocator,
 /*** Feature embedding: embedding vector plus its dimension ***/
 inline void fill_feature_embedding(AllocatorType& allocator,
                                    rapidjson::Document& data,
-                                   const jinq::models::io_define::feature_embedding::std_feature_embedding_output& out,
+                                   const mortred::models::io_define::feature_embedding::std_feature_embedding_output& out,
                                    const OutputOptions& options) {
     (void)options;
     data.SetObject();
@@ -98,7 +98,7 @@ inline void fill_feature_embedding(AllocatorType& allocator,
 /*** Object detection: class_id / score / category / bbox / detail_infos ***/
 inline void fill_object_detection(AllocatorType& allocator,
                                   rapidjson::Document& data,
-                                  const jinq::models::io_define::object_detection::std_object_detection_output& out,
+                                  const mortred::models::io_define::object_detection::std_object_detection_output& out,
                                   const OutputOptions& options) {
     (void)options;
     data.SetArray();
@@ -116,7 +116,7 @@ inline void fill_object_detection(AllocatorType& allocator,
 /*** Face detection: detection fields plus landmarks ***/
 inline void fill_face_detection(AllocatorType& allocator,
                                 rapidjson::Document& data,
-                                const jinq::models::io_define::object_detection::std_face_detection_output& out,
+                                const mortred::models::io_define::object_detection::std_face_detection_output& out,
                                 const OutputOptions& options) {
     (void)options;
     data.SetArray();
@@ -142,7 +142,7 @@ inline void fill_face_detection(AllocatorType& allocator,
 /*** OCR text regions: score / bbox / polygon / detail_infos ***/
 inline void fill_text_regions(AllocatorType& allocator,
                               rapidjson::Document& data,
-                              const jinq::models::io_define::ocr::std_text_regions_output& out,
+                              const mortred::models::io_define::ocr::std_text_regions_output& out,
                               const OutputOptions& options) {
     (void)options;
     data.SetArray();
@@ -167,7 +167,7 @@ inline void fill_text_regions(AllocatorType& allocator,
 inline void fill_scene_segmentation(
     AllocatorType& allocator,
     rapidjson::Document& data,
-    const jinq::models::io_define::scene_segmentation::std_scene_segmentation_output& out,
+    const mortred::models::io_define::scene_segmentation::std_scene_segmentation_output& out,
     const OutputOptions& options) {
     const char* image_ext = options.encoding_extension();
     data.SetObject();
@@ -175,7 +175,7 @@ inline void fill_scene_segmentation(
                    allocator);
     cv::Mat color_mask = out.colorized_seg_mask;
     if (color_mask.empty() && !out.segmentation_result.empty()) {
-        jinq::common::CvUtils::colorize_segmentation_mask(
+        mortred::common::CvUtils::colorize_segmentation_mask(
             out.segmentation_result, color_mask, 80);
     }
     data.AddMember("colorized_mask",
@@ -185,7 +185,7 @@ inline void fill_scene_segmentation(
 /*** Matting: image (PNG base64) ***/
 inline void fill_matting(AllocatorType& allocator,
                          rapidjson::Document& data,
-                         const jinq::models::io_define::matting::std_matting_output& out,
+                         const mortred::models::io_define::matting::std_matting_output& out,
                          const OutputOptions& options) {
     data.SetObject();
     data.AddMember("image", make_string(allocator, encode_image(out.matting_result, options.encoding_extension())),
@@ -195,7 +195,7 @@ inline void fill_matting(AllocatorType& allocator,
 /*** Enhancement: image (JPG base64) ***/
 inline void fill_enhancement(AllocatorType& allocator,
                             rapidjson::Document& data,
-                            const jinq::models::io_define::enhancement::std_enhancement_output& out,
+                            const mortred::models::io_define::enhancement::std_enhancement_output& out,
                             const OutputOptions& options) {
     data.SetObject();
     data.AddMember("image", make_string(allocator, encode_image(out.enhancement_result, options.encoding_extension())),
@@ -205,7 +205,7 @@ inline void fill_enhancement(AllocatorType& allocator,
 /*** Mono depth: image (PNG base64, colorized depth map) ***/
 inline void fill_depth_estimation(AllocatorType& allocator,
                                   rapidjson::Document& data,
-                                  const jinq::models::io_define::mono_depth_estimation::std_mde_output& out,
+                                  const mortred::models::io_define::mono_depth_estimation::std_mde_output& out,
                                   const OutputOptions& options) {
     data.SetObject();
     data.AddMember("image", make_string(allocator, encode_image(out.colorized_depth_map, options.encoding_extension())),
@@ -215,7 +215,7 @@ inline void fill_depth_estimation(AllocatorType& allocator,
 /*** Feature points: score / location / descriptor ***/
 inline void fill_feature_points(AllocatorType& allocator,
                                 rapidjson::Document& data,
-                                const jinq::models::io_define::feature_point::std_feature_point_output& out,
+                                const mortred::models::io_define::feature_point::std_feature_point_output& out,
                                 const OutputOptions& options) {
     (void)options;
     data.SetArray();
@@ -238,7 +238,7 @@ inline void fill_feature_points(AllocatorType& allocator,
 /*** SAM automatic masks: segmentation png + area / bbox / iou / stability ***/
 inline void fill_sam_amg(AllocatorType &allocator,
                          rapidjson::Document &data,
-                         const jinq::models::io_define::segment_anything::std_sam_amg_output &out,
+                         const mortred::models::io_define::segment_anything::std_sam_amg_output &out,
                          const OutputOptions &options) {
     const char *image_ext = options.encoding_extension();
     const auto count = out.segmentations.size();
@@ -265,6 +265,6 @@ inline void fill_sam_amg(AllocatorType &allocator,
 
 }  // namespace response
 }  // namespace server
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_SERVER_RESPONSE_SERIALIZERS_H

@@ -14,8 +14,8 @@
 
 #include "models/base_model.h"
 
-using jinq::common::StatusCode;
-using jinq::models::BaseAiModel;
+using mortred::common::StatusCode;
+using mortred::models::BaseAiModel;
 
 namespace {
 

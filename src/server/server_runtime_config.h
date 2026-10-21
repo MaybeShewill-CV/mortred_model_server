@@ -24,10 +24,10 @@
 #include "common/status_code.h"
 #include "server/server_config_schema.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
-using jinq::common::StatusCode;
-using jinq::common::k_default_request_size_limit_mb;
+using mortred::common::StatusCode;
+using mortred::common::k_default_request_size_limit_mb;
 
 // Applied when model_run_timeout <= 0. Every request must carry a deadline and
 // own a request timer: without them a hung model keeps its worker forever,
@@ -100,13 +100,13 @@ inline StatusCode parse_server_security_config(const toml::table& server_section
     if (const char* env = std::getenv("MORTRED_LISTEN_HOST"); env != nullptr && *env != '\0') {
         listen_host = env;
     }
-    if (!jinq::common::listen_host_permitted(listen_host)) {
+    if (!mortred::common::listen_host_permitted(listen_host)) {
         LOG(ERROR) << "refusing to serve on " << listen_host
-                   << " (MORTRED_EXPOSE=" << jinq::common::mortred_expose_mode()
+                   << " (MORTRED_EXPOSE=" << mortred::common::mortred_expose_mode()
                    << "); bind 127.0.0.1 or set MORTRED_EXPOSE=docker|unsafe";
         return StatusCode::SERVER_INIT_FAILED;
     }
-    if (!jinq::common::is_loopback_host(listen_host) && cfg.auth_token.empty()) {
+    if (!mortred::common::is_loopback_host(listen_host) && cfg.auth_token.empty()) {
         LOG(ERROR) << "refusing to serve on non-loopback host " << listen_host
                    << " without auth_token configured";
         return StatusCode::SERVER_INIT_FAILED;
@@ -220,6 +220,6 @@ inline StatusCode parse_server_runtime_config(const toml::table& server_section,
 }
 
 }  // namespace server
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_SERVER_RUNTIME_CONFIG_H

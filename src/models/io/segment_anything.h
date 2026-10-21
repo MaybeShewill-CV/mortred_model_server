@@ -15,7 +15,7 @@
 
 #include <opencv2/core.hpp>
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace io_define {
 namespace segment_anything {
@@ -44,6 +44,6 @@ using std_fast_sam_output = cv::Mat;
 } // namespace segment_anything
 } // namespace io_define
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_IO_SEGMENT_ANYTHING_H

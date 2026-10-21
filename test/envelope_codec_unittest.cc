@@ -17,13 +17,13 @@
 #include "common/response_envelope.h"
 #include "common/status_code.h"
 
-using jinq::common::StatusCode;
-using jinq::common::UnifiedResponse;
-using jinq::common::envelope::Request;
-using jinq::common::envelope::decode_request;
-using jinq::common::envelope::decode_response;
-using jinq::common::envelope::encode;
-using jinq::common::envelope::k_img_data_migration;
+using mortred::common::StatusCode;
+using mortred::common::UnifiedResponse;
+using mortred::common::envelope::Request;
+using mortred::common::envelope::decode_request;
+using mortred::common::envelope::decode_response;
+using mortred::common::envelope::encode;
+using mortred::common::envelope::k_img_data_migration;
 
 TEST(envelope_codec, request_roundtrip_preserves_fields) {
     Request request;
@@ -71,7 +71,7 @@ TEST(envelope_codec, response_roundtrip_and_unknown_keys_ignored) {
     resp.server_time_ms = 41.25;
     resp.partial = false;
 
-    jinq::common::ResponseItem ok_item;
+    mortred::common::ResponseItem ok_item;
     ok_item.status = 0;
     ok_item.data.SetObject();
     ok_item.data.AddMember("image", "abc", ok_item.data.GetAllocator());

@@ -17,27 +17,27 @@
 
 #include "models/backend/f32_output.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace diffusion {
 
-using VaeInput = jinq::models::io_define::diffusion::std_vae_decode_input;
-using VaeOutput = jinq::models::io_define::diffusion::std_vae_decode_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using VaeInput = mortred::models::io_define::diffusion::std_vae_decode_input;
+using VaeOutput = mortred::models::io_define::diffusion::std_vae_decode_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT>
-jinq::models::backend::PreparedInput AutoEncoderKL<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
+mortred::models::backend::PreparedInput AutoEncoderKL<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
     const auto &input_info = this->session().inputs().front();
     if (input_info.dynamic) {
         LOG(ERROR) << "vae decoder input must be static, got " << input_info.to_string();
         return {};
     }
-    jinq::models::backend::PreparedInput prepared;
+    mortred::models::backend::PreparedInput prepared;
     std::vector<NamedTensor> inputs;
     NamedTensor named;
     named.name = input_info.name;
-    named.tensor = jinq::models::backend::Tensor::make<float>(input_info.shape);
+    named.tensor = mortred::models::backend::Tensor::make<float>(input_info.shape);
     if (input.decode_data.size() * sizeof(float) != named.tensor.byte_size()) {
         LOG(ERROR) << "vae decode data element count " << input.decode_data.size() << " mismatches session input "
                    << input_info.to_string();
@@ -51,14 +51,14 @@ jinq::models::backend::PreparedInput AutoEncoderKL<INPUT, OUTPUT>::prepare_input
 
 template <typename INPUT, typename OUTPUT>
 StatusCode AutoEncoderKL<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                     const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
+                                                     const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "vae decoder output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    jinq::models::backend::F32OutputView output_view;
-    const auto output_status = jinq::models::backend::validated_f32_first_output(
-        outputs, {jinq::models::backend::DType::F32, 4, {1, -1, -1, -1}, jinq::models::backend::TensorLayout::Nchw}, "vae decoder", &output_view);
+    mortred::models::backend::F32OutputView output_view;
+    const auto output_status = mortred::models::backend::validated_f32_first_output(
+        outputs, {mortred::models::backend::DType::F32, 4, {1, -1, -1, -1}, mortred::models::backend::TensorLayout::Nchw}, "vae decoder", &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
     }
@@ -78,7 +78,7 @@ StatusCode AutoEncoderKL<INPUT, OUTPUT>::postprocess(const std::vector<NamedTens
         pix_value = pix_value > 1.0f ? 1.0f : pix_value;
         decode_out.push_back(static_cast<uint8_t>(pix_value * 255.0f));
     }
-    auto hwc_data = jinq::common::CvUtils::convert_to_hwc_vec<uint8_t>(decode_out, static_cast<int>(channels), static_cast<int>(height),
+    auto hwc_data = mortred::common::CvUtils::convert_to_hwc_vec<uint8_t>(decode_out, static_cast<int>(channels), static_cast<int>(height),
                                                                        static_cast<int>(width));
 
     auto mat_dtype = CV_8UC3;
@@ -101,8 +101,8 @@ StatusCode AutoEncoderKL<INPUT, OUTPUT>::postprocess(const std::vector<NamedTens
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-AutoEncoderKL<INPUT, OUTPUT>::AutoEncoderKL() : jinq::models::BackendCvModel<INPUT, OUTPUT>("AUTOENCODER_KL") {}
+AutoEncoderKL<INPUT, OUTPUT>::AutoEncoderKL() : mortred::models::BackendCvModel<INPUT, OUTPUT>("AUTOENCODER_KL") {}
 
 } // namespace diffusion
 } // namespace models
-} // namespace jinq
+} // namespace mortred

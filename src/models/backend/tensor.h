@@ -21,7 +21,7 @@
 
 #include "glog/logging.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
@@ -346,6 +346,6 @@ struct NamedTensor {
 
 }  // namespace backend
 }  // namespace models
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_MODELS_BACKEND_TENSOR_H

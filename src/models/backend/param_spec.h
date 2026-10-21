@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
@@ -438,6 +438,6 @@ inline std::vector<ParamViolation> validate_params(const std::vector<ParamSpec> 
 
 } // namespace backend
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_BACKEND_PARAM_SPEC_H

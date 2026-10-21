@@ -15,15 +15,15 @@
 #include "common/cv_utils.h"
 #include "models/backend/tensor.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace segment_anything {
 
-using jinq::common::CvUtils;
-using jinq::common::StatusCode;
-using jinq::models::backend::InferenceSession;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
+using mortred::common::CvUtils;
+using mortred::common::StatusCode;
+using mortred::models::backend::InferenceSession;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
 
 class SamVitEncoder::Impl {
   public:
@@ -43,7 +43,7 @@ class SamVitEncoder::Impl {
 
         const auto &input = _m_session->inputs().front();
         const auto &output = _m_session->outputs().front();
-        if (input.dtype != jinq::models::backend::DType::F32 || output.dtype != jinq::models::backend::DType::F32 ||
+        if (input.dtype != mortred::models::backend::DType::F32 || output.dtype != mortred::models::backend::DType::F32 ||
             input.shape.size() != 4 || input.shape[1] != 3 || output.shape.size() != 4 || input.dynamic || output.dynamic) {
             LOG(ERROR) << "invalid sam encoder io: " << input.to_string() << " / " << output.to_string();
             return StatusCode::MODEL_INIT_FAILED;
@@ -138,7 +138,7 @@ StatusCode SamVitEncoder::classify_encoder_outputs(const std::vector<NamedTensor
         LOG(ERROR) << "sam encoder output is invalid";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    if (outputs.front().tensor.dtype != jinq::models::backend::DType::F32 ||
+    if (outputs.front().tensor.dtype != mortred::models::backend::DType::F32 ||
         outputs.front().tensor.element_count() <= 0) {
         LOG(ERROR) << "sam encoder output is invalid";
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
@@ -162,4 +162,4 @@ bool SamVitEncoder::is_successfully_initialized() const { return _m_pimpl->is_su
 
 } // namespace segment_anything
 } // namespace models
-} // namespace jinq
+} // namespace mortred

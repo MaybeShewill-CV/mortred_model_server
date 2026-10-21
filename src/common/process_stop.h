@@ -29,7 +29,7 @@
 
 #include <workflow/WFFacilities.h>
 
-namespace jinq {
+namespace mortred {
 namespace common {
 
 class ProcessStop {
@@ -106,6 +106,6 @@ class ProcessStop {
 };
 
 }  // namespace common
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_COMMON_PROCESS_STOP_H

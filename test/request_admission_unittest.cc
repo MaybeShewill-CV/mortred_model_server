@@ -8,13 +8,13 @@
 
 #include "server/request_admission.h"
 
-using jinq::server::ContentTypeKind;
-using jinq::server::content_type_kind;
-using jinq::server::body_exceeds_limit;
-using jinq::server::declared_body_exceeds;
-using jinq::server::item_count_exceeds;
-using jinq::server::normalized_media_type;
-using jinq::server::queue_would_overflow;
+using mortred::server::ContentTypeKind;
+using mortred::server::content_type_kind;
+using mortred::server::body_exceeds_limit;
+using mortred::server::declared_body_exceeds;
+using mortred::server::item_count_exceeds;
+using mortred::server::normalized_media_type;
+using mortred::server::queue_would_overflow;
 
 TEST(request_admission, normalized_media_type_strips_params_and_case) {
     EXPECT_EQ(normalized_media_type("Application/JSON; charset=utf-8"), "application/json");

@@ -19,7 +19,7 @@
 #include <sstream>
 #include <string>
 
-namespace jinq {
+namespace mortred {
 namespace server {
 namespace openapi_doc_detail {
 
@@ -63,6 +63,6 @@ inline const std::string& k_openapi_doc_json_ref() {
 inline const std::string& k_openapi_doc_json = k_openapi_doc_json_ref();
 
 }  // namespace server
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_SERVER_OPENAPI_DOC_H

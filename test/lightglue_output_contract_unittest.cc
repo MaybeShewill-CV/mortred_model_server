@@ -9,11 +9,11 @@
 #include "models/io/common_input.h"
 #include "models/io/feature_point.h"
 
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using Model = jinq::models::feature_point::LightGlue<jinq::models::io_define::common_io::pair_mat_input,
-                                                     jinq::models::io_define::feature_point::std_feature_point_match_output>;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using Model = mortred::models::feature_point::LightGlue<mortred::models::io_define::common_io::pair_mat_input,
+                                                     mortred::models::io_define::feature_point::std_feature_point_match_output>;
 
 namespace {
 

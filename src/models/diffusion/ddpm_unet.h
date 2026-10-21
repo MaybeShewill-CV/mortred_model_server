@@ -17,12 +17,12 @@
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace diffusion {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT> class DDPMUNet : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class DDPMUNet : public mortred::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     DDPMUNet();
     ~DDPMUNet() override = default;
@@ -31,10 +31,10 @@ template <typename INPUT, typename OUTPUT> class DDPMUNet : public jinq::models:
     DDPMUNet &operator=(const DDPMUNet &transformer) = delete;
 
   private:
-    jinq::models::backend::PreparedInput prepare_inputs(const INPUT &input) override;
+    mortred::models::backend::PreparedInput prepare_inputs(const INPUT &input) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     // concrete xt input shape parsed from the session io ([N,C,H,W])
     std::vector<int64_t> _m_xt_shape;
@@ -42,7 +42,7 @@ template <typename INPUT, typename OUTPUT> class DDPMUNet : public jinq::models:
 
 } // namespace diffusion
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "ddpm_unet.inl"
 

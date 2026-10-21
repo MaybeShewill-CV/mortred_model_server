@@ -17,12 +17,12 @@
 #include "common/status_code.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace segment_anything {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
-using AmgMaskOutput = jinq::models::io_define::segment_anything::sam_amg_output;
+using AmgMaskOutput = mortred::models::io_define::segment_anything::sam_amg_output;
 
 /***
  *

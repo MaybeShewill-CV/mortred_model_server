@@ -17,19 +17,19 @@
 #include "server/item_exec.h"
 #include "server/sync_request_graph.h"
 
-using jinq::common::StatusCode;
-using jinq::models::io_define::common_io::base64_input;
-using jinq::models::io_define::common_io::byte_source;
-using jinq::server::InferenceResult;
-using jinq::server::InferenceTask;
-using jinq::server::aggregate_item_statuses;
-using jinq::server::BatchRequestState;
-using jinq::server::assemble_batch_slots;
-using jinq::server::assemble_published;
-using jinq::server::inference_result_to_unified;
-using jinq::server::make_model_input;
-using jinq::server::run_items;
-using jinq::server::run_one;
+using mortred::common::StatusCode;
+using mortred::models::io_define::common_io::base64_input;
+using mortred::models::io_define::common_io::byte_source;
+using mortred::server::InferenceResult;
+using mortred::server::InferenceTask;
+using mortred::server::aggregate_item_statuses;
+using mortred::server::BatchRequestState;
+using mortred::server::assemble_batch_slots;
+using mortred::server::assemble_published;
+using mortred::server::inference_result_to_unified;
+using mortred::server::make_model_input;
+using mortred::server::run_items;
+using mortred::server::run_one;
 
 namespace {
 
@@ -106,7 +106,7 @@ TEST(item_exec, unified_fill_only_ok_items) {
     auto unified = inference_result_to_unified(
         "t1", "TEST", result,
         [](rapidjson::Document::AllocatorType& allocator, rapidjson::Document& data,
-           const FakeOutput& output, const jinq::server::OutputOptions&) {
+           const FakeOutput& output, const mortred::server::OutputOptions&) {
             data.SetObject();
             data.AddMember("value", output.value, allocator);
         });

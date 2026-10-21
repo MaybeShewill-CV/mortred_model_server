@@ -10,7 +10,7 @@
 
 #include "common/request_size_limit.h"
 
-using jinq::common::k_default_request_size_limit_mb;
+using mortred::common::k_default_request_size_limit_mb;
 
 TEST(request_size_limit, default_limit_is_64_mb) {
     EXPECT_EQ(k_default_request_size_limit_mb, static_cast<size_t>(64));

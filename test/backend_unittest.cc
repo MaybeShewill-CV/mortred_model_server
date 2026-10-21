@@ -31,12 +31,12 @@
 
 namespace {
 
-using jinq::common::StatusCode;
-using jinq::models::backend::BackendConfig;
-using jinq::models::backend::InferenceSession;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using jinq::models::backend::TensorInfo;
+using mortred::common::StatusCode;
+using mortred::models::backend::BackendConfig;
+using mortred::models::backend::InferenceSession;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using mortred::models::backend::TensorInfo;
 
 constexpr const char* kMnnModel = "weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn";
 constexpr const char* kOnnxModel = "weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.onnx";
@@ -47,7 +47,7 @@ constexpr const char* kFeatureImage =
     "demo_data/model_test_input/feature_point/match_test_01.jpg";
 
 bool file_exists(const std::string& path) {
-    return jinq::common::FilePathUtil::is_file_exist(path);
+    return mortred::common::FilePathUtil::is_file_exist(path);
 }
 
 toml::table parse_toml(const std::string& content) {
@@ -93,24 +93,24 @@ std::string info_names(const std::vector<TensorInfo>& infos) {
 
 TEST(BackendTensor, MakeAndFromMat) {
     auto tensor = Tensor::make<float>({1, 2, 3});
-    EXPECT_EQ(tensor.dtype, jinq::models::backend::DType::F32);
-    EXPECT_EQ(tensor.layout, jinq::models::backend::TensorLayout::Unknown);
+    EXPECT_EQ(tensor.dtype, mortred::models::backend::DType::F32);
+    EXPECT_EQ(tensor.layout, mortred::models::backend::TensorLayout::Unknown);
     EXPECT_EQ(tensor.element_count(), 6);
     EXPECT_EQ(tensor.byte_size(), 6 * sizeof(float));
     EXPECT_TRUE(tensor.shape_is_concrete());
 
     auto nchw = Tensor::make<float>({1, 3, 4, 5});
-    EXPECT_EQ(nchw.layout, jinq::models::backend::TensorLayout::Nchw);
+    EXPECT_EQ(nchw.layout, mortred::models::backend::TensorLayout::Nchw);
     auto logits = Tensor::make<float>({1, 1000});
-    EXPECT_EQ(logits.layout, jinq::models::backend::TensorLayout::Linear);
+    EXPECT_EQ(logits.layout, mortred::models::backend::TensorLayout::Linear);
 
     cv::Mat image(4, 5, CV_8UC3, cv::Scalar(1, 2, 3));
     bool ok = false;
     auto from_mat = Tensor::from_mat(image, &ok);
     EXPECT_TRUE(ok);
-    EXPECT_EQ(from_mat.dtype, jinq::models::backend::DType::U8);
+    EXPECT_EQ(from_mat.dtype, mortred::models::backend::DType::U8);
     EXPECT_EQ(from_mat.shape, (std::vector<int64_t>{1, 4, 5, 3}));
-    EXPECT_EQ(from_mat.layout, jinq::models::backend::TensorLayout::Nhwc);
+    EXPECT_EQ(from_mat.layout, mortred::models::backend::TensorLayout::Nhwc);
     EXPECT_EQ(from_mat.buffer[0], 1);
 
     cv::Mat bad_depth;
@@ -137,7 +137,7 @@ score = 0.5
     std::string err;
     const toml::table* valid_section = valid["MODEL"].as_table();
     ASSERT_NE(valid_section, nullptr);
-    ASSERT_TRUE(jinq::models::backend::parse_backend_config(*valid_section, &config, &err)) << err;
+    ASSERT_TRUE(mortred::models::backend::parse_backend_config(*valid_section, &config, &err)) << err;
     EXPECT_EQ(config.type, "mnn");
     EXPECT_EQ(config.model_file_path, "a.mnn");
     EXPECT_EQ(config.device, "gpu");
@@ -154,7 +154,7 @@ gpu_mem_limit_mb = 512
 )toml");
     const toml::table* onnx_limit_section = onnx_limit["MODEL"].as_table();
     ASSERT_NE(onnx_limit_section, nullptr);
-    ASSERT_TRUE(jinq::models::backend::parse_backend_config(*onnx_limit_section, &config, &err))
+    ASSERT_TRUE(mortred::models::backend::parse_backend_config(*onnx_limit_section, &config, &err))
         << err;
     EXPECT_EQ(config.gpu_mem_limit_mb, 512);
 
@@ -167,7 +167,7 @@ gpu_mem_limit_mb = 0
 )toml");
     const toml::table* unlimited_section = unlimited["MODEL"].as_table();
     ASSERT_NE(unlimited_section, nullptr);
-    ASSERT_TRUE(jinq::models::backend::parse_backend_config(*unlimited_section, &config, &err))
+    ASSERT_TRUE(mortred::models::backend::parse_backend_config(*unlimited_section, &config, &err))
         << err;
     EXPECT_EQ(config.gpu_mem_limit_mb, 0);
 
@@ -180,7 +180,7 @@ gpu_mem_limit_mb = -1
 )toml");
     const toml::table* bad_limit_section = bad_limit["MODEL"].as_table();
     ASSERT_NE(bad_limit_section, nullptr);
-    EXPECT_FALSE(jinq::models::backend::parse_backend_config(*bad_limit_section, &config, &err));
+    EXPECT_FALSE(mortred::models::backend::parse_backend_config(*bad_limit_section, &config, &err));
     EXPECT_NE(err.find("gpu_mem_limit_mb"), std::string::npos) << err;
 
     const auto unknown_type = parse_toml(R"toml(
@@ -191,7 +191,7 @@ model_file_path = "a.mnn"
 )toml");
     const toml::table* unknown_section = unknown_type["MODEL"].as_table();
     ASSERT_NE(unknown_section, nullptr);
-    EXPECT_FALSE(jinq::models::backend::parse_backend_config(*unknown_section, &config, &err));
+    EXPECT_FALSE(mortred::models::backend::parse_backend_config(*unknown_section, &config, &err));
     EXPECT_NE(err.find("unknown backend"), std::string::npos) << err;
 
     const auto bad_device = parse_toml(R"toml(
@@ -203,7 +203,7 @@ device = "npu"
 )toml");
     const toml::table* device_section = bad_device["MODEL"].as_table();
     ASSERT_NE(device_section, nullptr);
-    EXPECT_FALSE(jinq::models::backend::parse_backend_config(*device_section, &config, &err));
+    EXPECT_FALSE(mortred::models::backend::parse_backend_config(*device_section, &config, &err));
     EXPECT_NE(err.find("device"), std::string::npos) << err;
 
     const auto bad_threads = parse_toml(R"toml(
@@ -215,13 +215,13 @@ threads = 0
 )toml");
     const toml::table* threads_section = bad_threads["MODEL"].as_table();
     ASSERT_NE(threads_section, nullptr);
-    EXPECT_FALSE(jinq::models::backend::parse_backend_config(*threads_section, &config, &err));
+    EXPECT_FALSE(mortred::models::backend::parse_backend_config(*threads_section, &config, &err));
     EXPECT_NE(err.find("threads"), std::string::npos) << err;
 
     const auto no_backend = parse_toml("[MODEL]\nkey = 1\n");
     const toml::table* no_backend_section = no_backend["MODEL"].as_table();
     ASSERT_NE(no_backend_section, nullptr);
-    EXPECT_FALSE(jinq::models::backend::parse_backend_config(*no_backend_section, &config, &err));
+    EXPECT_FALSE(mortred::models::backend::parse_backend_config(*no_backend_section, &config, &err));
     EXPECT_NE(err.find("backend"), std::string::npos) << err;
 }
 
@@ -268,15 +268,15 @@ TEST(MnnSession, InitAndRunMobilenetv2) {
     ASSERT_EQ(session->outputs().size(), 1u) << info_names(session->outputs());
     const auto& input_info = session->inputs().front();
     const auto& output_info = session->outputs().front();
-    EXPECT_EQ(input_info.dtype, jinq::models::backend::DType::F32);
+    EXPECT_EQ(input_info.dtype, mortred::models::backend::DType::F32);
     EXPECT_FALSE(input_info.dynamic);
-    EXPECT_EQ(output_info.dtype, jinq::models::backend::DType::F32);
+    EXPECT_EQ(output_info.dtype, mortred::models::backend::DType::F32);
     // this export is CAFFE; auto host copies stay NCHW. production toml sets
     // input_layout=nhwc and that path is checked below.
     EXPECT_EQ(input_info.shape, (std::vector<int64_t>{1, 3, 224, 224}));
-    EXPECT_EQ(input_info.layout, jinq::models::backend::TensorLayout::Nchw);
+    EXPECT_EQ(input_info.layout, mortred::models::backend::TensorLayout::Nchw);
     EXPECT_EQ(output_info.shape.size(), 2u);
-    EXPECT_EQ(output_info.layout, jinq::models::backend::TensorLayout::Linear);
+    EXPECT_EQ(output_info.layout, mortred::models::backend::TensorLayout::Linear);
 
     std::vector<NamedTensor> inputs;
     NamedTensor input;
@@ -289,7 +289,7 @@ TEST(MnnSession, InitAndRunMobilenetv2) {
     ASSERT_EQ(outputs.size(), 1u);
     EXPECT_EQ(outputs.front().name, output_info.name);
     EXPECT_GT(outputs.front().tensor.element_count(), 0);
-    EXPECT_EQ(outputs.front().tensor.layout, jinq::models::backend::TensorLayout::Linear);
+    EXPECT_EQ(outputs.front().tensor.layout, mortred::models::backend::TensorLayout::Linear);
 
     // dtype mismatch must be rejected
     auto bad_inputs = inputs;
@@ -311,8 +311,8 @@ TEST(MnnSession, InitAndRunMobilenetv2) {
     ASSERT_NE(nhwc_session, nullptr) << err;
     const auto& nhwc_in = nhwc_session->inputs().front();
     EXPECT_EQ(nhwc_in.shape, (std::vector<int64_t>{1, 224, 224, 3}));
-    EXPECT_EQ(nhwc_in.layout, jinq::models::backend::TensorLayout::Nhwc);
-    EXPECT_EQ(nhwc_session->outputs().front().layout, jinq::models::backend::TensorLayout::Linear);
+    EXPECT_EQ(nhwc_in.layout, mortred::models::backend::TensorLayout::Nhwc);
+    EXPECT_EQ(nhwc_session->outputs().front().layout, mortred::models::backend::TensorLayout::Linear);
 }
 
 TEST(MnnSession, ConfiguredOutputNameOrder) {
@@ -348,11 +348,11 @@ TEST(OrtSession, InitAndRunDdpmUnet) {
     ASSERT_NE(session, nullptr) << err;
     const auto& xt_info = find_info(session->inputs(), "xt");
     const auto& t_info = find_info(session->inputs(), "t");
-    EXPECT_EQ(xt_info.dtype, jinq::models::backend::DType::F32);
-    EXPECT_EQ(t_info.dtype, jinq::models::backend::DType::I64);
+    EXPECT_EQ(xt_info.dtype, mortred::models::backend::DType::F32);
+    EXPECT_EQ(t_info.dtype, mortred::models::backend::DType::I64);
     ASSERT_EQ(session->outputs().size(), 1u);
     if (xt_info.shape.size() == 4) {
-        EXPECT_EQ(xt_info.layout, jinq::models::backend::TensorLayout::Nchw);
+        EXPECT_EQ(xt_info.layout, mortred::models::backend::TensorLayout::Nchw);
     }
 
     std::vector<NamedTensor> inputs;
@@ -372,7 +372,7 @@ TEST(OrtSession, InitAndRunDdpmUnet) {
     EXPECT_EQ(outputs.front().tensor.element_count(), xt_info.shape[1] * xt_info.shape[2] *
                                                             xt_info.shape[3]);
     if (outputs.front().tensor.shape.size() == 4) {
-        EXPECT_EQ(outputs.front().tensor.layout, jinq::models::backend::TensorLayout::Nchw);
+        EXPECT_EQ(outputs.front().tensor.layout, mortred::models::backend::TensorLayout::Nchw);
     }
 
     // int32 timestep must be rejected (the exported model expects int64)
@@ -523,9 +523,9 @@ TEST(TrtSession, InitAndRunYolov8) {
     ASSERT_GE(session->inputs().size(), 1u);
     ASSERT_GE(session->outputs().size(), 1u);
     const auto& input_info = session->inputs().front();
-    EXPECT_EQ(input_info.dtype, jinq::models::backend::DType::F32);
+    EXPECT_EQ(input_info.dtype, mortred::models::backend::DType::F32);
     EXPECT_EQ(input_info.shape.size(), 4u);
-    EXPECT_EQ(input_info.layout, jinq::models::backend::TensorLayout::Nchw);
+    EXPECT_EQ(input_info.layout, mortred::models::backend::TensorLayout::Nchw);
 
     std::vector<NamedTensor> inputs;
     NamedTensor input;
@@ -545,7 +545,7 @@ TEST(TrtSession, InitAndRunYolov8) {
     std::vector<NamedTensor> outputs;
     ASSERT_EQ(session->run(inputs, outputs), StatusCode::OK);
     ASSERT_EQ(outputs.size(), session->outputs().size());
-    EXPECT_EQ(outputs.front().tensor.dtype, jinq::models::backend::DType::F32);
+    EXPECT_EQ(outputs.front().tensor.dtype, mortred::models::backend::DType::F32);
     EXPECT_GT(outputs.front().tensor.element_count(), 0);
 
     // a wrong input shape (outside the profile) must be rejected

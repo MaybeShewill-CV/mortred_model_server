@@ -32,11 +32,11 @@
 #include "models/backend/gpu_jpeg_decoder.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace cv_input {
 
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 struct ImageInputLimits {
     int64_t max_pixels = 16777216;
@@ -488,7 +488,7 @@ inline int jpeg_reduce_factor(const std::string &bytes, const ImageInputLimits &
 inline cv::Mat load_image(const io_define::common_io::file_input &in, const ImageInputLimits &limits, StatusCode *status,
                           std::string *error) {
     cv::Mat ret;
-    if (!jinq::common::FilePathUtil::is_file_exist(in.input_image_path)) {
+    if (!mortred::common::FilePathUtil::is_file_exist(in.input_image_path)) {
         if (error != nullptr) {
             *error = "input image: " + in.input_image_path + " not exist";
         }
@@ -534,7 +534,7 @@ inline cv::Mat load_image(const io_define::common_io::mat_input &in, const Image
  */
 inline cv::Mat load_image(const io_define::common_io::base64_input &in, const ImageInputLimits &limits, StatusCode *status,
                           std::string *error) {
-    const std::string decoded = jinq::common::base64::decode(in.input_image_content);
+    const std::string decoded = mortred::common::base64::decode(in.input_image_content);
     if (decoded.empty()) {
         if (error != nullptr) {
             *error = "input image base64 data is empty or invalid";
@@ -603,8 +603,8 @@ inline cv::Mat load_image(const io_define::common_io::image_input &in, const Ima
     const cv::Mat byte_view(1, static_cast<int>(bytes.size()), CV_8UC1,
                             const_cast<char *>(bytes.data()));
     cv::Mat image = cv::imdecode(byte_view, imread_color_flag_for_reduce(reduce));
-    jinq::common::stage_timing::mark("decode");
-    jinq::common::stage_timing::annotate("decoder", reduce > 1 ? "libjpeg-turbo-reduced" : "libjpeg-turbo");
+    mortred::common::stage_timing::mark("decode");
+    mortred::common::stage_timing::annotate("decoder", reduce > 1 ? "libjpeg-turbo-reduced" : "libjpeg-turbo");
     backend::gpu_jpeg::g_request_count[reduce > 1 ? backend::gpu_jpeg::CPU_REDUCED : backend::gpu_jpeg::CPU_FULL]
         .fetch_add(1);
     if (image.empty()) {
@@ -653,6 +653,6 @@ inline cv::Mat load_image(const io_define::common_io::image_input &in) {
 
 } // namespace cv_input
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_CV_IMAGE_INPUT_H

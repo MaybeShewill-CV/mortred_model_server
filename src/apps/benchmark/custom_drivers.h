@@ -10,7 +10,7 @@
 
 #include <string>
 
-namespace jinq {
+namespace mortred {
 namespace apps {
 namespace benchmark {
 
@@ -23,6 +23,6 @@ int run_diffusion_family_benchmark(const std::string &model_section, int argc, c
 
 } // namespace benchmark
 } // namespace apps
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_APPS_BENCHMARK_CUSTOM_DRIVERS_H

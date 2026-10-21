@@ -19,11 +19,11 @@
 #include "models/backend/param_spec.h"
 #include "toml/toml.hpp"
 
-using jinq::common::StatusCode;
-using jinq::factory::diffusion::DiffusionModelAdapter;
-using jinq::models::backend::ParamSet;
-using jinq::models::io_define::common_io::image_input;
-using namespace jinq::models::io_define::diffusion;
+using mortred::common::StatusCode;
+using mortred::factory::diffusion::DiffusionModelAdapter;
+using mortred::models::backend::ParamSet;
+using mortred::models::io_define::common_io::image_input;
+using namespace mortred::models::io_define::diffusion;
 
 namespace {
 
@@ -108,7 +108,7 @@ class FakeSampler {
 
 image_input make_request(const ParamSet *params) {
     image_input in;
-    in.image.origin = jinq::models::io_define::common_io::byte_source::origin_kind::base64_text;
+    in.image.origin = mortred::models::io_define::common_io::byte_source::origin_kind::base64_text;
     in.image.data = "aGVsbG8=";  // payload ignored by generative models
     in.params = params;
     return in;
@@ -122,7 +122,7 @@ class TestAdapter : public DiffusionModelAdapter<SAMPLER, SAMPLER_INPUT, SAMPLER
     using DiffusionModelAdapter<SAMPLER, SAMPLER_INPUT, SAMPLER_OUTPUT>::sampler;
 };
 
-using Base64Output = jinq::models::io_define::common_io::base64_input;
+using Base64Output = mortred::models::io_define::common_io::base64_input;
 using DdpmAdapter = TestAdapter<FakeSampler<std_ddpm_input, std_ddpm_output>, std_ddpm_input, std_ddpm_output>;
 using DdimAdapter = TestAdapter<FakeSampler<std_ddim_input, std_ddim_output>, std_ddim_input, std_ddim_output>;
 using ClsAdapter =

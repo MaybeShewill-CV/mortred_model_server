@@ -10,7 +10,7 @@
 
 #include "common/time_stamp.h"
 
-using jinq::common::Timestamp;
+using mortred::common::Timestamp;
 
 TEST(time_stamp, invalid_and_now) {
     Timestamp invalid;

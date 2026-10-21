@@ -14,15 +14,15 @@
 
 #include "models/cv_image_input.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace segment_anything {
 
-using jinq::common::StatusCode;
-using SamInput = jinq::models::io_define::segment_anything::sam_prompt_input;
-using SamOutput = jinq::models::io_define::segment_anything::std_sam_prompt_output;
+using mortred::common::StatusCode;
+using SamInput = mortred::models::io_define::segment_anything::sam_prompt_input;
+using SamOutput = mortred::models::io_define::segment_anything::std_sam_prompt_output;
 
-template <typename INPUT, typename OUTPUT> std::vector<jinq::models::backend::SessionSpec> SamPredictor<INPUT, OUTPUT>::sessions() {
+template <typename INPUT, typename OUTPUT> std::vector<mortred::models::backend::SessionSpec> SamPredictor<INPUT, OUTPUT>::sessions() {
     return {
         // both engines validate their own IO: the encoder names its tensors
         // per backend (input_image/image_embeddings on TRT, others on MNN) and
@@ -147,9 +147,9 @@ template <typename INPUT, typename OUTPUT> StatusCode SamPredictor<INPUT, OUTPUT
     SamInput internal_input{};
     if constexpr (std::is_same_v<INPUT, SamInput>) {
         internal_input = input;
-    } else if constexpr (std::is_same_v<INPUT, jinq::models::io_define::common_io::mat_input> ||
-                         std::is_same_v<INPUT, jinq::models::io_define::common_io::file_input> ||
-                         std::is_same_v<INPUT, jinq::models::io_define::common_io::base64_input>) {
+    } else if constexpr (std::is_same_v<INPUT, mortred::models::io_define::common_io::mat_input> ||
+                         std::is_same_v<INPUT, mortred::models::io_define::common_io::file_input> ||
+                         std::is_same_v<INPUT, mortred::models::io_define::common_io::base64_input>) {
         StatusCode image_status = StatusCode::OK;
         std::string image_error;
         internal_input.image = this->load_model_image(input, &image_status, &image_error);
@@ -181,8 +181,8 @@ template <typename INPUT, typename OUTPUT> StatusCode SamPredictor<INPUT, OUTPUT
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode SamPredictor<INPUT, OUTPUT>::postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                                                    const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
+StatusCode SamPredictor<INPUT, OUTPUT>::postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                                                    const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     (void)outputs;
     (void)output;
     LOG(ERROR) << "sam predictor is a multi-session model and must run through run_sessions";
@@ -191,10 +191,10 @@ StatusCode SamPredictor<INPUT, OUTPUT>::postprocess(const std::vector<jinq::mode
 
 template <typename INPUT, typename OUTPUT>
 SamPredictor<INPUT, OUTPUT>::SamPredictor()
-    : jinq::models::backend::MultiSessionModel<SamPredictor<INPUT, OUTPUT>, INPUT, OUTPUT>("SAM_PREDICTOR") {}
+    : mortred::models::backend::MultiSessionModel<SamPredictor<INPUT, OUTPUT>, INPUT, OUTPUT>("SAM_PREDICTOR") {}
 
 template <typename INPUT, typename OUTPUT> SamPredictor<INPUT, OUTPUT>::~SamPredictor() = default;
 
 } // namespace segment_anything
 } // namespace models
-} // namespace jinq
+} // namespace mortred

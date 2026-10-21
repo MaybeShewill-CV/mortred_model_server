@@ -18,7 +18,7 @@
 
 #include "common/status_code.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
@@ -268,6 +268,6 @@ inline bool parse_backend_config(const toml::table& model_section, BackendConfig
 
 }  // namespace backend
 }  // namespace models
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_MODELS_BACKEND_BACKEND_CONFIG_H

@@ -7,11 +7,11 @@
 #include "models/feature_point/superpoint.h"
 #include "models/io/feature_point.h"
 
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using jinq::models::feature_point::SuperPoint;
-using FP = jinq::models::io_define::feature_point::fp;
-using FPOutput = jinq::models::io_define::feature_point::std_feature_point_output;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using mortred::models::feature_point::SuperPoint;
+using FP = mortred::models::io_define::feature_point::fp;
+using FPOutput = mortred::models::io_define::feature_point::std_feature_point_output;
 
 namespace {
 
@@ -22,7 +22,7 @@ template <typename MODEL> class CallableSuperPoint : public MODEL {
     using MODEL::decode_fp_descriptor;
 };
 
-using TestModel = CallableSuperPoint<SuperPoint<jinq::models::io_define::common_io::mat_input, FPOutput>>;
+using TestModel = CallableSuperPoint<SuperPoint<mortred::models::io_define::common_io::mat_input, FPOutput>>;
 
 // [1, 256, grid_row, grid_col] descriptor tensor with a fully predictable
 // pattern: value(channel, row, col) = channel * 100 + row * 10 + col

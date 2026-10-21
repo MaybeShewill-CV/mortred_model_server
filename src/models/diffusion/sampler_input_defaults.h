@@ -25,15 +25,15 @@
 
 #include <opencv2/core.hpp>
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace diffusion {
 
-using jinq::common::StatusCode;
-using jinq::models::io_define::diffusion::std_cls_cond_ddim_input;
-using jinq::models::io_define::diffusion::std_ddim_input;
-using jinq::models::io_define::diffusion::std_ddpm_input;
-using jinq::models::io_define::diffusion::std_ldm_input;
+using mortred::common::StatusCode;
+using mortred::models::io_define::diffusion::std_cls_cond_ddim_input;
+using mortred::models::io_define::diffusion::std_ddim_input;
+using mortred::models::io_define::diffusion::std_ddpm_input;
+using mortred::models::io_define::diffusion::std_ldm_input;
 
 inline StatusCode parse_sample_size(const toml::table &section, const char *section_name, cv::Size *out) {
     if (!section.contains("sample_size")) {
@@ -182,9 +182,9 @@ inline StatusCode seed_ldm_input(const toml::table &cfg, std_ldm_input *input) {
     input->latent_scale = static_cast<float>((*section)["latent_scale"].value_or<double>(input->latent_scale));
     const std::string sampler_name = (*section)["sampler_type"].value_or<std::string>(std::string("ddim"));
     if (sampler_name == "ddpm") {
-        input->sampler_type = jinq::models::io_define::diffusion::DDPMSampler_Type::DDPM;
+        input->sampler_type = mortred::models::io_define::diffusion::DDPMSampler_Type::DDPM;
     } else if (sampler_name == "ddim") {
-        input->sampler_type = jinq::models::io_define::diffusion::DDPMSampler_Type::DDIM;
+        input->sampler_type = mortred::models::io_define::diffusion::DDPMSampler_Type::DDIM;
     } else {
         LOG(ERROR) << "[LDM_SAMPLER] sampler_type must be ddim or ddpm";
         return StatusCode::MODEL_INIT_FAILED;
@@ -210,6 +210,6 @@ StatusCode seed_sampler_input(const toml::table &cfg, SAMPLER_INPUT *input) {
 
 } // namespace diffusion
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_DIFFUSION_SAMPLER_INPUT_DEFAULTS_H

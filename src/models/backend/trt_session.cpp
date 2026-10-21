@@ -22,11 +22,11 @@
 
 static_assert(NV_TENSORRT_MAJOR >= 10, "Mortred GPU line requires TensorRT 10 headers");
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 namespace {
 
@@ -290,7 +290,7 @@ StatusCode TrtSession::init(const BackendConfig& config, std::string* err) {
     if (err != nullptr) {
         err->clear();
     }
-    if (!jinq::common::FilePathUtil::is_file_exist(config.model_file_path)) {
+    if (!mortred::common::FilePathUtil::is_file_exist(config.model_file_path)) {
         if (err != nullptr) {
             *err = "tensorrt engine file not exist: " + config.model_file_path;
         }
@@ -595,7 +595,7 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
     // note: cudaMemcpyAsync only enqueues; the actual transfer surfaces in
     // the first cudaStreamSynchronize below, so h2d measures launch cost and
     // exec absorbs the real H2D transfer
-    jinq::common::stage_timing::mark("h2d");
+    mortred::common::stage_timing::mark("h2d");
 
     // Resolve and bind outputs whose shape is inferable from the inputs.
     // Runtime-data-dependent outputs are left to their IOutputAllocator.
@@ -660,7 +660,7 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
         h2d_slot_guard.abandon = true;
         return StatusCode::TRT_CUDA_ERROR;
     }
-    jinq::common::stage_timing::mark("exec");
+    mortred::common::stage_timing::mark("exec");
 
     for (size_t idx = 0; idx < _m_output_infos.size(); ++idx) {
         const auto& info = _m_output_infos[idx];
@@ -784,10 +784,10 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
             staged_offset += entry.second;
         }
     }
-    jinq::common::stage_timing::mark("d2h");
+    mortred::common::stage_timing::mark("d2h");
     return StatusCode::OK;
 }
 
 }  // namespace backend
 }  // namespace models
-}  // namespace jinq
+}  // namespace mortred

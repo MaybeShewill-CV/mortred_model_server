@@ -20,12 +20,12 @@
 #include "lapjv.h"
 #include "kalman_filter.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace mot {
 namespace byte_tracker {
 
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /***************** Impl Function Sets ******************/
 

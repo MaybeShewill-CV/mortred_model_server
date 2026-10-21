@@ -1136,7 +1136,7 @@ def render_header(json_text: str) -> str:
         "\n"
         "#include <string>\n"
         "\n"
-        "namespace jinq {\n"
+        "namespace mortred {\n"
         "namespace server {\n"
         "\n"
         'inline const std::string k_openapi_doc_json = R"MORTRED_OPENAPI(\n'
@@ -1144,7 +1144,7 @@ def render_header(json_text: str) -> str:
         + ')MORTRED_OPENAPI";\n'
         "\n"
         "}  // namespace server\n"
-        "}  // namespace jinq\n"
+        "}  // namespace mortred\n"
         "\n"
         "#endif  // MORTRED_SERVER_OPENAPI_DOC_H\n"
     )

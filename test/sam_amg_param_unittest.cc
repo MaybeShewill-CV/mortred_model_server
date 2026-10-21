@@ -15,22 +15,22 @@
 #include "models/model_io_define.h"
 #include "models/segment_anything/sam_automask_generator/sam_automask_generator.h"
 
-using jinq::common::StatusCode;
-using jinq::models::io_define::common_io::image_input;
-using jinq::models::io_define::common_io::mat_input;
-using AmgOutput = jinq::models::io_define::segment_anything::sam_amg_output;
+using mortred::common::StatusCode;
+using mortred::models::io_define::common_io::image_input;
+using mortred::models::io_define::common_io::mat_input;
+using AmgOutput = mortred::models::io_define::segment_anything::sam_amg_output;
 
 namespace {
 
 // the model is never initialized here: generate() answers MODEL_INIT_FAILED
 // when it is reached; the pre-fix bug answered MODEL_EMPTY_INPUT_IMAGE from
 // the "unsupported input type" branch instead - this is exactly the signal
-class TestAmg : public jinq::models::segment_anything::SamAutoMaskGenerator<image_input, AmgOutput> {
+class TestAmg : public mortred::models::segment_anything::SamAutoMaskGenerator<image_input, AmgOutput> {
   public:
     using SamAutoMaskGenerator::run_sessions;
 };
 
-class TestAmgMat : public jinq::models::segment_anything::SamAutoMaskGenerator<mat_input, AmgOutput> {
+class TestAmgMat : public mortred::models::segment_anything::SamAutoMaskGenerator<mat_input, AmgOutput> {
   public:
     using SamAutoMaskGenerator::run_sessions;
 };
@@ -40,12 +40,12 @@ class TestAmgMat : public jinq::models::segment_anything::SamAutoMaskGenerator<m
 TEST(SamAmgParam, served_image_input_branch_reaches_generate) {
     TestAmg model;
     image_input in;
-    in.image.origin = jinq::models::io_define::common_io::byte_source::origin_kind::raw_bytes;
+    in.image.origin = mortred::models::io_define::common_io::byte_source::origin_kind::raw_bytes;
     std::vector<unsigned char> png;
     cv::imencode(".png", cv::Mat(8, 8, CV_8UC3, cv::Scalar(1, 2, 3)), png);
     in.image.data.assign(png.begin(), png.end());
 
-    jinq::models::backend::ParamSet params;
+    mortred::models::backend::ParamSet params;
     params.set_i32("points_per_side", 16);
     in.params = &params;
 

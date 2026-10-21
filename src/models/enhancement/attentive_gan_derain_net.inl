@@ -18,13 +18,13 @@
 #include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace enhancement {
 
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
-using jinq::models::io_define::enhancement::std_enhancement_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
+using mortred::models::io_define::enhancement::std_enhancement_output;
 
 template <typename INPUT, typename OUTPUT> StatusCode AttentiveGanDerain<INPUT, OUTPUT>::on_init(const toml::table &params) {
     (void)params;
@@ -40,11 +40,11 @@ template <typename INPUT, typename OUTPUT> StatusCode AttentiveGanDerain<INPUT, 
         LOG(ERROR) << "invalid attentive gan input size: " << _m_input_size_host;
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "attentivegan"));
+    this->set_image_decode_hint(_m_input_size_host, mortred::models::cv_input::parse_image_decode_upscale(params, "attentivegan"));
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
         .norm = {.scale = 1.0f / 127.5f, .mean = {1.0f, 1.0f, 1.0f}},
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::BGR,
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::BGR,
         .pad_value = 114,
         .output_dtype = inputs.front().dtype,
         .output_nhwc = true,
@@ -57,7 +57,7 @@ template <typename INPUT, typename OUTPUT>
 std::vector<NamedTensor> AttentiveGanDerain<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
 
     // resize -> f32 -> x/127.5 - 1; stays in BGR order, the network expects it
-    auto result = jinq::models::backend::ImagePipeline(input_image)
+    auto result = mortred::models::backend::ImagePipeline(input_image)
                       .resize(_m_input_size_host)
                       .to_float()
                       .scale(1.0f / 127.5f)
@@ -72,30 +72,30 @@ std::vector<NamedTensor> AttentiveGanDerain<INPUT, OUTPUT>::preprocess(const cv:
 
 template <typename INPUT, typename OUTPUT>
 StatusCode AttentiveGanDerain<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                          const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                          const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "attentive gan output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto &tensor = outputs.front().tensor;
-    const auto source_status = jinq::models::backend::validated_source_size(context, "attentive gan");
+    const auto source_status = mortred::models::backend::validated_source_size(context, "attentive gan");
     if (source_status != StatusCode::OK) {
         return source_status;
     }
     const auto output_rank = tensor.shape.size();
-    jinq::models::backend::TensorContract output_contract;
-    output_contract.dtype = jinq::models::backend::DType::F32;
+    mortred::models::backend::TensorContract output_contract;
+    output_contract.dtype = mortred::models::backend::DType::F32;
     const bool nchw4 = output_rank == 4 && tensor.shape.size() == 4 && tensor.shape[1] == 3;
     if (nchw4) {
         output_contract.rank = 4;
         output_contract.shape = {1, 3, -1, -1};
-        output_contract.layout = jinq::models::backend::TensorLayout::Nchw;
+        output_contract.layout = mortred::models::backend::TensorLayout::Nchw;
     } else {
         output_contract.rank = output_rank == 3 ? 3 : 4;
         output_contract.shape = output_rank == 3 ? std::vector<int64_t>{-1, -1, 3} : std::vector<int64_t>{1, -1, -1, 3};
     }
-    jinq::models::backend::F32OutputView output_view;
-    const auto output_status = jinq::models::backend::validated_f32_first_output(outputs, output_contract, "attentive gan", &output_view);
+    mortred::models::backend::F32OutputView output_view;
+    const auto output_status = mortred::models::backend::validated_f32_first_output(outputs, output_contract, "attentive gan", &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
     }
@@ -108,7 +108,7 @@ StatusCode AttentiveGanDerain<INPUT, OUTPUT>::postprocess(const std::vector<Name
         output_size.width = static_cast<int>(tensor.shape[3]);
         std::vector<float> nchw(static_cast<size_t>(tensor.element_count()));
         std::memcpy(nchw.data(), output_view.data, tensor.byte_size());
-        hwc_storage = jinq::common::CvUtils::convert_to_hwc_vec<float>(
+        hwc_storage = mortred::common::CvUtils::convert_to_hwc_vec<float>(
             nchw, 3, output_size.height, output_size.width);
         if (hwc_storage.empty()) {
             return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
@@ -125,7 +125,7 @@ StatusCode AttentiveGanDerain<INPUT, OUTPUT>::postprocess(const std::vector<Name
     }
     if (hwc_ptr == nullptr || output_size.area() <= 0 ||
         tensor.element_count() != 3 * output_size.area()) {
-        LOG(ERROR) << "invalid attentive gan output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
+        LOG(ERROR) << "invalid attentive gan output shape: " << mortred::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
 
@@ -166,8 +166,8 @@ StatusCode AttentiveGanDerain<INPUT, OUTPUT>::postprocess(const std::vector<Name
 }
 
 template <typename INPUT, typename OUTPUT>
-AttentiveGanDerain<INPUT, OUTPUT>::AttentiveGanDerain() : jinq::models::BackendCvModel<INPUT, OUTPUT>("ATTENTIVEGANDERAIN") {}
+AttentiveGanDerain<INPUT, OUTPUT>::AttentiveGanDerain() : mortred::models::BackendCvModel<INPUT, OUTPUT>("ATTENTIVEGANDERAIN") {}
 
 } // namespace enhancement
 } // namespace models
-} // namespace jinq
+} // namespace mortred

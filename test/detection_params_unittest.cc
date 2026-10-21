@@ -4,9 +4,9 @@
 
 #include "models/object_detection/detection_params.h"
 
-using jinq::models::object_detection::DetectionParams;
-using jinq::models::object_detection::parse_model_input_size;
-using jinq::models::object_detection::passes_min_box_area;
+using mortred::models::object_detection::DetectionParams;
+using mortred::models::object_detection::parse_model_input_size;
+using mortred::models::object_detection::passes_min_box_area;
 
 namespace {
 

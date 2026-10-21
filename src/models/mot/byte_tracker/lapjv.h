@@ -8,7 +8,7 @@
 #ifndef MORTRED_MODEL_SERVER_LAPJV_H
 #define MORTRED_MODEL_SERVER_LAPJV_H
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace mot {
 namespace byte_tracker {

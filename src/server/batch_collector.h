@@ -40,10 +40,10 @@
 #include "server/prometheus_metrics.h"
 #include "server/worker_pool.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
-using jinq::common::StatusCode;
-using jinq::common::Timestamp;
+using mortred::common::StatusCode;
+using mortred::common::Timestamp;
 
 /*** One whole multi-item request handed to the batch collector. The state
  * OWNS the request and the per-item result slots; every queued batch_entry
@@ -507,6 +507,6 @@ private:
 };
 
 }  // namespace server
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_SERVER_BATCH_COLLECTOR_H

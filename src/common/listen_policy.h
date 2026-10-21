@@ -14,7 +14,7 @@
 
 #include "common/auth_token.h"
 
-namespace jinq {
+namespace mortred {
 namespace common {
 
 /***
@@ -53,6 +53,6 @@ inline bool listen_host_permitted(const std::string& host) {
 }
 
 }  // namespace common
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_COMMON_LISTEN_POLICY_H

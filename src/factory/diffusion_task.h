@@ -12,19 +12,19 @@
 #include "models/diffusion/ddpm_sampler.h"
 #include "models/diffusion/ldm_sampler.h"
 
-namespace jinq {
+namespace mortred {
 namespace factory {
 namespace diffusion {
 
-using jinq::models::BaseAiModel;
+using mortred::models::BaseAiModel;
 
-using jinq::models::diffusion::ClsCondDDIMSampler;
-using jinq::models::diffusion::DDIMSampler;
-using jinq::models::diffusion::DDPMSampler;
-using jinq::models::diffusion::LDMSampler;
+using mortred::models::diffusion::ClsCondDDIMSampler;
+using mortred::models::diffusion::DDIMSampler;
+using mortred::models::diffusion::DDPMSampler;
+using mortred::models::diffusion::LDMSampler;
 
-using ImageInput = jinq::models::io_define::common_io::image_input;
-using Base64Output = jinq::models::io_define::common_io::base64_input;
+using ImageInput = mortred::models::io_define::common_io::image_input;
+using Base64Output = mortred::models::io_define::common_io::base64_input;
 
 // every sampler is mounted on the server through the same base64 adapter, so
 // the whole task shares one output type and one catalog
@@ -33,51 +33,51 @@ std::unique_ptr<BaseAiModel<ImageInput, Base64Output>> make_server_worker() {
     return std::make_unique<DiffusionModelAdapter<SAMPLER, SAMPLER_INPUT, SAMPLER_OUTPUT>>();
 }
 
-using Entry = jinq::factory::cv_catalog::CvModelEntry<Base64Output>;
+using Entry = mortred::factory::cv_catalog::CvModelEntry<Base64Output>;
 
 /*** request-overridable diffusion knobs, per sampler family. Step counts
  * change the compute time drastically - async callers should size the
  * deadline accordingly (same caveat as SAM AMG points_per_side) */
-inline const std::vector<jinq::models::backend::ParamSpec> &ddpm_param_specs() {
-    static const std::vector<jinq::models::backend::ParamSpec> specs = {
-        jinq::models::backend::ParamSpec::i32("timesteps").range(1, 1000).desc("sampling timesteps (more = slower, higher quality)"),
+inline const std::vector<mortred::models::backend::ParamSpec> &ddpm_param_specs() {
+    static const std::vector<mortred::models::backend::ParamSpec> specs = {
+        mortred::models::backend::ParamSpec::i32("timesteps").range(1, 1000).desc("sampling timesteps (more = slower, higher quality)"),
     };
     return specs;
 }
 
-inline const std::vector<jinq::models::backend::ParamSpec> &ddim_param_specs() {
-    static const std::vector<jinq::models::backend::ParamSpec> specs = {
-        jinq::models::backend::ParamSpec::i32("sample_steps").range(1, 1000).desc("DDIM sampling steps (fewer = faster)"),
-        jinq::models::backend::ParamSpec::f32("eta").range(0.0, 1.0).desc("stochasticity (0 = deterministic ODE, 1 = full stochastic)"),
+inline const std::vector<mortred::models::backend::ParamSpec> &ddim_param_specs() {
+    static const std::vector<mortred::models::backend::ParamSpec> specs = {
+        mortred::models::backend::ParamSpec::i32("sample_steps").range(1, 1000).desc("DDIM sampling steps (fewer = faster)"),
+        mortred::models::backend::ParamSpec::f32("eta").range(0.0, 1.0).desc("stochasticity (0 = deterministic ODE, 1 = full stochastic)"),
     };
     return specs;
 }
 
-inline const std::vector<jinq::models::backend::ParamSpec> &cls_cond_ddim_param_specs() {
-    static const std::vector<jinq::models::backend::ParamSpec> specs = {
-        jinq::models::backend::ParamSpec::i32("sample_steps").range(1, 1000).desc("DDIM sampling steps (fewer = faster)"),
-        jinq::models::backend::ParamSpec::f32("eta").range(0.0, 1.0).desc("stochasticity (0 = deterministic ODE, 1 = full stochastic)"),
-        jinq::models::backend::ParamSpec::i32("cls_id").range(0, 9999).desc("conditioning class id (model dependent)"),
+inline const std::vector<mortred::models::backend::ParamSpec> &cls_cond_ddim_param_specs() {
+    static const std::vector<mortred::models::backend::ParamSpec> specs = {
+        mortred::models::backend::ParamSpec::i32("sample_steps").range(1, 1000).desc("DDIM sampling steps (fewer = faster)"),
+        mortred::models::backend::ParamSpec::f32("eta").range(0.0, 1.0).desc("stochasticity (0 = deterministic ODE, 1 = full stochastic)"),
+        mortred::models::backend::ParamSpec::i32("cls_id").range(0, 9999).desc("conditioning class id (model dependent)"),
     };
     return specs;
 }
 
-inline const std::vector<jinq::models::backend::ParamSpec> &ldm_param_specs() {
-    static const std::vector<jinq::models::backend::ParamSpec> specs = {
-        jinq::models::backend::ParamSpec::i32("step_size").range(1, 1000).desc("latent sampler steps (fewer = faster)"),
+inline const std::vector<mortred::models::backend::ParamSpec> &ldm_param_specs() {
+    static const std::vector<mortred::models::backend::ParamSpec> specs = {
+        mortred::models::backend::ParamSpec::i32("step_size").range(1, 1000).desc("latent sampler steps (fewer = faster)"),
     };
     return specs;
 }
 
 inline const std::vector<Entry> &catalog() {
-    using jinq::models::io_define::diffusion::std_cls_cond_ddim_input;
-    using jinq::models::io_define::diffusion::std_cls_cond_ddim_output;
-    using jinq::models::io_define::diffusion::std_ddim_input;
-    using jinq::models::io_define::diffusion::std_ddim_output;
-    using jinq::models::io_define::diffusion::std_ddpm_input;
-    using jinq::models::io_define::diffusion::std_ddpm_output;
-    using jinq::models::io_define::diffusion::std_ldm_input;
-    using jinq::models::io_define::diffusion::std_ldm_output;
+    using mortred::models::io_define::diffusion::std_cls_cond_ddim_input;
+    using mortred::models::io_define::diffusion::std_cls_cond_ddim_output;
+    using mortred::models::io_define::diffusion::std_ddim_input;
+    using mortred::models::io_define::diffusion::std_ddim_output;
+    using mortred::models::io_define::diffusion::std_ddpm_input;
+    using mortred::models::io_define::diffusion::std_ddpm_output;
+    using mortred::models::io_define::diffusion::std_ldm_input;
+    using mortred::models::io_define::diffusion::std_ldm_output;
 
     using ClsCondDDIM = ClsCondDDIMSampler<std_cls_cond_ddim_input, std_cls_cond_ddim_output>;
     using DDIM = DDIMSampler<std_ddim_input, std_ddim_output>;
@@ -86,20 +86,20 @@ inline const std::vector<Entry> &catalog() {
 
     static const std::vector<Entry> entries = {
         Entry{"DDPM", "DDPM diffusion sampler", "DDPM_SERVER", &make_server_worker<DDPM, std_ddpm_input, std_ddpm_output>,
-              &jinq::server::response::fill_base64_image, ddpm_param_specs()},
+              &mortred::server::response::fill_base64_image, ddpm_param_specs()},
         Entry{"DDIM", "DDIM diffusion sampler", "DDIM_SERVER", &make_server_worker<DDIM, std_ddim_input, std_ddim_output>,
-              &jinq::server::response::fill_base64_image, ddim_param_specs()},
+              &mortred::server::response::fill_base64_image, ddim_param_specs()},
         Entry{"CLS_COND_DDIM", "class conditional DDIM sampler", "CLS_COND_DDIM_SERVER",
               &make_server_worker<ClsCondDDIM, std_cls_cond_ddim_input, std_cls_cond_ddim_output>,
-              &jinq::server::response::fill_base64_image, cls_cond_ddim_param_specs()},
+              &mortred::server::response::fill_base64_image, cls_cond_ddim_param_specs()},
         Entry{"LDM", "latent diffusion sampler", "LDM_SERVER", &make_server_worker<LDM, std_ldm_input, std_ldm_output>,
-              &jinq::server::response::fill_base64_image, ldm_param_specs()},
+              &mortred::server::response::fill_base64_image, ldm_param_specs()},
     };
     return entries;
 }
 
 } // namespace diffusion
 } // namespace factory
-} // namespace jinq
+} // namespace mortred
 
 #endif

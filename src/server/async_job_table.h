@@ -49,10 +49,10 @@
 #include "common/status_code.h"
 #include "server/inference_task.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
 
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /*** Async job lifecycle. Terminal states are >= DONE. */
 enum class AsyncJobState { PENDING = 0, RUNNING = 1, DONE = 2, FAILED = 3, TIMEOUT = 4 };
@@ -400,6 +400,6 @@ class AsyncJobTable {
 };
 
 }  // namespace server
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_MODEL_SERVER_ASYNC_JOB_TABLE_H

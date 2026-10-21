@@ -17,16 +17,16 @@
 #include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace ocr {
 
-using jinq::common::CvUtils;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using TextRegion = jinq::models::io_define::ocr::text_region;
-using TextRegions = jinq::models::io_define::ocr::std_text_regions_output;
+using mortred::common::CvUtils;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using TextRegion = mortred::models::io_define::ocr::text_region;
+using TextRegions = mortred::models::io_define::ocr::std_text_regions_output;
 
 template <typename INPUT, typename OUTPUT> StatusCode DBTextDetector<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto &inputs = this->session().inputs();
@@ -77,14 +77,14 @@ template <typename INPUT, typename OUTPUT> StatusCode DBTextDetector<INPUT, OUTP
     }
 
     LOG(INFO) << "DB_Text detection model initialization complete!!!";
-    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "dbnet"));
+    this->set_image_decode_hint(_m_input_size_host, mortred::models::cv_input::parse_image_decode_upscale(params, "dbnet"));
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
         // CPU chain stays BGR: register the chain arrays verbatim and let
         // bgr_norm do the reversal (the literal once shipped them verbatim,
         // swapping B/R means on the GPU decode path)
-        .norm = jinq::models::backend::bgr_norm(1.0f / 255.0f, {0.485f, 0.456f, 0.406f}, {0.229f, 0.224f, 0.225f}),
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::BGR,
+        .norm = mortred::models::backend::bgr_norm(1.0f / 255.0f, {0.485f, 0.456f, 0.406f}, {0.229f, 0.224f, 0.225f}),
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::BGR,
         .pad_value = 114,
         .output_dtype = input_info.dtype,
         .output_nhwc = false,
@@ -94,7 +94,7 @@ template <typename INPUT, typename OUTPUT> StatusCode DBTextDetector<INPUT, OUTP
 }
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> DBTextDetector<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
-    auto result = jinq::models::backend::ImagePipeline(input_image)
+    auto result = mortred::models::backend::ImagePipeline(input_image)
                       .resize(_m_input_size_host)
                       .to_float()
                       .scale(1.0f / 255.0f)
@@ -110,24 +110,24 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> DBTextDetect
 
 template <typename INPUT, typename OUTPUT>
 StatusCode DBTextDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                      const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                      const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     const auto output_iter =
         std::find_if(outputs.begin(), outputs.end(), [this](const NamedTensor &item) { return item.name == _m_output_name; });
     if (output_iter == outputs.end()) {
         LOG(ERROR) << "db text inference result tensor is missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    jinq::models::backend::GeometryScale geometry_scale;
+    mortred::models::backend::GeometryScale geometry_scale;
     std::string geometry_error;
-    if (!jinq::models::backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
+    if (!mortred::models::backend::make_geometry_scale(context, &geometry_scale, &geometry_error)) {
         LOG(ERROR) << "db text " << geometry_error;
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
-    jinq::models::backend::F32OutputView output_view;
-    const auto output_status = jinq::models::backend::validated_f32_named_output(
+    mortred::models::backend::F32OutputView output_view;
+    const auto output_status = mortred::models::backend::validated_f32_named_output(
         outputs, _m_output_name,
-        {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
-         jinq::models::backend::TensorLayout::Nchw},
+        {mortred::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
+         mortred::models::backend::TensorLayout::Nchw},
         "db text", &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
@@ -163,7 +163,7 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
 
 template <typename INPUT, typename OUTPUT>
 StatusCode DBTextDetector<INPUT, OUTPUT>::get_boxes_from_bitmap(const cv::Mat &seg_prob_mat, const cv::Mat &seg_score_mat,
-                                                                const jinq::models::backend::GeometryScale &geometry_scale,
+                                                                const mortred::models::backend::GeometryScale &geometry_scale,
                                                                 float score_threshold, int keep_topk, OUTPUT &output) const {
     TextRegions result;
 
@@ -193,9 +193,9 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::get_boxes_from_bitmap(const cv::Mat &s
 
         // rescale bbox coords to origin user image size
         for (auto &pt : r_vertices) {
-            pt = jinq::models::backend::scale_point(pt, geometry_scale);
+            pt = mortred::models::backend::scale_point(pt, geometry_scale);
         }
-        r_bounding_box = jinq::models::backend::scale_bbox(r_bounding_box, geometry_scale);
+        r_bounding_box = mortred::models::backend::scale_bbox(r_bounding_box, geometry_scale);
 
         TextRegion region;
         region.bbox = r_bounding_box;
@@ -214,8 +214,8 @@ StatusCode DBTextDetector<INPUT, OUTPUT>::get_boxes_from_bitmap(const cv::Mat &s
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-DBTextDetector<INPUT, OUTPUT>::DBTextDetector() : jinq::models::BackendCvModel<INPUT, OUTPUT>("DB_TEXT") {}
+DBTextDetector<INPUT, OUTPUT>::DBTextDetector() : mortred::models::BackendCvModel<INPUT, OUTPUT>("DB_TEXT") {}
 
 } // namespace ocr
 } // namespace models
-} // namespace jinq
+} // namespace mortred

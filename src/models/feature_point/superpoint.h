@@ -14,12 +14,12 @@
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace feature_point {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT> class SuperPoint : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class SuperPoint : public mortred::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     SuperPoint();
     ~SuperPoint() override = default;
@@ -28,22 +28,22 @@ template <typename INPUT, typename OUTPUT> class SuperPoint : public jinq::model
     SuperPoint &operator=(const SuperPoint &transformer) = delete;
 
   protected:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
+    std::vector<mortred::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode on_init(const toml::table &params) override;
 
-    const jinq::models::backend::NamedTensor *find_output(const std::vector<jinq::models::backend::NamedTensor> &outputs,
+    const mortred::models::backend::NamedTensor *find_output(const std::vector<mortred::models::backend::NamedTensor> &outputs,
                                                           const std::string &name) const;
 
-    void decode_fp_location_and_score(const jinq::models::backend::NamedTensor &semi,
+    void decode_fp_location_and_score(const mortred::models::backend::NamedTensor &semi,
                                       double score_threshold, double nms_radius,
-                                      jinq::models::io_define::feature_point::std_feature_point_output &key_points) const;
+                                      mortred::models::io_define::feature_point::std_feature_point_output &key_points) const;
 
-    void decode_fp_descriptor(const jinq::models::backend::NamedTensor &desc,
-                              jinq::models::io_define::feature_point::std_feature_point_output &key_points) const;
+    void decode_fp_descriptor(const mortred::models::backend::NamedTensor &desc,
+                              mortred::models::io_define::feature_point::std_feature_point_output &key_points) const;
 
     // score thresh
     double _m_score_threshold = 0.015;
@@ -57,7 +57,7 @@ template <typename INPUT, typename OUTPUT> class SuperPoint : public jinq::model
 
 } // namespace feature_point
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "superpoint.inl"
 

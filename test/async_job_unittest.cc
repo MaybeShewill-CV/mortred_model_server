@@ -33,7 +33,7 @@
 
 // tests-only builds do not link libmodels; BaseAiServerImpl::serve_process
 // references this symbol via the vtable, so provide a local stub.
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 namespace gpu_jpeg {
@@ -43,27 +43,27 @@ std::string render_decode_metrics() {
 }  // namespace gpu_jpeg
 }  // namespace backend
 }  // namespace models
-}  // namespace jinq
+}  // namespace mortred
 
 namespace {
 
-using jinq::common::StatusCode;
-using jinq::server::AsyncJobState;
-using jinq::server::AsyncJobTable;
-using jinq::server::is_async_terminal;
-using jinq::server::InferenceTask;
+using mortred::common::StatusCode;
+using mortred::server::AsyncJobState;
+using mortred::server::AsyncJobTable;
+using mortred::server::is_async_terminal;
+using mortred::server::InferenceTask;
 
 struct TrivialOutput {
     int value = 0;
 };
 
 using Table = AsyncJobTable<TrivialOutput>;
-using Result = jinq::server::InferenceResult<TrivialOutput>;
+using Result = mortred::server::InferenceResult<TrivialOutput>;
 
 InferenceTask make_req(const std::string& id, const std::string& payload) {
     InferenceTask req;
     req.task_id = id;
-    req.items.push_back({jinq::models::io_define::common_io::byte_source::origin_kind::base64_text, payload});
+    req.items.push_back({mortred::models::io_define::common_io::byte_source::origin_kind::base64_text, payload});
     return req;
 }
 
@@ -323,7 +323,7 @@ TEST(async_job_table, missing_job_operations_return_not_found) {
 }
 
 TEST(async_endpoints, drain_timeout_returns_with_inflight_log) {
-    jinq::server::AsyncJobEndpoints<TrivialOutput> eps;
+    mortred::server::AsyncJobEndpoints<TrivialOutput> eps;
     eps.add_inflight_for_test(1);
 
     FLAGS_logtostderr = true;
@@ -339,11 +339,11 @@ TEST(async_endpoints, drain_timeout_returns_with_inflight_log) {
 }
 
 TEST(async_endpoints, shared_deadline_budget_under_350ms) {
-    jinq::server::AsyncJobEndpoints<TrivialOutput> eps;
+    mortred::server::AsyncJobEndpoints<TrivialOutput> eps;
     eps.add_inflight_for_test(1);
 
     using IntWorker = std::unique_ptr<int>;
-    jinq::server::WorkerPool<IntWorker> pool;
+    mortred::server::WorkerPool<IntWorker> pool;
     pool.adopt(std::make_unique<int>(1));
     pool.commit_watermark(1);
     IntWorker held;
@@ -365,8 +365,8 @@ TEST(async_endpoints, shared_deadline_budget_under_350ms) {
 
 namespace {
 
-using jinq::models::BaseAiModel;
-using jinq::models::io_define::common_io::base64_input;
+using mortred::models::BaseAiModel;
+using mortred::models::io_define::common_io::base64_input;
 
 class DrainStubModel : public BaseAiModel<base64_input, TrivialOutput> {
 public:
@@ -385,7 +385,7 @@ public:
 };
 
 class NeverInitServer
-    : public jinq::server::BaseAiServerImpl<std::unique_ptr<DrainStubModel>, TrivialOutput> {
+    : public mortred::server::BaseAiServerImpl<std::unique_ptr<DrainStubModel>, TrivialOutput> {
 public:
     StatusCode init(const toml::table&) override {
         return StatusCode::SERVER_INIT_FAILED;
@@ -395,7 +395,7 @@ protected:
     void fill_response_data(rapidjson::Document::AllocatorType&,
                             rapidjson::Document&,
                             const TrivialOutput&,
-                            const jinq::server::OutputOptions&) override {}
+                            const mortred::server::OutputOptions&) override {}
 };
 
 }  // namespace

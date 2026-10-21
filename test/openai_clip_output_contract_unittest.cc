@@ -8,10 +8,10 @@
 #include "models/clip/openai_clip.h"
 #include "models/io/clip.h"
 
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using Model = jinq::models::clip::OpenAiClip<jinq::models::io_define::clip::clip_input, jinq::models::io_define::clip::clip_output>;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using Model = mortred::models::clip::OpenAiClip<mortred::models::io_define::clip::clip_input, mortred::models::io_define::clip::clip_output>;
 
 namespace {
 

@@ -14,15 +14,15 @@
 
 #include "models/backend/f32_output.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace diffusion {
 
-using ClsCondUnetInput = jinq::models::io_define::diffusion::std_cls_cond_ddpm_unet_input;
-using ClsCondUnetOutput = jinq::models::io_define::diffusion::std_cls_cond_ddpm_unet_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::TensorInfo;
+using ClsCondUnetInput = mortred::models::io_define::diffusion::std_cls_cond_ddpm_unet_input;
+using ClsCondUnetOutput = mortred::models::io_define::diffusion::std_cls_cond_ddpm_unet_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::TensorInfo;
 
 namespace {
 
@@ -36,22 +36,22 @@ const TensorInfo *find_info(const std::vector<TensorInfo> &infos, const std::str
 }
 
 bool make_integer_scalar(NamedTensor &named, const TensorInfo &info, int64_t value) {
-    named.tensor = jinq::models::backend::Tensor::make<int64_t>(info.shape);
+    named.tensor = mortred::models::backend::Tensor::make<int64_t>(info.shape);
     named.tensor.data<int64_t>()[0] = value;
     return true;
 }
 
 bool make_integer_scalar(NamedTensor &named, const TensorInfo &info, int32_t value) {
-    named.tensor = jinq::models::backend::Tensor::make<int32_t>(info.shape);
+    named.tensor = mortred::models::backend::Tensor::make<int32_t>(info.shape);
     named.tensor.data<int32_t>()[0] = value;
     return true;
 }
 
 bool write_integer_scalar(NamedTensor &named, const TensorInfo &info, int64_t value) {
-    if (info.dtype == jinq::models::backend::DType::I64) {
+    if (info.dtype == mortred::models::backend::DType::I64) {
         return make_integer_scalar(named, info, static_cast<int64_t>(value));
     }
-    if (info.dtype == jinq::models::backend::DType::I32) {
+    if (info.dtype == mortred::models::backend::DType::I32) {
         return make_integer_scalar(named, info, static_cast<int32_t>(value));
     }
     return false;
@@ -60,7 +60,7 @@ bool write_integer_scalar(NamedTensor &named, const TensorInfo &info, int64_t va
 } // namespace
 
 template <typename INPUT, typename OUTPUT>
-jinq::models::backend::PreparedInput ClsCondDDPMUNet<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
+mortred::models::backend::PreparedInput ClsCondDDPMUNet<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
     const auto &input_infos = this->session().inputs();
     const auto *xt_info = find_info(input_infos, "xt");
     const auto *t_info = find_info(input_infos, "t");
@@ -74,11 +74,11 @@ jinq::models::backend::PreparedInput ClsCondDDPMUNet<INPUT, OUTPUT>::prepare_inp
         return {};
     }
 
-    jinq::models::backend::PreparedInput prepared;
+    mortred::models::backend::PreparedInput prepared;
     std::vector<NamedTensor> inputs;
     NamedTensor xt;
     xt.name = "xt";
-    xt.tensor = jinq::models::backend::Tensor::make<float>(xt_info->shape);
+    xt.tensor = mortred::models::backend::Tensor::make<float>(xt_info->shape);
     if (input.xt.size() * sizeof(float) != xt.tensor.byte_size()) {
         LOG(ERROR) << "xt element count " << input.xt.size() << " mismatches session input " << xt_info->to_string();
         return {};
@@ -107,14 +107,14 @@ jinq::models::backend::PreparedInput ClsCondDDPMUNet<INPUT, OUTPUT>::prepare_inp
 
 template <typename INPUT, typename OUTPUT>
 StatusCode ClsCondDDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                       const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
+                                                       const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "cls cond ddpm unet output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    jinq::models::backend::F32OutputView output_view;
-    const auto output_status = jinq::models::backend::validated_f32_first_output(
-        outputs, {jinq::models::backend::DType::F32, 4, {1, -1, -1, -1}, jinq::models::backend::TensorLayout::Nchw}, "cls cond ddpm unet", &output_view);
+    mortred::models::backend::F32OutputView output_view;
+    const auto output_status = mortred::models::backend::validated_f32_first_output(
+        outputs, {mortred::models::backend::DType::F32, 4, {1, -1, -1, -1}, mortred::models::backend::TensorLayout::Nchw}, "cls cond ddpm unet", &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
     }
@@ -127,8 +127,8 @@ StatusCode ClsCondDDPMUNet<INPUT, OUTPUT>::postprocess(const std::vector<NamedTe
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-ClsCondDDPMUNet<INPUT, OUTPUT>::ClsCondDDPMUNet() : jinq::models::BackendCvModel<INPUT, OUTPUT>("DDPM_UNET") {}
+ClsCondDDPMUNet<INPUT, OUTPUT>::ClsCondDDPMUNet() : mortred::models::BackendCvModel<INPUT, OUTPUT>("DDPM_UNET") {}
 
 } // namespace diffusion
 } // namespace models
-} // namespace jinq
+} // namespace mortred

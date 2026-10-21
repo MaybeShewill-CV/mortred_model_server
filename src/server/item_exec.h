@@ -28,9 +28,9 @@
 #include "server/inference_task.h"
 #include "server/output_options.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 template <typename INPUT>
 inline INPUT make_model_input(models::io_define::common_io::byte_source item,
@@ -102,7 +102,7 @@ inline void run_items(WORKER& worker, const InferenceTask& req,
     aggregate_item_statuses(result);
     if (result->model_run_status != StatusCode::OK) {
         LOG(ERROR) << "worker run failed with status "
-                   << jinq::common::to_underlying(result->model_run_status);
+                   << mortred::common::to_underlying(result->model_run_status);
     }
 }
 
@@ -115,22 +115,22 @@ inline StatusCode run_one(WORKER& worker, const InferenceTask& req, size_t idx,
 }
 
 template <typename MODEL_OUTPUT, typename FillFn>
-inline jinq::common::UnifiedResponse inference_result_to_unified(
+inline mortred::common::UnifiedResponse inference_result_to_unified(
     const std::string& task_id, const std::string& model_name,
     const InferenceResult<MODEL_OUTPUT>& result, FillFn fill) {
-    jinq::common::UnifiedResponse unified;
+    mortred::common::UnifiedResponse unified;
     unified.task_id = task_id;
     unified.model_name = model_name;
-    unified.status = jinq::common::to_underlying(result.model_run_status);
-    unified.status_str = jinq::common::status_code_to_str(result.model_run_status);
+    unified.status = mortred::common::to_underlying(result.model_run_status);
+    unified.status_str = mortred::common::status_code_to_str(result.model_run_status);
     unified.partial = result.partial;
     unified.server_time_ms =
         result.worker_run_time_consuming + result.find_worker_time_consuming;
     unified.results.reserve(result.item_status.size());
     for (size_t idx = 0; idx < result.item_status.size(); ++idx) {
         const StatusCode item_status = result.item_status[idx];
-        jinq::common::ResponseItem item;
-        item.status = jinq::common::to_underlying(item_status);
+        mortred::common::ResponseItem item;
+        item.status = mortred::common::to_underlying(item_status);
         if (item_status == StatusCode::OK) {
             rapidjson::Document data;
             fill(data.GetAllocator(), data, result.item_outputs[idx], result.options);
@@ -142,6 +142,6 @@ inline jinq::common::UnifiedResponse inference_result_to_unified(
 }
 
 }  // namespace server
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_SERVER_ITEM_EXEC_H

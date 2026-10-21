@@ -10,32 +10,32 @@
 #include "models/object_detection/yolo_decode.h"
 #include "toml/toml.hpp"
 
-using jinq::common::StatusCode;
-using jinq::models::backend::DType;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using jinq::models::backend::GeometryScale;
-using jinq::models::backend::LetterboxGeometry;
-using jinq::models::backend::compute_letterbox_geometry;
-using jinq::models::backend::make_geometry_scale;
-using jinq::models::backend::make_letterbox_geometry;
-using jinq::models::backend::scale_bbox;
-using jinq::models::backend::scale_point;
-using jinq::models::backend::unmap_letterbox_bbox;
-using jinq::models::backend::validated_f32_named_output;
-using jinq::models::object_detection::DetectionParams;
-using jinq::models::object_detection::F32OutputView;
-using jinq::models::object_detection::collect_yolo_cxcywh_obj_candidates;
-using jinq::models::object_detection::collect_yolov7_head_candidates;
-using jinq::models::object_detection::collect_yolov8_candidates;
-using jinq::models::object_detection::make_nchw_input;
-using jinq::models::object_detection::passes_min_box_area;
-using jinq::models::object_detection::unmap_letterbox_detections;
+using mortred::common::StatusCode;
+using mortred::models::backend::DType;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using mortred::models::backend::GeometryScale;
+using mortred::models::backend::LetterboxGeometry;
+using mortred::models::backend::compute_letterbox_geometry;
+using mortred::models::backend::make_geometry_scale;
+using mortred::models::backend::make_letterbox_geometry;
+using mortred::models::backend::scale_bbox;
+using mortred::models::backend::scale_point;
+using mortred::models::backend::unmap_letterbox_bbox;
+using mortred::models::backend::validated_f32_named_output;
+using mortred::models::object_detection::DetectionParams;
+using mortred::models::object_detection::F32OutputView;
+using mortred::models::object_detection::collect_yolo_cxcywh_obj_candidates;
+using mortred::models::object_detection::collect_yolov7_head_candidates;
+using mortred::models::object_detection::collect_yolov8_candidates;
+using mortred::models::object_detection::make_nchw_input;
+using mortred::models::object_detection::passes_min_box_area;
+using mortred::models::object_detection::unmap_letterbox_detections;
 
 namespace {
 
-jinq::models::backend::InferenceContext test_context() {
-    jinq::models::backend::InferenceContext context;
+mortred::models::backend::InferenceContext test_context() {
+    mortred::models::backend::InferenceContext context;
     context.source_size = cv::Size(200, 300);
     context.network_size = cv::Size(100, 50);
     return context;
@@ -103,7 +103,7 @@ TEST(DetectorCommon, DistinguishesMissingAndContractFailedOutputs) {
 }
 
 TEST(DetectorCommon, FinalizeDetectionsAppliesNmsTopKAndCategories) {
-    using jinq::models::io_define::object_detection::bbox;
+    using mortred::models::io_define::object_detection::bbox;
 
     DetectionParams params;
     params.class_nums = 2;
@@ -128,7 +128,7 @@ TEST(DetectorCommon, FinalizeDetectionsAppliesNmsTopKAndCategories) {
     car.class_id = 1;
     detections.push_back(car);
 
-    const auto result = jinq::models::object_detection::finalize_detections(detections, params);
+    const auto result = mortred::models::object_detection::finalize_detections(detections, params);
     ASSERT_EQ(result.size(), 1u);
     EXPECT_EQ(result[0].class_id, 0);
     EXPECT_FLOAT_EQ(result[0].score, 0.9f);
@@ -136,7 +136,7 @@ TEST(DetectorCommon, FinalizeDetectionsAppliesNmsTopKAndCategories) {
 }
 
 TEST(DetectorCommon, RequestParamsOverrideConfigDefaults) {
-    using jinq::models::io_define::object_detection::bbox;
+    using mortred::models::io_define::object_detection::bbox;
 
     DetectionParams params;
     params.class_nums = 1;
@@ -156,23 +156,23 @@ TEST(DetectorCommon, RequestParamsOverrideConfigDefaults) {
     // legacy path: nullptr params keeps pure config behavior
     auto context = test_context();
     context.params = nullptr;
-    const auto legacy = jinq::models::object_detection::finalize_detections(detections, params, context);
+    const auto legacy = mortred::models::object_detection::finalize_detections(detections, params, context);
     EXPECT_EQ(legacy.size(), 3u);
 
     // request override: score_threshold 0.5 keeps only the 0.6 box,
     // top_k 1 would not change that; check threshold first
-    jinq::models::backend::ParamSet request_params;
+    mortred::models::backend::ParamSet request_params;
     request_params.set_f32("score_threshold", 0.5f);
     context.params = &request_params;
-    const auto strict = jinq::models::object_detection::finalize_detections(detections, params, context);
+    const auto strict = mortred::models::object_detection::finalize_detections(detections, params, context);
     ASSERT_EQ(strict.size(), 1u);
     EXPECT_FLOAT_EQ(strict[0].score, 0.6f);
 
     // top_k truncation also overrides the config default
-    request_params = jinq::models::backend::ParamSet();
+    request_params = mortred::models::backend::ParamSet();
     request_params.set_f32("score_threshold", 0.1f);
     request_params.set_i32("top_k", 2);
-    const auto truncated = jinq::models::object_detection::finalize_detections(detections, params, context);
+    const auto truncated = mortred::models::object_detection::finalize_detections(detections, params, context);
     EXPECT_EQ(truncated.size(), 2u);
 }
 
@@ -181,20 +181,20 @@ TEST(DetectorCommon, ImagePostprocessContextCarriesRequestParams) {
     // InferenceContext without the request-scoped parameter view, so every
     // per-request override silently fell back to config defaults on that
     // path. The shared builder must carry params + decode geometry together.
-    jinq::models::backend::ParamSet request_params;
+    mortred::models::backend::ParamSet request_params;
     request_params.set_f32("score_threshold", 0.5f);
 
-    jinq::models::io_define::common_io::image_input input;
+    mortred::models::io_define::common_io::image_input input;
     input.params = &request_params;
-    const auto ctx = jinq::models::backend::image_postprocess_context(
+    const auto ctx = mortred::models::backend::image_postprocess_context(
         input, cv::Size(640, 640), cv::Size(1280, 720));
     EXPECT_EQ(ctx.params, &request_params);
     EXPECT_EQ(ctx.network_size, cv::Size(640, 640));
     EXPECT_EQ(ctx.source_size, cv::Size(1280, 720));
 
     // legacy single-image requests carry no view; the builder keeps nullptr
-    jinq::models::io_define::common_io::image_input legacy;
-    const auto legacy_ctx = jinq::models::backend::image_postprocess_context(
+    mortred::models::io_define::common_io::image_input legacy;
+    const auto legacy_ctx = mortred::models::backend::image_postprocess_context(
         legacy, cv::Size(224, 224), cv::Size(448, 448));
     EXPECT_EQ(legacy_ctx.params, nullptr);
     EXPECT_EQ(legacy_ctx.network_size, cv::Size(224, 224));
@@ -227,7 +227,7 @@ TEST(DetectorCommon, RejectsInvalidNchwInput) {
 }
 
 TEST(DetectorCommon, ComputesUltralyticsLetterboxAndUnmapsBoxes) {
-    jinq::models::backend::InferenceContext context;
+    mortred::models::backend::InferenceContext context;
     context.source_size = cv::Size(800, 600);
     context.network_size = cv::Size(640, 640);
 
@@ -286,7 +286,7 @@ TEST(DetectorCommon, YoloV8SyntheticDecodeNmsThenLetterboxUnmap) {
     packed[5 * k_proposals + 1] = 0.1f;
     packed[5 * k_proposals + 2] = 0.7f;
 
-    jinq::models::io_define::object_detection::std_object_detection_output candidates;
+    mortred::models::io_define::object_detection::std_object_detection_output candidates;
     collect_yolov8_candidates(packed.data(), k_rows, k_proposals, 0.5f, 5.0f, &candidates);
     ASSERT_EQ(candidates.size(), 3u);
 
@@ -297,7 +297,7 @@ TEST(DetectorCommon, YoloV8SyntheticDecodeNmsThenLetterboxUnmap) {
     params.nms_threshold = 0.5f;
     params.keep_top_k = 10;
 
-    auto kept = jinq::models::object_detection::finalize_detections(std::move(candidates), params);
+    auto kept = mortred::models::object_detection::finalize_detections(std::move(candidates), params);
     ASSERT_EQ(kept.size(), 2u);
     EXPECT_EQ(kept[0].class_id, 0);
     EXPECT_FLOAT_EQ(kept[0].score, 0.9f);
@@ -306,7 +306,7 @@ TEST(DetectorCommon, YoloV8SyntheticDecodeNmsThenLetterboxUnmap) {
     EXPECT_FLOAT_EQ(kept[1].score, 0.7f);
     EXPECT_EQ(kept[1].category, "bicycle");
 
-    jinq::models::backend::InferenceContext context;
+    mortred::models::backend::InferenceContext context;
     context.source_size = cv::Size(800, 600);
     context.network_size = cv::Size(640, 640);
     LetterboxGeometry geom;
@@ -335,7 +335,7 @@ TEST(DetectorCommon, YoloCxcywhObjSyntheticDecodeFiltersNetworkArea) {
     packed.insert(packed.end(), small_row, small_row + 7);
     packed.insert(packed.end(), large_row, large_row + 7);
 
-    jinq::models::io_define::object_detection::std_object_detection_output candidates;
+    mortred::models::io_define::object_detection::std_object_detection_output candidates;
     collect_yolo_cxcywh_obj_candidates(packed.data(), 1, proposals, class_nums, 0.5f, 5.0f, &candidates);
     ASSERT_EQ(candidates.size(), 1u);
     EXPECT_FLOAT_EQ(candidates[0].bbox.width, 3.0f);
@@ -347,7 +347,7 @@ TEST(DetectorCommon, YoloCxcywhObjSyntheticDecodeFiltersNetworkArea) {
 
     // Contrast: the dropped 2x2 network box unmaps to 4x4=16 source px when
     // letterbox scale is 0.5, which would have passed a post-unmap filter.
-    jinq::models::backend::InferenceContext context;
+    mortred::models::backend::InferenceContext context;
     context.source_size = cv::Size(400, 400);
     context.network_size = cv::Size(200, 200);
     LetterboxGeometry geom;
@@ -379,7 +379,7 @@ TEST(DetectorCommon, YoloV7SyntheticDecodeFiltersNetworkArea) {
     fill(0, 0.0f, 0.0f, -2.2f, -2.2f, 6.0f, 6.0f);
     fill(1, 0.0f, 0.0f, 0.0f, 0.0f, 6.0f, 6.0f);
 
-    jinq::models::io_define::object_detection::std_object_detection_output candidates;
+    mortred::models::io_define::object_detection::std_object_detection_output candidates;
     collect_yolov7_head_candidates(data.data(), anchor_nums, grid, grid, attrs, 8, anchors, 0.4f, 5.0f, &candidates);
     ASSERT_EQ(candidates.size(), 1u);
     EXPECT_NEAR(candidates[0].bbox.width, 19.0f, 1e-4);
@@ -403,7 +403,7 @@ TEST(DetectorCommon, YoloV8SyntheticDecodeFiltersNetworkArea) {
     packed[5 * k_proposals + 0] = 0.1f;
     packed[5 * k_proposals + 1] = 0.1f;
 
-    jinq::models::io_define::object_detection::std_object_detection_output candidates;
+    mortred::models::io_define::object_detection::std_object_detection_output candidates;
     collect_yolov8_candidates(packed.data(), k_rows, k_proposals, 0.5f, 5.0f, &candidates);
     ASSERT_EQ(candidates.size(), 1u);
     EXPECT_FLOAT_EQ(candidates[0].bbox.width, 3.0f);
@@ -412,14 +412,14 @@ TEST(DetectorCommon, YoloV8SyntheticDecodeFiltersNetworkArea) {
 
 TEST(DetectorCommon, ImageDecodeUpscaleIsStrictUnlessBudget) {
     const auto empty = std::move(toml::parse("")).table();
-    EXPECT_FLOAT_EQ(jinq::models::object_detection::parse_image_decode_upscale(empty, "test"), 1.0f);
+    EXPECT_FLOAT_EQ(mortred::models::object_detection::parse_image_decode_upscale(empty, "test"), 1.0f);
 
     const auto budget = std::move(toml::parse("image_decode_mode = \"budget\"")).table();
-    EXPECT_FLOAT_EQ(jinq::models::object_detection::parse_image_decode_upscale(budget, "test"), 1.25f);
+    EXPECT_FLOAT_EQ(mortred::models::object_detection::parse_image_decode_upscale(budget, "test"), 1.25f);
 
     const auto custom = std::move(toml::parse("image_decode_mode = \"budget\"\nimage_decode_budget_upscale = 1.5")).table();
-    EXPECT_FLOAT_EQ(jinq::models::object_detection::parse_image_decode_upscale(custom, "test"), 1.5f);
+    EXPECT_FLOAT_EQ(mortred::models::object_detection::parse_image_decode_upscale(custom, "test"), 1.5f);
 
     const auto out_of_range = std::move(toml::parse("image_decode_mode = \"budget\"\nimage_decode_budget_upscale = 3.0")).table();
-    EXPECT_FLOAT_EQ(jinq::models::object_detection::parse_image_decode_upscale(out_of_range, "test"), 1.25f);
+    EXPECT_FLOAT_EQ(mortred::models::object_detection::parse_image_decode_upscale(out_of_range, "test"), 1.25f);
 }

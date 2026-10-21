@@ -12,7 +12,7 @@
 #include <string>
 #include <system_error>
 
-namespace jinq {
+namespace mortred {
 namespace common {
 
 // thin wrappers over std::filesystem; edge cases (empty parts, separators,
@@ -39,6 +39,6 @@ public:
 };
 
 }  // namespace common
-}  // namespace jinq
+}  // namespace mortred
 
 #endif //MORTRED_MODEL_SERVER_FILE_PATH_UTIL_H

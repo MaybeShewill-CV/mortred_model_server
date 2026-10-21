@@ -21,20 +21,20 @@
 #include "common/file_path_util.h"
 #include "models/diffusion/cls_cond_ddpm_unet.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 
-using jinq::common::CvUtils;
-using jinq::common::FilePathUtil;
-using jinq::common::StatusCode;
+using mortred::common::CvUtils;
+using mortred::common::FilePathUtil;
+using mortred::common::StatusCode;
 
 namespace diffusion {
 
-using jinq::models::io_define::diffusion::std_cls_cond_ddim_input;
-using jinq::models::io_define::diffusion::std_cls_cond_ddim_output;
-using jinq::models::io_define::diffusion::std_cls_cond_ddpm_unet_input;
-using jinq::models::io_define::diffusion::std_cls_cond_ddpm_unet_output;
-using ClsCondDenoiseModelPtr = jinq::models::diffusion::ClsCondDDPMUNet<std_cls_cond_ddpm_unet_input, std_cls_cond_ddpm_unet_output>;
+using mortred::models::io_define::diffusion::std_cls_cond_ddim_input;
+using mortred::models::io_define::diffusion::std_cls_cond_ddim_output;
+using mortred::models::io_define::diffusion::std_cls_cond_ddpm_unet_input;
+using mortred::models::io_define::diffusion::std_cls_cond_ddpm_unet_output;
+using ClsCondDenoiseModelPtr = mortred::models::diffusion::ClsCondDDPMUNet<std_cls_cond_ddpm_unet_input, std_cls_cond_ddpm_unet_output>;
 
 namespace cls_cond_ddim_sampler_impl {
 
@@ -577,4 +577,4 @@ StatusCode ClsCondDDIMSampler<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPU
 
 } // namespace diffusion
 } // namespace models
-} // namespace jinq
+} // namespace mortred

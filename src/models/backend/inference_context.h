@@ -12,7 +12,7 @@
 #include "models/backend/tensor.h"
 #include "models/io/common_input.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
@@ -57,10 +57,10 @@ inline InferenceContext image_postprocess_context(
 struct PreparedInput {
     std::vector<backend::NamedTensor> inputs;
     InferenceContext context;
-    jinq::common::StatusCode status = jinq::common::StatusCode::OK;
+    mortred::common::StatusCode status = mortred::common::StatusCode::OK;
     std::string error;
 
-    static PreparedInput invalid(jinq::common::StatusCode status, std::string error) {
+    static PreparedInput invalid(mortred::common::StatusCode status, std::string error) {
         PreparedInput result;
         result.status = status;
         result.error = std::move(error);
@@ -70,6 +70,6 @@ struct PreparedInput {
 
 } // namespace backend
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_BACKEND_INFERENCE_CONTEXT_H

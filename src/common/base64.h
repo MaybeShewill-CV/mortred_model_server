@@ -16,7 +16,7 @@
 
 #include "glog/logging.h"
 
-namespace jinq {
+namespace mortred {
 namespace common {
 namespace base64 {
 
@@ -136,6 +136,6 @@ inline std::string decode(std::string_view input) {
 
 }  // namespace base64
 }  // namespace common
-}  // namespace jinq
+}  // namespace mortred
 
 #endif //MORTRED_MODEL_SERVER_BASE64_H

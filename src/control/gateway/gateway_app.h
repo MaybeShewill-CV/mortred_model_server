@@ -121,7 +121,7 @@ private:
                             const char* layer, const char* limited_message);
     void forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
                           const std::string& method, const std::string& query,
-                          const std::shared_ptr<jinq::common::stage_timing::StageTrace>& trace,
+                          const std::shared_ptr<mortred::common::stage_timing::StageTrace>& trace,
                           const StageClocks& clocks,
                           std::shared_ptr<const ApiKey> inflight_key = nullptr);
     void note_upstream_stage(const StageClocks& clocks,
@@ -140,7 +140,7 @@ private:
     Catalog catalog_;
     ControlConfig cfg_;
     ApiKeyManager api_keys_;
-    jinq::server::PrometheusMetrics metrics_;
+    mortred::server::PrometheusMetrics metrics_;
     // L2 authorized per-source GCRA. Constructed at init() when
     // [gateway.rate_limit] is enabled or shadow (non-copyable: sharded
     // mutexes). Null = disabled. Admitted only after auth succeeds.

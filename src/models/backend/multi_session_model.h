@@ -52,11 +52,11 @@
 #include "models/backend/model_runtime.h"
 #include "models/backend/session.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /*** reusable description of one session input or output ***/
 struct IoSpec {
@@ -211,6 +211,6 @@ template <typename Derived, typename INPUT, typename OUTPUT> class MultiSessionM
 
 } // namespace backend
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_BACKEND_MULTI_SESSION_MODEL_H

@@ -9,11 +9,11 @@
 #include "models/io/scene_segmentation.h"
 #include "models/scene_segmentation/hrnet_segmentation.h"
 
-using jinq::common::StatusCode;
-using jinq::models::backend::InferenceContext;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using Output = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::InferenceContext;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using Output = mortred::models::io_define::scene_segmentation::std_scene_segmentation_output;
 
 namespace {
 
@@ -22,8 +22,8 @@ template <typename MODEL> class CallableHrnet : public MODEL {
     using MODEL::postprocess;
 };
 
-using TestModel = CallableHrnet<jinq::models::scene_segmentation::HRNetSegmentation<
-    jinq::models::io_define::common_io::mat_input, Output>>;
+using TestModel = CallableHrnet<mortred::models::scene_segmentation::HRNetSegmentation<
+    mortred::models::io_define::common_io::mat_input, Output>>;
 
 InferenceContext map_context() {
     InferenceContext ctx;

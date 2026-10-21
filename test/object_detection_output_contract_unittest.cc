@@ -18,14 +18,14 @@
 #include "server/item_exec.h"
 #include "server/response_serializers.h"
 
-using jinq::common::StatusCode;
-using jinq::models::backend::DType;
-using jinq::models::backend::NamedTensor;
-using jinq::models::io_define::common_io::mat_input;
-using jinq::models::io_define::object_detection::std_object_detection_output;
-using jinq::models::object_detection::YoloV5Detector;
-using jinq::models::object_detection::YoloV7Detector;
-using jinq::models::object_detection::YoloV8Detector;
+using mortred::common::StatusCode;
+using mortred::models::backend::DType;
+using mortred::models::backend::NamedTensor;
+using mortred::models::io_define::common_io::mat_input;
+using mortred::models::io_define::object_detection::std_object_detection_output;
+using mortred::models::object_detection::YoloV5Detector;
+using mortred::models::object_detection::YoloV7Detector;
+using mortred::models::object_detection::YoloV8Detector;
 
 namespace {
 
@@ -59,7 +59,7 @@ struct YoloV7Wire {
     bool data_is_array = false;
 };
 
-jinq::models::backend::InferenceContext test_context();
+mortred::models::backend::InferenceContext test_context();
 
 NamedTensor yolov7_shaped_head(const std::string &name, int64_t height, int64_t width, int64_t channels) {
     NamedTensor output;
@@ -77,16 +77,16 @@ YoloV7Wire yolov7_post_to_wire(const char *model_name, const std::vector<NamedTe
     std_object_detection_output decoded;
     const StatusCode post_status = detector.postprocess(outputs, test_context(), decoded);
 
-    jinq::server::InferenceResult<std_object_detection_output> result;
+    mortred::server::InferenceResult<std_object_detection_output> result;
     result.item_status.assign(1, post_status);
     result.item_outputs.assign(1, std::move(decoded));
-    jinq::server::aggregate_item_statuses(&result);
+    mortred::server::aggregate_item_statuses(&result);
 
-    const auto unified = jinq::server::inference_result_to_unified(
-        "p0-3", model_name, result, &jinq::server::response::fill_object_detection);
+    const auto unified = mortred::server::inference_result_to_unified(
+        "p0-3", model_name, result, &mortred::server::response::fill_object_detection);
     YoloV7Wire wire;
-    wire.http = jinq::server::http_status_of(static_cast<StatusCode>(unified.status));
-    const std::string body = jinq::common::envelope::encode(unified);
+    wire.http = mortred::server::http_status_of(static_cast<StatusCode>(unified.status));
+    const std::string body = mortred::common::envelope::encode(unified);
 
     rapidjson::Document doc;
     doc.Parse(body.data(), body.size());
@@ -123,7 +123,7 @@ YoloV7Wire yolov7_post_to_wire(const char *model_name, const std::vector<NamedTe
             }
         }
     }
-    EXPECT_EQ(wire.status, jinq::common::to_underlying(post_status));
+    EXPECT_EQ(wire.status, mortred::common::to_underlying(post_status));
     EXPECT_EQ(wire.status, unified.status);
     return wire;
 }
@@ -178,8 +178,8 @@ std::vector<float> one_candidate_yolov8(float class_score) {
     return values;
 }
 
-jinq::models::backend::InferenceContext test_context() {
-    jinq::models::backend::InferenceContext context;
+mortred::models::backend::InferenceContext test_context() {
+    mortred::models::backend::InferenceContext context;
     context.source_size = cv::Size(20, 20);
     context.network_size = cv::Size(10, 10);
     return context;
@@ -269,11 +269,11 @@ TEST(ObjectDetectionOutputContract, RequestParamThresholdSweepIsMonotone) {
     auto run_with_threshold = [&detector, &tensor](float request_threshold) {
         std_object_detection_output out;
         auto context = test_context();
-        jinq::models::backend::ParamSet params;
+        mortred::models::backend::ParamSet params;
         params.set_f32("score_threshold", request_threshold);
         context.params = &params;
         const auto status = detector.postprocess({tensor}, context, out);
-        EXPECT_EQ(status, jinq::common::StatusCode::OK);
+        EXPECT_EQ(status, mortred::common::StatusCode::OK);
         return out.size();
     };
 
@@ -300,7 +300,7 @@ TEST(ObjectDetectionOutputContract, RequestParamThresholdSweepIsMonotone) {
         auto context = test_context();
         context.params = nullptr;
         detector._m_detection_params.score_threshold = 0.6f;
-        EXPECT_EQ(detector.postprocess({tensor}, context, out), jinq::common::StatusCode::OK);
+        EXPECT_EQ(detector.postprocess({tensor}, context, out), mortred::common::StatusCode::OK);
         EXPECT_EQ(out.size(), 1u);
     }
 }

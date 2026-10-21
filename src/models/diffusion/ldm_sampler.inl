@@ -20,27 +20,27 @@
 #include "models/diffusion/autoencoder_kl.h"
 #include "models/diffusion/ddpm_unet.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 
-using jinq::common::FilePathUtil;
-using jinq::common::StatusCode;
+using mortred::common::FilePathUtil;
+using mortred::common::StatusCode;
 
 namespace diffusion {
 
-using jinq::models::io_define::diffusion::DDPMSampler_Type;
-using jinq::models::io_define::diffusion::std_ddpm_input;
-using jinq::models::io_define::diffusion::std_ddpm_output;
-using jinq::models::io_define::diffusion::std_ddim_input;
-using jinq::models::io_define::diffusion::std_ddim_output;
-using jinq::models::io_define::diffusion::std_vae_decode_input;
-using jinq::models::io_define::diffusion::std_vae_decode_output;
-using jinq::models::io_define::diffusion::std_ldm_input;
-using jinq::models::io_define::diffusion::std_ldm_output;
-using DDPMSamplerPtr = jinq::models::diffusion::DDPMSampler<std_ddpm_input, std_ddpm_output>;
-using DDIMSamplerPtr = jinq::models::diffusion::DDIMSampler<std_ddim_input, std_ddim_output>;
-using VAEDecoderPtr = jinq::models::diffusion::AutoEncoderKL<std_vae_decode_input, std_vae_decode_output>;
-using LatentDenoiseModel = jinq::models::diffusion::DDPMUNet<
+using mortred::models::io_define::diffusion::DDPMSampler_Type;
+using mortred::models::io_define::diffusion::std_ddpm_input;
+using mortred::models::io_define::diffusion::std_ddpm_output;
+using mortred::models::io_define::diffusion::std_ddim_input;
+using mortred::models::io_define::diffusion::std_ddim_output;
+using mortred::models::io_define::diffusion::std_vae_decode_input;
+using mortred::models::io_define::diffusion::std_vae_decode_output;
+using mortred::models::io_define::diffusion::std_ldm_input;
+using mortred::models::io_define::diffusion::std_ldm_output;
+using DDPMSamplerPtr = mortred::models::diffusion::DDPMSampler<std_ddpm_input, std_ddpm_output>;
+using DDIMSamplerPtr = mortred::models::diffusion::DDIMSampler<std_ddim_input, std_ddim_output>;
+using VAEDecoderPtr = mortred::models::diffusion::AutoEncoderKL<std_vae_decode_input, std_vae_decode_output>;
+using LatentDenoiseModel = mortred::models::diffusion::DDPMUNet<
     std_ddpm_unet_input, std_ddpm_unet_output>;
 
 namespace ldm_sampler_impl {
@@ -400,4 +400,4 @@ StatusCode LDMSampler<INPUT, OUTPUT>::run_impl(const INPUT& input, OUTPUT& outpu
 
 } // namespace diffusion
 } // namespace models
-} // namespace jinq
+} // namespace mortred

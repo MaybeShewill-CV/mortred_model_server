@@ -21,16 +21,16 @@
 #include "models/backend/backend_cv_model.h"
 #include "models/io/common_input.h"
 
-using jinq::common::StatusCode;
-using jinq::models::backend::DType;
-using jinq::models::backend::InferenceSession;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using jinq::models::backend::TensorInfo;
-using jinq::models::io_define::common_io::mat_input;
+using mortred::common::StatusCode;
+using mortred::models::backend::DType;
+using mortred::models::backend::InferenceSession;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using mortred::models::backend::TensorInfo;
+using mortred::models::io_define::common_io::mat_input;
 
 // tests-only: do not link libmodels (it already defines create).
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
@@ -67,7 +67,7 @@ std::unique_ptr<InferenceSession> InferenceSession::create(const BackendConfig &
 
 } // namespace backend
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 namespace {
 
@@ -90,7 +90,7 @@ device = "cpu"
 )toml");
 }
 
-class PackedThrowModel : public jinq::models::backend::BackendCvModel<mat_input, int> {
+class PackedThrowModel : public mortred::models::backend::BackendCvModel<mat_input, int> {
   public:
     PackedThrowModel() : BackendCvModel("PACKED_THROW") {}
 
@@ -104,7 +104,7 @@ class PackedThrowModel : public jinq::models::backend::BackendCvModel<mat_input,
         return {NamedTensor{"input", Tensor::make<float>({1, 1, 1, 3})}};
     }
 
-    StatusCode postprocess(const std::vector<NamedTensor> &, const jinq::models::backend::InferenceContext &,
+    StatusCode postprocess(const std::vector<NamedTensor> &, const mortred::models::backend::InferenceContext &,
                            int &output) override {
         ++postprocess_calls;
         if (throw_on_second_postprocess && postprocess_calls >= 2) {
@@ -138,7 +138,7 @@ void expect_all_session_failed(const StatusCode aggregate, const std::vector<Sta
 } // namespace
 
 TEST(packed_batch_nvi, postprocess_throw_marks_every_item_failed) {
-    jinq::models::backend::g_fake_session_mode = jinq::models::backend::FakeSessionMode::Echo;
+    mortred::models::backend::g_fake_session_mode = mortred::models::backend::FakeSessionMode::Echo;
     PackedThrowModel model;
     model.throw_on_second_postprocess = true;
     ASSERT_EQ(model.init(packed_throw_cfg()), StatusCode::OK);
@@ -152,7 +152,7 @@ TEST(packed_batch_nvi, postprocess_throw_marks_every_item_failed) {
 }
 
 TEST(packed_batch_nvi, session_throw_marks_every_item_failed) {
-    jinq::models::backend::g_fake_session_mode = jinq::models::backend::FakeSessionMode::Throw;
+    mortred::models::backend::g_fake_session_mode = mortred::models::backend::FakeSessionMode::Throw;
     PackedThrowModel model;
     ASSERT_EQ(model.init(packed_throw_cfg()), StatusCode::OK);
 
@@ -165,7 +165,7 @@ TEST(packed_batch_nvi, session_throw_marks_every_item_failed) {
 }
 
 TEST(packed_batch_nvi, postprocess_status_return_stays_isolated) {
-    jinq::models::backend::g_fake_session_mode = jinq::models::backend::FakeSessionMode::Echo;
+    mortred::models::backend::g_fake_session_mode = mortred::models::backend::FakeSessionMode::Echo;
     PackedThrowModel model;
     model.fail_second_with_status = true;
     ASSERT_EQ(model.init(packed_throw_cfg()), StatusCode::OK);

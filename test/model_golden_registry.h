@@ -63,27 +63,27 @@
 #include "models/io/ocr.h"
 #include "models/io/scene_segmentation.h"
 
-namespace jinq {
+namespace mortred {
 namespace test {
 namespace golden {
 
-using jinq::common::CvUtils;
-using jinq::common::FilePathUtil;
-using jinq::common::StatusCode;
-using jinq::models::BaseAiModel;
-using jinq::models::io_define::classification::std_classification_output;
-using jinq::models::io_define::common_io::mat_input;
-using jinq::models::io_define::enhancement::std_enhancement_output;
-using jinq::models::io_define::feature_embedding::std_feature_embedding_output;
-using jinq::models::io_define::feature_point::std_feature_point_output;
-using jinq::models::io_define::matting::std_matting_output;
-using jinq::models::io_define::mono_depth_estimation::std_mde_output;
-using jinq::models::io_define::object_detection::bbox;
-using jinq::models::io_define::object_detection::face_bbox;
-using jinq::models::io_define::object_detection::std_face_detection_output;
-using jinq::models::io_define::object_detection::std_object_detection_output;
-using jinq::models::io_define::ocr::std_text_regions_output;
-using jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
+using mortred::common::CvUtils;
+using mortred::common::FilePathUtil;
+using mortred::common::StatusCode;
+using mortred::models::BaseAiModel;
+using mortred::models::io_define::classification::std_classification_output;
+using mortred::models::io_define::common_io::mat_input;
+using mortred::models::io_define::enhancement::std_enhancement_output;
+using mortred::models::io_define::feature_embedding::std_feature_embedding_output;
+using mortred::models::io_define::feature_point::std_feature_point_output;
+using mortred::models::io_define::matting::std_matting_output;
+using mortred::models::io_define::mono_depth_estimation::std_mde_output;
+using mortred::models::io_define::object_detection::bbox;
+using mortred::models::io_define::object_detection::face_bbox;
+using mortred::models::io_define::object_detection::std_face_detection_output;
+using mortred::models::io_define::object_detection::std_object_detection_output;
+using mortred::models::io_define::ocr::std_text_regions_output;
+using mortred::models::io_define::scene_segmentation::std_scene_segmentation_output;
 
 constexpr double k_score_tol = 1e-3;
 constexpr double k_det_score_tol = 1e-2;
@@ -1343,7 +1343,7 @@ void run_trt_product_case(const char *id, const char *config, const char *image,
 
 } // namespace golden
 } // namespace test
-} // namespace jinq
+} // namespace mortred
 
 /*** one macro per task output contract - no type erasure.
  *
@@ -1355,8 +1355,8 @@ void run_trt_product_case(const char *id, const char *config, const char *image,
     TEST(model_golden, name) {                                                                                                             \
         /* the case name is an identifier for TEST() but a string for the  */                                                              \
         /* golden stem, the log tag and every failure message              */                                                              \
-        jinq::test::golden::run_case(#name, config, image, &creator<jinq::models::io_define::common_io::mat_input, output_type>,           \
-                                     jinq::test::golden::compare_fn);                                                                      \
+        mortred::test::golden::run_case(#name, config, image, &creator<mortred::models::io_define::common_io::mat_input, output_type>,           \
+                                     mortred::test::golden::compare_fn);                                                                      \
     }
 
 #define GOLDEN_CLASSIFICATION_CASE(name, config, image, creator, output_type)                                                              \

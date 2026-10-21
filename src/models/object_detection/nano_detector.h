@@ -21,13 +21,13 @@
 #include "models/object_detection/detection_params.h"
 #include "models/object_detection/detector_common.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace object_detection {
 
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT> class NanoDetector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class NanoDetector : public mortred::models::BackendCvModel<INPUT, OUTPUT> {
   private:
     struct CenterPrior {
         int x;
@@ -43,15 +43,15 @@ template <typename INPUT, typename OUTPUT> class NanoDetector : public jinq::mod
     NanoDetector &operator=(const NanoDetector &transformer) = delete;
 
   protected:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
+    std::vector<mortred::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode on_init(const toml::table &params) override;
 
     std::vector<float> refine_bbox_coords(const float *preds, int x, int y, int stride,
-                                          const jinq::models::backend::InferenceContext &context,
+                                          const mortred::models::backend::InferenceContext &context,
                                           const GeometryScale &geometry_scale) const;
 
     void generate_grid_center_priors();
@@ -73,7 +73,7 @@ template <typename INPUT, typename OUTPUT> class NanoDetector : public jinq::mod
 
 } // namespace object_detection
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "nano_detector.inl"
 

@@ -31,9 +31,9 @@ void print_usage(const char *exe) {
 } // namespace
 
 int main(int argc, char **argv) {
-    jinq::apps::ModelCli cli;
+    mortred::apps::ModelCli cli;
     std::string err;
-    if (!jinq::apps::parse_model_cli(argc, argv, &cli, &err)) {
+    if (!mortred::apps::parse_model_cli(argc, argv, &cli, &err)) {
         std::fprintf(stderr, "%s\n", err.c_str());
         print_usage(argv[0]);
         return -1;
@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
         return 0;
     }
     if (cli.list) {
-        jinq::apps::ProductIndex::print_list(stdout);
+        mortred::apps::ProductIndex::print_list(stdout);
         return 0;
     }
     if (cli.model.empty() || cli.rest_argc() != 2) {
@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    const auto *entry = jinq::apps::ProductIndex::find(cli.model);
+    const auto *entry = mortred::apps::ProductIndex::find(cli.model);
     if (entry == nullptr) {
         std::fprintf(stderr, "unknown --model '%s' (see --list)\n", cli.model.c_str());
         return -1;
@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
     }
     const auto config = std::move(parsed).table();
     std::string model_alias;
-    if (jinq::apps::find_section_ci(config, cli.model, &model_alias) == nullptr) {
+    if (mortred::apps::find_section_ci(config, cli.model, &model_alias) == nullptr) {
         std::fprintf(stderr, "--model %s does not match a [%s] table in %s\n", cli.model.c_str(),
                      cli.model.c_str(), config_path.c_str());
         return -1;
@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
     }
     std::string section_alias;
     const auto* server_tbl =
-        jinq::apps::find_section_ci(config, entry->server_section, &section_alias);
+        mortred::apps::find_section_ci(config, entry->server_section, &section_alias);
     if (server_tbl == nullptr) {
         std::fprintf(stderr, "server section [%s] missing from %s\n",
                      entry->server_section.c_str(), config_path.c_str());
@@ -101,6 +101,6 @@ int main(int argc, char **argv) {
         }
     }
 
-    return jinq::apps::run_model_server_main(cli.rest_argc(), cli.rest.data(), entry->server_section,
+    return mortred::apps::run_model_server_main(cli.rest_argc(), cli.rest.data(), entry->server_section,
                                              entry->make_server);
 }

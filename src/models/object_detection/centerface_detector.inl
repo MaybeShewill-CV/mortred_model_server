@@ -16,14 +16,14 @@
 #include "models/backend/model_runtime.h"
 #include "models/object_detection/detector_common.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace object_detection {
 
-using FaceBBox = jinq::models::io_define::object_detection::face_bbox;
-using FaceOutput = jinq::models::io_define::object_detection::std_face_detection_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using FaceBBox = mortred::models::io_define::object_detection::face_bbox;
+using FaceOutput = mortred::models::io_define::object_detection::std_face_detection_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode CenterFaceDetector<INPUT, OUTPUT>::on_init(const toml::table &params) {
     _m_detection_params.score_threshold = 0.6f;
@@ -47,8 +47,8 @@ template <typename INPUT, typename OUTPUT> StatusCode CenterFaceDetector<INPUT, 
     // output H/W is ceil(src/32)*32; empty decode hint keeps JPEG reduce off
     this->set_image_decode_hint(cv::Size(), 1.0f);
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE,
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE,
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .output_dtype = input_info.dtype,
         .output_nhwc = false,
@@ -65,7 +65,7 @@ std::vector<NamedTensor> CenterFaceDetector<INPUT, OUTPUT>::preprocess(const cv:
     const auto width_resized = static_cast<int>(std::ceil(static_cast<float>(input_image.cols) / 32.0f) * 32);
     const auto height_resized = static_cast<int>(std::ceil(static_cast<float>(input_image.rows) / 32.0f) * 32);
 
-    auto result = jinq::models::backend::ImagePipeline(input_image)
+    auto result = mortred::models::backend::ImagePipeline(input_image)
                       .bgr_to_rgb()
                       .resize(cv::Size(width_resized, height_resized))
                       .to_float()
@@ -79,11 +79,11 @@ std::vector<NamedTensor> CenterFaceDetector<INPUT, OUTPUT>::preprocess(const cv:
 
 template <typename INPUT, typename OUTPUT>
 StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                          const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
-    const auto *heatmap = jinq::models::backend::find_output(outputs, "537");
-    const auto *scale = jinq::models::backend::find_output(outputs, "538");
-    const auto *offset = jinq::models::backend::find_output(outputs, "539");
-    const auto *landmark = jinq::models::backend::find_output(outputs, "540");
+                                                          const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
+    const auto *heatmap = mortred::models::backend::find_output(outputs, "537");
+    const auto *scale = mortred::models::backend::find_output(outputs, "538");
+    const auto *offset = mortred::models::backend::find_output(outputs, "539");
+    const auto *landmark = mortred::models::backend::find_output(outputs, "540");
     if (heatmap == nullptr || scale == nullptr || offset == nullptr || landmark == nullptr) {
         LOG(ERROR) << "centerface outputs 537/538/539/540 missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
@@ -97,11 +97,11 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<Name
     }
 
     // heatmap layout: [1,1,H,W] over the /4 feature map
-    const jinq::models::backend::Tensor &heat_tensor = heatmap->tensor;
+    const mortred::models::backend::Tensor &heat_tensor = heatmap->tensor;
     std::string contract_error;
-    if (!jinq::models::backend::validate_output_tensor(
+    if (!mortred::models::backend::validate_output_tensor(
             *heatmap,
-            {jinq::models::backend::DType::F32, 4, {1, 1, -1, -1}, jinq::models::backend::TensorLayout::Nchw},
+            {mortred::models::backend::DType::F32, 4, {1, 1, -1, -1}, mortred::models::backend::TensorLayout::Nchw},
             &contract_error)) {
         LOG(ERROR) << "centerface heatmap contract failed: " << contract_error;
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
@@ -109,12 +109,12 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<Name
     const int output_height = static_cast<int>(heat_tensor.shape[2]);
     const int output_width = static_cast<int>(heat_tensor.shape[3]);
     const int channel_step = output_width * output_height;
-    const std::vector<std::pair<const jinq::models::backend::NamedTensor *, int>> contracted = {{scale, 2}, {offset, 2}, {landmark, 10}};
+    const std::vector<std::pair<const mortred::models::backend::NamedTensor *, int>> contracted = {{scale, 2}, {offset, 2}, {landmark, 10}};
     for (const auto &item : contracted) {
-        if (!jinq::models::backend::validate_output_tensor(
+        if (!mortred::models::backend::validate_output_tensor(
                 *item.first,
-                {jinq::models::backend::DType::F32, 4, {1, item.second, output_height, output_width},
-                 jinq::models::backend::TensorLayout::Nchw},
+                {mortred::models::backend::DType::F32, 4, {1, item.second, output_height, output_width},
+                 mortred::models::backend::TensorLayout::Nchw},
                 &contract_error)) {
             LOG(ERROR) << "centerface output contract failed: " << contract_error;
             return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
@@ -124,14 +124,14 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<Name
     const float *scale_data = nullptr;
     const float *offset_data = nullptr;
     const float *landmark_data = nullptr;
-    if (!jinq::models::backend::get_f32_data(heat_tensor, &heat_data, &contract_error) ||
-        !jinq::models::backend::get_f32_data(scale->tensor, &scale_data, &contract_error) ||
-        !jinq::models::backend::get_f32_data(offset->tensor, &offset_data, &contract_error) ||
-        !jinq::models::backend::get_f32_data(landmark->tensor, &landmark_data, &contract_error) ||
-        !jinq::models::backend::require_finite_f32(heat_data, heat_tensor.element_count(), heatmap->name, &contract_error) ||
-        !jinq::models::backend::require_finite_f32(scale_data, scale->tensor.element_count(), scale->name, &contract_error) ||
-        !jinq::models::backend::require_finite_f32(offset_data, offset->tensor.element_count(), offset->name, &contract_error) ||
-        !jinq::models::backend::require_finite_f32(landmark_data, landmark->tensor.element_count(), landmark->name, &contract_error)) {
+    if (!mortred::models::backend::get_f32_data(heat_tensor, &heat_data, &contract_error) ||
+        !mortred::models::backend::get_f32_data(scale->tensor, &scale_data, &contract_error) ||
+        !mortred::models::backend::get_f32_data(offset->tensor, &offset_data, &contract_error) ||
+        !mortred::models::backend::get_f32_data(landmark->tensor, &landmark_data, &contract_error) ||
+        !mortred::models::backend::require_finite_f32(heat_data, heat_tensor.element_count(), heatmap->name, &contract_error) ||
+        !mortred::models::backend::require_finite_f32(scale_data, scale->tensor.element_count(), scale->name, &contract_error) ||
+        !mortred::models::backend::require_finite_f32(offset_data, offset->tensor.element_count(), offset->name, &contract_error) ||
+        !mortred::models::backend::require_finite_f32(landmark_data, landmark->tensor.element_count(), landmark->name, &contract_error)) {
         LOG(ERROR) << "centerface output contract failed: " << contract_error;
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
@@ -197,8 +197,8 @@ StatusCode CenterFaceDetector<INPUT, OUTPUT>::postprocess(const std::vector<Name
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-CenterFaceDetector<INPUT, OUTPUT>::CenterFaceDetector() : jinq::models::BackendCvModel<INPUT, OUTPUT>("CENTER_FACE") {}
+CenterFaceDetector<INPUT, OUTPUT>::CenterFaceDetector() : mortred::models::BackendCvModel<INPUT, OUTPUT>("CENTER_FACE") {}
 
 } // namespace object_detection
 } // namespace models
-} // namespace jinq
+} // namespace mortred

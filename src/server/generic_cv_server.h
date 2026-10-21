@@ -30,18 +30,18 @@
 #include "server/base_server_impl.h"
 #include "server/output_options.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 // unified served input: one transport-agnostic image plus the request
 // parameter view (see io/common_input.h). v1 requests arrive as base64
 // text inside the envelope; raw-bytes encoding plugs in without touching
 // the worker contract.
-using ImageInput = jinq::models::io_define::common_io::image_input;
+using ImageInput = mortred::models::io_define::common_io::image_input;
 
 template<typename MODEL_OUTPUT>
-using CvWorkerPtr = std::unique_ptr<jinq::models::BaseAiModel<ImageInput, MODEL_OUTPUT>>;
+using CvWorkerPtr = std::unique_ptr<mortred::models::BaseAiModel<ImageInput, MODEL_OUTPUT>>;
 
 template<typename MODEL_OUTPUT>
 using CvWorkerFactory = std::function<CvWorkerPtr<MODEL_OUTPUT>()>;
@@ -65,7 +65,7 @@ struct CvServerSpec {
     CvResponseFiller<MODEL_OUTPUT> fill_response;
     // request-overridable parameter schema; empty = the model accepts no
     // per-request params and the envelope validator rejects any
-    std::vector<jinq::models::backend::ParamSpec> param_specs;
+    std::vector<mortred::models::backend::ParamSpec> param_specs;
 };
 
 template<typename MODEL_OUTPUT>
@@ -149,7 +149,7 @@ StatusCode CvModelServer<MODEL_OUTPUT>::Impl::init(const toml::table& config) {
         env != nullptr && *env != '\0') {
         model_cfg_path = env;
     }
-    if (!jinq::common::FilePathUtil::is_file_exist(model_cfg_path)) {
+    if (!mortred::common::FilePathUtil::is_file_exist(model_cfg_path)) {
         LOG(ERROR) << _m_spec.display_name << " model config file not exist: " << model_cfg_path;
         this->_m_successfully_initialized = false;
         return StatusCode::SERVER_INIT_FAILED;
@@ -189,6 +189,6 @@ StatusCode CvModelServer<MODEL_OUTPUT>::Impl::init(const toml::table& config) {
 }
 
 }  // namespace server
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_MODEL_SERVER_GENERIC_CV_SERVER_H

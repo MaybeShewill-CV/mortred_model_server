@@ -12,7 +12,7 @@
 #include "glog/logging.h"
 #include "models/backend/request_geometry.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 namespace {
@@ -262,7 +262,7 @@ RuntimeResult<NamedTensor> ImagePipeline::pack(const std::string &name, bool nch
     }
 
     if (nchw) {
-        const auto data = jinq::common::CvUtils::convert_to_chw_vec(image_);
+        const auto data = mortred::common::CvUtils::convert_to_chw_vec(image_);
         if (data.size() * sizeof(float) != named.tensor.byte_size()) {
             return {StatusCode::MODEL_EMPTY_INPUT_IMAGE, "ImagePipeline pack: CHW data size mismatch", {}};
         }
@@ -779,4 +779,4 @@ RuntimeResult<TensorInfo> SessionIoValidator::validate() const {
 
 } // namespace backend
 } // namespace models
-} // namespace jinq
+} // namespace mortred

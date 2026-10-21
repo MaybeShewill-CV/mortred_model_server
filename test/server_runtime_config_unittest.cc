@@ -10,10 +10,10 @@
 #include "common/status_code.h"
 #include "server/server_runtime_config.h"
 
-using jinq::common::StatusCode;
-using jinq::server::ServerRuntimeConfig;
-using jinq::server::k_model_run_timeout_clamp_ms;
-using jinq::server::parse_server_runtime_config;
+using mortred::common::StatusCode;
+using mortred::server::ServerRuntimeConfig;
+using mortred::server::k_model_run_timeout_clamp_ms;
+using mortred::server::parse_server_runtime_config;
 
 namespace {
 

@@ -17,23 +17,23 @@
 #include "common/cv_utils.h"
 #include "models/backend/model_runtime.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace feature_point {
 
-using FeatureMatchOutput = jinq::models::io_define::feature_point::std_feature_point_match_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::InferenceSession;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using jinq::models::backend::TensorInfo;
+using FeatureMatchOutput = mortred::models::io_define::feature_point::std_feature_point_match_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::InferenceSession;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using mortred::models::backend::TensorInfo;
 
-template <typename INPUT, typename OUTPUT> std::vector<jinq::models::backend::SessionSpec> LightGlue<INPUT, OUTPUT>::sessions() {
+template <typename INPUT, typename OUTPUT> std::vector<mortred::models::backend::SessionSpec> LightGlue<INPUT, OUTPUT>::sessions() {
     return {
-        {"extractor", "extractor_backend", jinq::models::backend::IoSpec::input("image").f32().rank(4),
-         jinq::models::backend::IoSpec::output("keypoints").i32().rank(3)},
-        {"matcher", "matcher_backend", jinq::models::backend::IoSpec::input("kpts0").f32().rank(3),
-         jinq::models::backend::IoSpec::output("matches0").i32().rank(2)},
+        {"extractor", "extractor_backend", mortred::models::backend::IoSpec::input("image").f32().rank(4),
+         mortred::models::backend::IoSpec::output("keypoints").i32().rank(3)},
+        {"matcher", "matcher_backend", mortred::models::backend::IoSpec::input("kpts0").f32().rank(3),
+         mortred::models::backend::IoSpec::output("matches0").i32().rank(2)},
     };
 }
 
@@ -78,8 +78,8 @@ StatusCode LightGlue<INPUT, OUTPUT>::classify_extractor_outputs(const std::vecto
         LOG(ERROR) << "lightglue extractor outputs keypoints/scores/descriptors missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    if (keypoints->tensor.dtype != jinq::models::backend::DType::I32 || scores->tensor.dtype != jinq::models::backend::DType::F32 ||
-        descriptors->tensor.dtype != jinq::models::backend::DType::F32) {
+    if (keypoints->tensor.dtype != mortred::models::backend::DType::I32 || scores->tensor.dtype != mortred::models::backend::DType::F32 ||
+        descriptors->tensor.dtype != mortred::models::backend::DType::F32) {
         LOG(ERROR) << "lightglue extractor output dtypes are unexpected";
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
@@ -91,8 +91,8 @@ StatusCode LightGlue<INPUT, OUTPUT>::classify_extractor_outputs(const std::vecto
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
     std::string finite_error;
-    if (!jinq::models::backend::require_finite_f32(scores->tensor.template data<float>(), score_count, scores->name, &finite_error) ||
-        !jinq::models::backend::require_finite_f32(descriptors->tensor.template data<float>(),
+    if (!mortred::models::backend::require_finite_f32(scores->tensor.template data<float>(), score_count, scores->name, &finite_error) ||
+        !mortred::models::backend::require_finite_f32(descriptors->tensor.template data<float>(),
                                                    static_cast<size_t>(descriptors->tensor.element_count()), descriptors->name,
                                                    &finite_error)) {
         LOG(ERROR) << "lightglue extractor output contract failed: " << finite_error;
@@ -122,8 +122,8 @@ StatusCode LightGlue<INPUT, OUTPUT>::classify_matcher_outputs(const std::vector<
         LOG(ERROR) << "lightglue matcher outputs matches0/mscores0 missing";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    if (match_indices->tensor.dtype != jinq::models::backend::DType::I32 ||
-        match_scores->tensor.dtype != jinq::models::backend::DType::F32) {
+    if (match_indices->tensor.dtype != mortred::models::backend::DType::I32 ||
+        match_scores->tensor.dtype != mortred::models::backend::DType::F32) {
         LOG(ERROR) << "lightglue matcher output dtypes are unexpected";
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
@@ -134,7 +134,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::classify_matcher_outputs(const std::vector<
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
     std::string finite_error;
-    if (!jinq::models::backend::require_finite_f32(match_scores->tensor.template data<float>(), score_count, match_scores->name,
+    if (!mortred::models::backend::require_finite_f32(match_scores->tensor.template data<float>(), score_count, match_scores->name,
                                                    &finite_error)) {
         LOG(ERROR) << "lightglue matcher output contract failed: " << finite_error;
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
@@ -174,7 +174,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::extract_feature_points(const cv::Mat &input
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
-    const auto chw_data = jinq::common::CvUtils::convert_to_chw_vec(input_image);
+    const auto chw_data = mortred::common::CvUtils::convert_to_chw_vec(input_image);
     NamedTensor image;
     image.name = "image";
     image.tensor = Tensor::make<float>({1, 1, input_image.rows, input_image.cols});
@@ -290,7 +290,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::match_feature_points(const FeaturePoints &s
             continue;
         }
 
-        namespace feature_point_io = jinq::models::io_define::feature_point;
+        namespace feature_point_io = mortred::models::io_define::feature_point;
         feature_point_io::fp src_point;
         src_point.location = cv::Point2f(static_cast<float>(src_features.keypoints[static_cast<size_t>(src_index) * 2]),
                                          static_cast<float>(src_features.keypoints[static_cast<size_t>(src_index) * 2 + 1]));
@@ -303,7 +303,7 @@ StatusCode LightGlue<INPUT, OUTPUT>::match_feature_points(const FeaturePoints &s
 }
 
 template <typename INPUT, typename OUTPUT> StatusCode LightGlue<INPUT, OUTPUT>::run_sessions(const INPUT &input, OUTPUT &output) {
-    if constexpr (std::is_same_v<INPUT, jinq::models::io_define::common_io::pair_mat_input>) {
+    if constexpr (std::is_same_v<INPUT, mortred::models::io_define::common_io::pair_mat_input>) {
         if (input.src_input_image.empty() || input.dst_input_image.empty()) {
             LOG(ERROR) << "lightglue source or destination input image is empty";
             return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
@@ -355,8 +355,8 @@ template <typename INPUT, typename OUTPUT> StatusCode LightGlue<INPUT, OUTPUT>::
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode LightGlue<INPUT, OUTPUT>::postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                                                 const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
+StatusCode LightGlue<INPUT, OUTPUT>::postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                                                 const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     (void)outputs;
     (void)output;
     LOG(ERROR) << "lightglue is a multi-session model and must run through run_sessions";
@@ -366,8 +366,8 @@ StatusCode LightGlue<INPUT, OUTPUT>::postprocess(const std::vector<jinq::models:
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-LightGlue<INPUT, OUTPUT>::LightGlue() : jinq::models::backend::MultiSessionModel<LightGlue<INPUT, OUTPUT>, INPUT, OUTPUT>("LIGHTGLUE") {}
+LightGlue<INPUT, OUTPUT>::LightGlue() : mortred::models::backend::MultiSessionModel<LightGlue<INPUT, OUTPUT>, INPUT, OUTPUT>("LIGHTGLUE") {}
 
 } // namespace feature_point
 } // namespace models
-} // namespace jinq
+} // namespace mortred

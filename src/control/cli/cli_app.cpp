@@ -738,10 +738,10 @@ int cmd_profile(const Options& opt, const std::string& id, const std::string& im
     const std::string path = "/v1/models/" + id + "/infer";
     const bool raw = encoding == "raw";
     const std::string body = raw ? bytes : [&bytes] {
-        jinq::common::envelope::Request envelope;
-        envelope.images.push_back(jinq::common::base64::encode(
+        mortred::common::envelope::Request envelope;
+        envelope.images.push_back(mortred::common::base64::encode(
             reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size()));
-        return jinq::common::envelope::encode(envelope);
+        return mortred::common::envelope::encode(envelope);
     }();
     const std::string media_type = image_media_type(image_path);
     const char* ctype = raw ? media_type.c_str() : "application/json; charset=utf-8";
@@ -1043,7 +1043,7 @@ int run_cli(int argc, char** argv) {
             std::fprintf(stderr, "cannot read image file: %s\n", image_path.c_str());
             return 2;
         }
-        const std::string b64 = jinq::common::base64::encode(
+        const std::string b64 = mortred::common::base64::encode(
             reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size());
         const HttpResult cat = http_request(opt, "GET", "/api/v1/catalog", "");
         if (cat.status < 200 || cat.status >= 300) {
@@ -1070,9 +1070,9 @@ int run_cli(int argc, char** argv) {
             std::fprintf(stderr, "unknown server id in catalog: %s\n", id.c_str());
             return 1;
         }
-        jinq::common::envelope::Request envelope;
+        mortred::common::envelope::Request envelope;
         envelope.images.push_back(b64);
-        const std::string body = jinq::common::envelope::encode(envelope);
+        const std::string body = mortred::common::envelope::encode(envelope);
         Options gateway_opt = opt;
         gateway_opt.addr = opt.gateway_addr;
         r = http_request(gateway_opt, "POST", "/v1/models/" + id + "/infer", body);

@@ -13,12 +13,12 @@
 
 #include "glog/logging.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace segment_anything {
 
-using jinq::common::StatusCode;
-using AmgOutput = jinq::models::io_define::segment_anything::sam_amg_output;
+using mortred::common::StatusCode;
+using AmgOutput = mortred::models::io_define::segment_anything::sam_amg_output;
 
 template <typename INPUT, typename OUTPUT> StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::on_init(const toml::table &params) {
     _m_points_per_side = static_cast<int>(params["points_per_side"].value_or<int64_t>(32));
@@ -65,7 +65,7 @@ template <typename INPUT, typename OUTPUT> StatusCode SamAutoMaskGenerator<INPUT
 
 template <typename INPUT, typename OUTPUT>
 StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::generate(const cv::Mat &input_image, AmgOutput &amg_output,
-                                                         const jinq::models::backend::ParamSet *request_params) {
+                                                         const mortred::models::backend::ParamSet *request_params) {
     if (_m_encoder == nullptr || _m_decoder == nullptr) {
         return StatusCode::MODEL_INIT_FAILED;
     }
@@ -102,10 +102,10 @@ StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::run_sessions(const INPUT &input,
     cv::Mat image;
     if constexpr (std::is_same_v<INPUT, cv::Mat>) {
         image = input;
-    } else if constexpr (std::is_same_v<INPUT, jinq::models::io_define::common_io::mat_input> ||
-                         std::is_same_v<INPUT, jinq::models::io_define::common_io::file_input> ||
-                         std::is_same_v<INPUT, jinq::models::io_define::common_io::base64_input> ||
-                         std::is_same_v<INPUT, jinq::models::io_define::common_io::image_input>) {
+    } else if constexpr (std::is_same_v<INPUT, mortred::models::io_define::common_io::mat_input> ||
+                         std::is_same_v<INPUT, mortred::models::io_define::common_io::file_input> ||
+                         std::is_same_v<INPUT, mortred::models::io_define::common_io::base64_input> ||
+                         std::is_same_v<INPUT, mortred::models::io_define::common_io::image_input>) {
         StatusCode image_status = StatusCode::OK;
         std::string image_error;
         image = this->load_model_image(input, &image_status, &image_error);
@@ -120,8 +120,8 @@ StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::run_sessions(const INPUT &input,
 
     // the served image_input carries the request-scoped param view; legacy
     // input types keep pure config behavior (nullptr)
-    const jinq::models::backend::ParamSet *request_params = nullptr;
-    if constexpr (std::is_same_v<INPUT, jinq::models::io_define::common_io::image_input>) {
+    const mortred::models::backend::ParamSet *request_params = nullptr;
+    if constexpr (std::is_same_v<INPUT, mortred::models::io_define::common_io::image_input>) {
         request_params = input.params;
     }
 
@@ -135,8 +135,8 @@ StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::run_sessions(const INPUT &input,
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                                                            const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
+StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                                                            const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     (void)outputs;
     (void)output;
     LOG(ERROR) << "sam amg is a multi-session model and must run through run_sessions";
@@ -144,10 +144,10 @@ StatusCode SamAutoMaskGenerator<INPUT, OUTPUT>::postprocess(const std::vector<ji
 }
 
 template <typename INPUT, typename OUTPUT>
-SamAutoMaskGenerator<INPUT, OUTPUT>::SamAutoMaskGenerator() : jinq::models::BackendCvModel<INPUT, OUTPUT>("SAM_AMG") {}
+SamAutoMaskGenerator<INPUT, OUTPUT>::SamAutoMaskGenerator() : mortred::models::BackendCvModel<INPUT, OUTPUT>("SAM_AMG") {}
 
 template <typename INPUT, typename OUTPUT> SamAutoMaskGenerator<INPUT, OUTPUT>::~SamAutoMaskGenerator() = default;
 
 } // namespace segment_anything
 } // namespace models
-} // namespace jinq
+} // namespace mortred

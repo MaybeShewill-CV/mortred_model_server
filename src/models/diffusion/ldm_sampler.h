@@ -16,13 +16,13 @@
 #include "models/base_model.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace diffusion {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 template <typename INPUT, typename OUTPUT>
-class LDMSampler : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
+class LDMSampler : public mortred::models::BaseAiModel<INPUT, OUTPUT> {
   public:
     /***
      * constructor
@@ -75,7 +75,7 @@ class LDMSampler : public jinq::models::BaseAiModel<INPUT, OUTPUT> {
 };
 } // namespace diffusion
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "ldm_sampler.inl"
 

@@ -10,7 +10,7 @@
 
 #include "models/backend/tensor.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
@@ -144,6 +144,6 @@ inline bool require_finite_f32(const float *data, size_t count, const std::strin
 
 } // namespace backend
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_BACKEND_TENSOR_CONTRACT_H

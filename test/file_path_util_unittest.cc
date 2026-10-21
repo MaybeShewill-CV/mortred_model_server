@@ -10,7 +10,7 @@
 
 #include "common/file_path_util.h"
 
-using jinq::common::FilePathUtil;
+using mortred::common::FilePathUtil;
 
 TEST(file_path_util, exist_and_name) {
     std::string exist_file_path = "demo_data/model_test_input/ocr/railway_ticket.png";

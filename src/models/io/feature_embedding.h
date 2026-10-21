@@ -10,7 +10,7 @@
 
 #include <vector>
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace io_define {
 namespace feature_embedding {
@@ -25,6 +25,6 @@ using std_feature_embedding_output = feature_embedding_output;
 } // namespace feature_embedding
 } // namespace io_define
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_IO_FEATURE_EMBEDDING_H

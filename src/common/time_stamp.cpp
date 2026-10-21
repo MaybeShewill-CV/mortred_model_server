@@ -9,7 +9,7 @@
 
 #include <ctime>
 
-namespace jinq {
+namespace mortred {
 namespace common {
 
 Timestamp::Timestamp()
@@ -50,4 +50,4 @@ std::string Timestamp::to_format_str(const char* fmt) const {
 }
 
 }  // namespace common
-}  // namespace jinq
+}  // namespace mortred

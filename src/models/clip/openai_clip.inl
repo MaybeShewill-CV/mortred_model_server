@@ -20,15 +20,15 @@
 #include "models/backend/model_runtime.h"
 #include "models/cv_image_input.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace clip {
 
-using jinq::common::StatusCode;
-using jinq::models::backend::InferenceSession;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using jinq::models::backend::TensorInfo;
+using mortred::common::StatusCode;
+using mortred::models::backend::InferenceSession;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using mortred::models::backend::TensorInfo;
 
 namespace {
 
@@ -37,12 +37,12 @@ constexpr float k_clip_logit_cap = 80.0f;
 
 } // namespace
 
-template <typename INPUT, typename OUTPUT> std::vector<jinq::models::backend::SessionSpec> OpenAiClip<INPUT, OUTPUT>::sessions() {
+template <typename INPUT, typename OUTPUT> std::vector<mortred::models::backend::SessionSpec> OpenAiClip<INPUT, OUTPUT>::sessions() {
     return {
-        {"visual", "visual_backend", jinq::models::backend::IoSpec::input("input").f32().rank(4).nchw().channels(3).static_shape(),
-         jinq::models::backend::IoSpec::output("output").f32().rank(2).static_shape()},
-        {"text", "text_backend", jinq::models::backend::IoSpec::input("input").i32().rank(2).static_shape(),
-         jinq::models::backend::IoSpec::output("output").f32().rank(2).static_shape()},
+        {"visual", "visual_backend", mortred::models::backend::IoSpec::input("input").f32().rank(4).nchw().channels(3).static_shape(),
+         mortred::models::backend::IoSpec::output("output").f32().rank(2).static_shape()},
+        {"text", "text_backend", mortred::models::backend::IoSpec::input("input").i32().rank(2).static_shape(),
+         mortred::models::backend::IoSpec::output("output").f32().rank(2).static_shape()},
     };
 }
 
@@ -66,7 +66,7 @@ template <typename INPUT, typename OUTPUT> StatusCode OpenAiClip<INPUT, OUTPUT>:
     }
     auto *const text_encoder = this->session("text");
     const auto *text_input = find_info(*text_encoder, "input");
-    if (text_input == nullptr || jinq::models::backend::shape_volume(text_input->shape) != static_cast<int64_t>(_m_context_length)) {
+    if (text_input == nullptr || mortred::models::backend::shape_volume(text_input->shape) != static_cast<int64_t>(_m_context_length)) {
         LOG(ERROR) << "openai clip context length " << _m_context_length << " mismatches text encoder input";
         this->reset_sessions();
         return StatusCode::MODEL_INIT_FAILED;
@@ -125,7 +125,7 @@ template <typename INPUT, typename OUTPUT>
 StatusCode OpenAiClip<INPUT, OUTPUT>::classify_embedding_output(const std::vector<NamedTensor> &outputs,
                                                                 std::vector<float> &embedding) const {
     embedding.clear();
-    auto output_view = jinq::models::backend::OutputReader(outputs, "output").f32().shape({1, -1}).finite().read();
+    auto output_view = mortred::models::backend::OutputReader(outputs, "output").f32().shape({1, -1}).finite().read();
     if (!output_view.ok()) {
         return output_view.status;
     }
@@ -163,7 +163,7 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::encode_image(const cv::Mat &input_image, s
     const auto &input_info = this->session("visual")->inputs().front();
 
     // bgr -> rgb -> resize -> [0,1] -> clip mean/std, f32 nchw
-    auto input = jinq::models::backend::ImagePipeline(input_image)
+    auto input = mortred::models::backend::ImagePipeline(input_image)
                      .bgr_to_rgb()
                      .resize(cv::Size(static_cast<int>(input_info.shape[3]), static_cast<int>(input_info.shape[2])))
                      .to_float()
@@ -336,9 +336,9 @@ template <typename INPUT, typename OUTPUT> StatusCode OpenAiClip<INPUT, OUTPUT>:
     ClipInput internal_input{};
     if constexpr (std::is_same_v<INPUT, ClipInput>) {
         internal_input = input;
-    } else if constexpr (std::is_same_v<INPUT, jinq::models::io_define::common_io::mat_input> ||
-                         std::is_same_v<INPUT, jinq::models::io_define::common_io::file_input> ||
-                         std::is_same_v<INPUT, jinq::models::io_define::common_io::base64_input>) {
+    } else if constexpr (std::is_same_v<INPUT, mortred::models::io_define::common_io::mat_input> ||
+                         std::is_same_v<INPUT, mortred::models::io_define::common_io::file_input> ||
+                         std::is_same_v<INPUT, mortred::models::io_define::common_io::base64_input>) {
         internal_input.task_type = ClipTaskType::IMAGE_EMBEDDING;
         StatusCode image_status = StatusCode::OK;
         std::string image_error;
@@ -379,8 +379,8 @@ template <typename INPUT, typename OUTPUT> StatusCode OpenAiClip<INPUT, OUTPUT>:
 }
 
 template <typename INPUT, typename OUTPUT>
-StatusCode OpenAiClip<INPUT, OUTPUT>::postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                                                  const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
+StatusCode OpenAiClip<INPUT, OUTPUT>::postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                                                  const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     (void)outputs;
     (void)output;
     LOG(ERROR) << "openai clip is a multi-session model and must run through run_sessions";
@@ -389,8 +389,8 @@ StatusCode OpenAiClip<INPUT, OUTPUT>::postprocess(const std::vector<jinq::models
 
 template <typename INPUT, typename OUTPUT>
 OpenAiClip<INPUT, OUTPUT>::OpenAiClip()
-    : jinq::models::backend::MultiSessionModel<OpenAiClip<INPUT, OUTPUT>, INPUT, OUTPUT>("OPENAI_CLIP") {}
+    : mortred::models::backend::MultiSessionModel<OpenAiClip<INPUT, OUTPUT>, INPUT, OUTPUT>("OPENAI_CLIP") {}
 
 } // namespace clip
 } // namespace models
-} // namespace jinq
+} // namespace mortred

@@ -14,14 +14,14 @@
 #include "server/generic_cv_server.h"
 #include "server/response_serializers.h"
 
-namespace jinq {
+namespace mortred {
 namespace factory {
 namespace cv_catalog {
 
-template <typename OUTPUT> struct CvModelEntry : public jinq::models::catalog::ServedModelEntry {
-    jinq::server::CvWorkerFactory<OUTPUT> make_worker;
-    jinq::server::CvResponseFiller<OUTPUT> fill_response = nullptr;
-    std::vector<jinq::models::backend::ParamSpec> param_specs;
+template <typename OUTPUT> struct CvModelEntry : public mortred::models::catalog::ServedModelEntry {
+    mortred::server::CvWorkerFactory<OUTPUT> make_worker;
+    mortred::server::CvResponseFiller<OUTPUT> fill_response = nullptr;
+    std::vector<mortred::models::backend::ParamSpec> param_specs;
     // Weight family (yolov8, dinov2, …). Catalog id is model_section and is
     // lowercase. Empty means this row is not part of the static_bs1 split.
     std::string family;
@@ -35,23 +35,23 @@ const CvModelEntry<OUTPUT> *find_entry(const std::vector<CvModelEntry<OUTPUT>> &
 }
 
 template <typename OUTPUT>
-std::unique_ptr<jinq::server::BaseAiServer> create_server(const CvModelEntry<OUTPUT> &entry, const std::string &server_name) {
-    auto &server_factory = jinq::factory::ServerFactory<jinq::server::BaseAiServer>::get_instance();
-    server_factory.register_creator(server_name, [entry]() -> std::unique_ptr<jinq::server::BaseAiServer> {
-        jinq::server::CvServerSpec<OUTPUT> spec;
+std::unique_ptr<mortred::server::BaseAiServer> create_server(const CvModelEntry<OUTPUT> &entry, const std::string &server_name) {
+    auto &server_factory = mortred::factory::ServerFactory<mortred::server::BaseAiServer>::get_instance();
+    server_factory.register_creator(server_name, [entry]() -> std::unique_ptr<mortred::server::BaseAiServer> {
+        mortred::server::CvServerSpec<OUTPUT> spec;
         spec.server_section = entry.server_section;
         spec.model_section = entry.model_section;
         spec.display_name = entry.display_name;
         spec.make_worker = entry.make_worker;
         spec.fill_response = entry.fill_response;
         spec.param_specs = entry.param_specs;
-        return std::make_unique<jinq::server::CvModelServer<OUTPUT>>(std::move(spec));
+        return std::make_unique<mortred::server::CvModelServer<OUTPUT>>(std::move(spec));
     });
     return server_factory.create(server_name);
 }
 
 template <typename OUTPUT>
-std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::vector<CvModelEntry<OUTPUT>> &entries,
+std::unique_ptr<mortred::server::BaseAiServer> create_server(const std::vector<CvModelEntry<OUTPUT>> &entries,
                                                           const std::string &model_section, const std::string &server_name) {
     const auto *entry = find_entry(entries, model_section);
     if (entry == nullptr) {
@@ -63,6 +63,6 @@ std::unique_ptr<jinq::server::BaseAiServer> create_server(const std::vector<CvMo
 
 } // namespace cv_catalog
 } // namespace factory
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_FACTORY_CV_CATALOG_H

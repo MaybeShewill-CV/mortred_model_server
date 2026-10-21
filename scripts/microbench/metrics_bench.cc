@@ -11,7 +11,7 @@
 
 #include "server/prometheus_metrics.h"
 
-using jinq::server::PrometheusMetrics;
+using mortred::server::PrometheusMetrics;
 
 static const int kIters = 200000;
 

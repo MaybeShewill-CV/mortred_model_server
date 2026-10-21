@@ -12,9 +12,9 @@
 
 #include "common/status_code.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 inline int http_status_of(StatusCode code) {
     switch (code) {
@@ -79,6 +79,6 @@ inline int http_status_of(StatusCode code) {
 }
 
 } // namespace server
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_SERVER_HTTP_STATUS_H

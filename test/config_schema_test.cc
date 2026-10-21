@@ -21,9 +21,9 @@
 #include "server/server_config_schema.h"
 #include "models/backend/backend_config.h"
 
-using jinq::server::validate_server_section;
-using jinq::models::backend::parse_backend_table;
-using jinq::models::backend::parse_backend_config;
+using mortred::server::validate_server_section;
+using mortred::models::backend::parse_backend_table;
+using mortred::models::backend::parse_backend_config;
 
 namespace {
 
@@ -198,7 +198,7 @@ TEST(config_schema, cuda_device_is_rejected) {
 TEST(config_schema, omitted_device_defaults_to_gpu) {
     auto table = parse_text("[M]\n[M.backend]\ntype=\"mnn\"\nmodel_file_path=\"x.mnn\"\n");
     std::string err;
-    jinq::models::backend::BackendConfig cfg;
+    mortred::models::backend::BackendConfig cfg;
     ASSERT_TRUE(parse_backend_config(table, &cfg, &err)) << err;
     EXPECT_EQ(cfg.device, "gpu");
 }

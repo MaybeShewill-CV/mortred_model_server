@@ -33,18 +33,18 @@
 #include "models/mot/byte_tracker/byte_tracker.h"
 #include "models/object_detection/yolov5_detector.h"
 
-namespace jinq {
+namespace mortred {
 namespace apps {
 namespace benchmark {
 namespace {
 
-using jinq::common::CvUtils;
-using jinq::common::FilePathUtil;
-using jinq::common::Timestamp;
+using mortred::common::CvUtils;
+using mortred::common::FilePathUtil;
+using mortred::common::Timestamp;
 
 int run_ddpm_benchmark(int argc, char **argv) {
-    using jinq::models::io_define::diffusion::std_ddpm_input;
-    using jinq::models::io_define::diffusion::std_ddpm_output;
+    using mortred::models::io_define::diffusion::std_ddpm_input;
+    using mortred::models::io_define::diffusion::std_ddpm_output;
     BenchmarkSpec<std_ddpm_input, std_ddpm_output> spec;
     spec.model_name = "DDPM";
     spec.display_name = "ddpm sampler";
@@ -74,8 +74,8 @@ int run_ddpm_benchmark(int argc, char **argv) {
         return std::string(n >= 3 ? a[2] : "../demo_data/model_test_input/diffusion/ddpm");
     };
     spec.make_model = []() {
-        return std::unique_ptr<jinq::models::BaseAiModel<std_ddpm_input, std_ddpm_output>>(
-            new jinq::models::diffusion::DDPMSampler<std_ddpm_input, std_ddpm_output>());
+        return std::unique_ptr<mortred::models::BaseAiModel<std_ddpm_input, std_ddpm_output>>(
+            new mortred::models::diffusion::DDPMSampler<std_ddpm_input, std_ddpm_output>());
     };
     spec.handle_output = [](const std_ddpm_input &in, const std_ddpm_output &out, const std::string &save_dir) {
         if (in.save_all_mid_results) {
@@ -92,8 +92,8 @@ int run_ddpm_benchmark(int argc, char **argv) {
 }
 
 int run_ddim_benchmark(int argc, char **argv) {
-    using jinq::models::io_define::diffusion::std_ddim_input;
-    using jinq::models::io_define::diffusion::std_ddim_output;
+    using mortred::models::io_define::diffusion::std_ddim_input;
+    using mortred::models::io_define::diffusion::std_ddim_output;
     BenchmarkSpec<std_ddim_input, std_ddim_output> spec;
     spec.model_name = "DDIM";
     spec.display_name = "ddim sampler";
@@ -126,8 +126,8 @@ int run_ddim_benchmark(int argc, char **argv) {
     };
     spec.image_path_of = [](int, char **) { return std::string("../demo_data/model_test_input/diffusion/ddim"); };
     spec.make_model = []() {
-        return std::unique_ptr<jinq::models::BaseAiModel<std_ddim_input, std_ddim_output>>(
-            new jinq::models::diffusion::DDIMSampler<std_ddim_input, std_ddim_output>());
+        return std::unique_ptr<mortred::models::BaseAiModel<std_ddim_input, std_ddim_output>>(
+            new mortred::models::diffusion::DDIMSampler<std_ddim_input, std_ddim_output>());
     };
     spec.handle_output = [](const std_ddim_input &in, const std_ddim_output &out, const std::string &save_dir) {
         if (in.save_all_mid_results) {
@@ -145,8 +145,8 @@ int run_ddim_benchmark(int argc, char **argv) {
 }
 
 int run_cls_cond_ddim_benchmark(int argc, char **argv) {
-    using jinq::models::io_define::diffusion::std_cls_cond_ddim_input;
-    using jinq::models::io_define::diffusion::std_cls_cond_ddim_output;
+    using mortred::models::io_define::diffusion::std_cls_cond_ddim_input;
+    using mortred::models::io_define::diffusion::std_cls_cond_ddim_output;
     BenchmarkSpec<std_cls_cond_ddim_input, std_cls_cond_ddim_output> spec;
     spec.model_name = "CLS_COND_DDIM";
     spec.display_name = "class cond ddim sampler";
@@ -184,8 +184,8 @@ int run_cls_cond_ddim_benchmark(int argc, char **argv) {
     };
     spec.image_path_of = [](int, char **) { return std::string("../demo_data/model_test_input/diffusion/ddim"); };
     spec.make_model = []() {
-        return std::unique_ptr<jinq::models::BaseAiModel<std_cls_cond_ddim_input, std_cls_cond_ddim_output>>(
-            new jinq::models::diffusion::ClsCondDDIMSampler<std_cls_cond_ddim_input, std_cls_cond_ddim_output>());
+        return std::unique_ptr<mortred::models::BaseAiModel<std_cls_cond_ddim_input, std_cls_cond_ddim_output>>(
+            new mortred::models::diffusion::ClsCondDDIMSampler<std_cls_cond_ddim_input, std_cls_cond_ddim_output>());
     };
     spec.handle_output = [](const std_cls_cond_ddim_input &in, const std_cls_cond_ddim_output &out,
                             const std::string &save_dir) {
@@ -204,9 +204,9 @@ int run_cls_cond_ddim_benchmark(int argc, char **argv) {
 }
 
 int run_ldm_benchmark(int argc, char **argv) {
-    using jinq::models::io_define::diffusion::DDPMSampler_Type;
-    using jinq::models::io_define::diffusion::std_ldm_input;
-    using jinq::models::io_define::diffusion::std_ldm_output;
+    using mortred::models::io_define::diffusion::DDPMSampler_Type;
+    using mortred::models::io_define::diffusion::std_ldm_input;
+    using mortred::models::io_define::diffusion::std_ldm_output;
     BenchmarkSpec<std_ldm_input, std_ldm_output> spec;
     spec.model_name = "LDM";
     spec.display_name = "ldm sampler";
@@ -242,8 +242,8 @@ int run_ldm_benchmark(int argc, char **argv) {
     };
     spec.image_path_of = [](int, char **) { return std::string("../demo_data/model_test_input/diffusion/ldm"); };
     spec.make_model = []() {
-        return std::unique_ptr<jinq::models::BaseAiModel<std_ldm_input, std_ldm_output>>(
-            new jinq::models::diffusion::LDMSampler<std_ldm_input, std_ldm_output>());
+        return std::unique_ptr<mortred::models::BaseAiModel<std_ldm_input, std_ldm_output>>(
+            new mortred::models::diffusion::LDMSampler<std_ldm_input, std_ldm_output>());
     };
     spec.handle_output = [](const std_ldm_input &, const std_ldm_output &out, const std::string &save_dir) {
         cv::imwrite(FilePathUtil::concat_path(save_dir, "ldm_sample_output.png"), out.sampled_image);
@@ -255,9 +255,9 @@ int run_ldm_benchmark(int argc, char **argv) {
 } // namespace
 
 int run_openai_clip_benchmark(int argc, char **argv) {
-    using jinq::models::io_define::clip::clip_input;
-    using jinq::models::io_define::clip::clip_output;
-    using jinq::models::io_define::clip::ClipTaskType;
+    using mortred::models::io_define::clip::clip_input;
+    using mortred::models::io_define::clip::clip_output;
+    using mortred::models::io_define::clip::ClipTaskType;
 
     if (argc != 2 && argc != 3) {
         LOG(ERROR) << "wrong usage";
@@ -287,7 +287,7 @@ int run_openai_clip_benchmark(int argc, char **argv) {
     const cv::Mat input_image = cv::imread(input_image_path, cv::IMREAD_COLOR);
     const std::vector<std::string> input_texts = {"a photo of fox", "a photo of dog", "a photo of cat"};
 
-    auto clip = jinq::factory::clip::create_model("OPENAI_CLIP");
+    auto clip = mortred::factory::clip::create_model("OPENAI_CLIP");
     if (clip == nullptr) {
         return -1;
     }
@@ -345,8 +345,8 @@ int run_openai_clip_benchmark(int argc, char **argv) {
 }
 
 int run_sam_predictor_benchmark(int argc, char **argv) {
-    using jinq::models::io_define::segment_anything::sam_prompt_input;
-    using jinq::models::io_define::segment_anything::std_sam_prompt_output;
+    using mortred::models::io_define::segment_anything::sam_prompt_input;
+    using mortred::models::io_define::segment_anything::std_sam_prompt_output;
 
     if (argc < 2) {
         LOG(INFO) << "usage: exe --model SAM_PREDICTOR config_file [image]";
@@ -357,7 +357,7 @@ int run_sam_predictor_benchmark(int argc, char **argv) {
         LOG(ERROR) << "config file path: " << config_file_path << " not exists";
         return -1;
     }
-    auto sam_model = jinq::factory::segment_anything::create_sam_predictor<sam_prompt_input, std_sam_prompt_output>();
+    auto sam_model = mortred::factory::segment_anything::create_sam_predictor<sam_prompt_input, std_sam_prompt_output>();
     auto cfg_parsed = toml::parse_file(config_file_path);
     if (!cfg_parsed) {
         LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
@@ -406,8 +406,8 @@ int run_sam_predictor_benchmark(int argc, char **argv) {
 }
 
 int run_fast_sam_benchmark(int argc, char **argv) {
-    using jinq::models::io_define::common_io::mat_input;
-    using jinq::models::io_define::segment_anything::std_fast_sam_output;
+    using mortred::models::io_define::common_io::mat_input;
+    using mortred::models::io_define::segment_anything::std_fast_sam_output;
 
     if (argc < 2) {
         LOG(INFO) << "usage: exe --model FAST_SAM config_file [image]";
@@ -419,7 +419,7 @@ int run_fast_sam_benchmark(int argc, char **argv) {
         return -1;
     }
     auto fast_sam_model =
-        jinq::factory::segment_anything::create_fast_sam_segmentor<mat_input, std_fast_sam_output>();
+        mortred::factory::segment_anything::create_fast_sam_segmentor<mat_input, std_fast_sam_output>();
     auto cfg_parsed = toml::parse_file(config_file_path);
     if (!cfg_parsed) {
         LOG(ERROR) << "parse toml config file failed, error: " << std::string(cfg_parsed.error().description());
@@ -460,8 +460,8 @@ int run_fast_sam_benchmark(int argc, char **argv) {
 }
 
 int run_lightglue_benchmark(int argc, char **argv) {
-    using jinq::models::io_define::common_io::pair_mat_input;
-    using jinq::models::io_define::feature_point::std_feature_point_match_output;
+    using mortred::models::io_define::common_io::pair_mat_input;
+    using mortred::models::io_define::feature_point::std_feature_point_match_output;
 
     BenchmarkSpec<pair_mat_input, std_feature_point_match_output> spec;
     spec.model_name = "LIGHTGLUE";
@@ -488,7 +488,7 @@ int run_lightglue_benchmark(int argc, char **argv) {
         return std::string(n == 4 ? a[2] : "../demo_data/model_test_input/feature_point/match_test_01.jpg");
     };
     spec.make_model = []() {
-        return jinq::factory::feature_point::create_lightglue_matcher<pair_mat_input, std_feature_point_match_output>();
+        return mortred::factory::feature_point::create_lightglue_matcher<pair_mat_input, std_feature_point_match_output>();
     };
     spec.handle_output = [](const pair_mat_input &in, const std_feature_point_match_output &out,
                             const std::string &image_path) {
@@ -505,10 +505,10 @@ int run_lightglue_benchmark(int argc, char **argv) {
 }
 
 int run_byte_track_benchmark(int argc, char **argv) {
-    using jinq::models::io_define::common_io::mat_input;
-    using jinq::models::io_define::object_detection::std_object_detection_output;
-    using jinq::models::mot::byte_tracker::ByteTracker;
-    using jinq::models::object_detection::YoloV5Detector;
+    using mortred::models::io_define::common_io::mat_input;
+    using mortred::models::io_define::object_detection::std_object_detection_output;
+    using mortred::models::mot::byte_tracker::ByteTracker;
+    using mortred::models::object_detection::YoloV5Detector;
 
     if (argc != 2 && argc != 3 && argc != 4) {
         LOG(ERROR) << "wrong usage";
@@ -623,4 +623,4 @@ int run_diffusion_family_benchmark(const std::string &model_section, int argc, c
 
 } // namespace benchmark
 } // namespace apps
-} // namespace jinq
+} // namespace mortred

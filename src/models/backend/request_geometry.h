@@ -8,11 +8,11 @@
 #include "common/status_code.h"
 #include "models/backend/inference_context.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /*** request-scoped scale from network coordinates to source-image coordinates ***/
 struct GeometryScale {
@@ -157,6 +157,6 @@ inline StatusCode validated_source_size(const InferenceContext &context, const s
 
 } // namespace backend
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_BACKEND_REQUEST_GEOMETRY_H

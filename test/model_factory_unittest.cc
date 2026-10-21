@@ -18,13 +18,13 @@
 #include "models/base_model.h"
 #include "server/abstract_server.h"
 
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 struct fake_model_input {};
 struct fake_model_output {};
 
 // test-only polymorphic base: tag() verifies the concrete type the factory created
-class FakeModelBase : public jinq::models::BaseAiModel<fake_model_input, fake_model_output> {
+class FakeModelBase : public mortred::models::BaseAiModel<fake_model_input, fake_model_output> {
 public:
     ~FakeModelBase() override = default;
     virtual std::string tag() const = 0;
@@ -62,7 +62,7 @@ public:
     }
 };
 
-class FakeServer : public jinq::server::BaseAiServer {
+class FakeServer : public mortred::server::BaseAiServer {
 public:
     StatusCode init(const toml::table&) override {
         return StatusCode::OK;
@@ -74,7 +74,7 @@ public:
 };
 
 // differs from FakeServer by is_successfully_initialized() for type verification
-class FakeServer2 : public jinq::server::BaseAiServer {
+class FakeServer2 : public mortred::server::BaseAiServer {
 public:
     StatusCode init(const toml::table&) override {
         return StatusCode::OK;
@@ -85,8 +85,8 @@ public:
     }
 };
 
-using ModelFactory = jinq::factory::TypeErasedFactory<FakeModelBase>;
-using ServerFactory = jinq::factory::ServerFactory<jinq::server::BaseAiServer>;
+using ModelFactory = mortred::factory::TypeErasedFactory<FakeModelBase>;
+using ServerFactory = mortred::factory::ServerFactory<mortred::server::BaseAiServer>;
 
 TEST(model_factory, register_and_create_model) {
     ModelFactory::get_instance().register_creator("fake_model", []() -> std::unique_ptr<FakeModelBase> {
@@ -210,8 +210,8 @@ TEST(model_factory, register_creator_rejects_empty_name_and_null_closure) {
 }
 
 TEST(server_factory, register_and_create_server) {
-    ServerFactory::get_instance().register_creator("fake_server", []() -> std::unique_ptr<jinq::server::BaseAiServer> {
-        return std::unique_ptr<jinq::server::BaseAiServer>(new FakeServer());
+    ServerFactory::get_instance().register_creator("fake_server", []() -> std::unique_ptr<mortred::server::BaseAiServer> {
+        return std::unique_ptr<mortred::server::BaseAiServer>(new FakeServer());
     });
 
     auto server = ServerFactory::get_instance().create("fake_server");
@@ -221,8 +221,8 @@ TEST(server_factory, register_and_create_server) {
 
 TEST(server_factory, create_stays_valid_after_registration_scope_closes) {
     {
-        ServerFactory::get_instance().register_creator("scoped_server", []() -> std::unique_ptr<jinq::server::BaseAiServer> {
-            return std::unique_ptr<jinq::server::BaseAiServer>(new FakeServer());
+        ServerFactory::get_instance().register_creator("scoped_server", []() -> std::unique_ptr<mortred::server::BaseAiServer> {
+            return std::unique_ptr<mortred::server::BaseAiServer>(new FakeServer());
         });
         auto first = ServerFactory::get_instance().create("scoped_server");
         ASSERT_NE(first, nullptr);
@@ -235,11 +235,11 @@ TEST(server_factory, create_stays_valid_after_registration_scope_closes) {
 
 TEST(server_factory, re_registering_same_name_replaces_creator) {
     auto& factory = ServerFactory::get_instance();
-    factory.register_creator("server_overwrite", []() -> std::unique_ptr<jinq::server::BaseAiServer> {
-        return std::unique_ptr<jinq::server::BaseAiServer>(new FakeServer());
+    factory.register_creator("server_overwrite", []() -> std::unique_ptr<mortred::server::BaseAiServer> {
+        return std::unique_ptr<mortred::server::BaseAiServer>(new FakeServer());
     });
-    factory.register_creator("server_overwrite", []() -> std::unique_ptr<jinq::server::BaseAiServer> {
-        return std::unique_ptr<jinq::server::BaseAiServer>(new FakeServer2());
+    factory.register_creator("server_overwrite", []() -> std::unique_ptr<mortred::server::BaseAiServer> {
+        return std::unique_ptr<mortred::server::BaseAiServer>(new FakeServer2());
     });
 
     auto server = factory.create("server_overwrite");

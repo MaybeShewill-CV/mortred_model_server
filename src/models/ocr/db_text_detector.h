@@ -19,12 +19,12 @@
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace ocr {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT> class DBTextDetector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class DBTextDetector : public mortred::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     DBTextDetector();
     ~DBTextDetector() override = default;
@@ -33,15 +33,15 @@ template <typename INPUT, typename OUTPUT> class DBTextDetector : public jinq::m
     DBTextDetector &operator=(const DBTextDetector &transformer) = delete;
 
   protected:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
+    std::vector<mortred::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode on_init(const toml::table &params) override;
 
     StatusCode get_boxes_from_bitmap(const cv::Mat &seg_prob_mat, const cv::Mat &seg_score_mat,
-                                    const jinq::models::backend::GeometryScale &geometry_scale,
+                                    const mortred::models::backend::GeometryScale &geometry_scale,
                                     float score_threshold, int keep_topk, OUTPUT &output) const;
 
     // score thresh
@@ -59,7 +59,7 @@ template <typename INPUT, typename OUTPUT> class DBTextDetector : public jinq::m
 
 } // namespace ocr
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "db_text_detector.inl"
 

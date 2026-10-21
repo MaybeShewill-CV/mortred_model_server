@@ -29,9 +29,9 @@
 
 #include "common/time_stamp.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
-using jinq::common::Timestamp;
+using mortred::common::Timestamp;
 
 // Shared production budget for destructor drain (async + worker share one deadline).
 inline constexpr int kDrainTimeoutMs = 3000;
@@ -196,6 +196,6 @@ private:
 };
 
 }  // namespace server
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_SERVER_WORKER_POOL_H

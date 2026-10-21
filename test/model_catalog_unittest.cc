@@ -30,9 +30,9 @@ namespace {
 
 namespace fs = std::filesystem;
 
-using ServerEntry = jinq::models::catalog::ServedModelEntry;
-using jinq::models::catalog::model_entry_valid;
-using jinq::models::catalog::served_model_entry_valid;
+using ServerEntry = mortred::models::catalog::ServedModelEntry;
+using mortred::models::catalog::model_entry_valid;
+using mortred::models::catalog::served_model_entry_valid;
 
 std::vector<fs::path> collect_toml_files(const fs::path &root) {
     std::vector<fs::path> files;
@@ -82,22 +82,22 @@ fs::path resolve_model_config(const fs::path &server_file, const std::string &ra
 class ModelCatalogTest : public ::testing::Test {
   protected:
     void SetUp() override {
-        register_entries("classification", jinq::factory::classification::catalog());
-        register_entries("object_detection", jinq::factory::object_detection::catalog());
-        register_entries("face_detection", jinq::factory::object_detection::face_catalog());
-        register_entries("scene_segmentation", jinq::factory::scene_segmentation::catalog());
-        register_entries("ocr", jinq::factory::ocr::catalog());
-        register_entries("matting", jinq::factory::matting::catalog());
-        register_entries("enhancement", jinq::factory::enhancement::catalog());
-        register_entries("feature_embedding", jinq::factory::feature_embedding::catalog());
-        register_entries("feature_point", jinq::factory::feature_point::catalog());
-        register_entries("mono_depth_estimation", jinq::factory::mono_depth_estimation::catalog());
-        register_entries("diffusion", jinq::factory::diffusion::catalog());
-        register_entries("segment_anything_amg", jinq::factory::segment_anything::amg_catalog());
+        register_entries("classification", mortred::factory::classification::catalog());
+        register_entries("object_detection", mortred::factory::object_detection::catalog());
+        register_entries("face_detection", mortred::factory::object_detection::face_catalog());
+        register_entries("scene_segmentation", mortred::factory::scene_segmentation::catalog());
+        register_entries("ocr", mortred::factory::ocr::catalog());
+        register_entries("matting", mortred::factory::matting::catalog());
+        register_entries("enhancement", mortred::factory::enhancement::catalog());
+        register_entries("feature_embedding", mortred::factory::feature_embedding::catalog());
+        register_entries("feature_point", mortred::factory::feature_point::catalog());
+        register_entries("mono_depth_estimation", mortred::factory::mono_depth_estimation::catalog());
+        register_entries("diffusion", mortred::factory::diffusion::catalog());
+        register_entries("segment_anything_amg", mortred::factory::segment_anything::amg_catalog());
     }
 
     template <typename OUTPUT>
-    void register_entries(const std::string &task, const std::vector<jinq::factory::cv_catalog::CvModelEntry<OUTPUT>> &entries) {
+    void register_entries(const std::string &task, const std::vector<mortred::factory::cv_catalog::CvModelEntry<OUTPUT>> &entries) {
         for (const auto &entry : entries) {
             served_entries_.push_back(&entry);
             entry_tasks_[&entry] = task;
@@ -112,12 +112,12 @@ class ModelCatalogTest : public ::testing::Test {
     // constructing the server instantiates CvModelServer<OUTPUT> and proves the
     // registration lambda is valid; init() is intentionally not called
     template <typename OUTPUT>
-    void check_create_server(const std::vector<jinq::factory::cv_catalog::CvModelEntry<OUTPUT>> &entries, const std::string &task) {
+    void check_create_server(const std::vector<mortred::factory::cv_catalog::CvModelEntry<OUTPUT>> &entries, const std::string &task) {
         for (const auto &entry : entries) {
             const auto server_name = "model_catalog_ut_" + task + "_" + entry.model_section;
-            auto server = jinq::factory::cv_catalog::create_server(entry, server_name);
+            auto server = mortred::factory::cv_catalog::create_server(entry, server_name);
             ASSERT_NE(server, nullptr) << server_name;
-            EXPECT_NE(dynamic_cast<jinq::server::CvModelServer<OUTPUT> *>(server.get()), nullptr) << server_name;
+            EXPECT_NE(dynamic_cast<mortred::server::CvModelServer<OUTPUT> *>(server.get()), nullptr) << server_name;
         }
     }
 
@@ -192,18 +192,18 @@ TEST_F(ModelCatalogTest, ServerSectionsResolveToShippedConfigs) {
 }
 
 TEST_F(ModelCatalogTest, CreateServerBuildsGenericCvServer) {
-    check_create_server(jinq::factory::classification::catalog(), "classification");
-    check_create_server(jinq::factory::object_detection::catalog(), "object_detection");
-    check_create_server(jinq::factory::object_detection::face_catalog(), "face_detection");
-    check_create_server(jinq::factory::scene_segmentation::catalog(), "scene_segmentation");
-    check_create_server(jinq::factory::ocr::catalog(), "ocr");
-    check_create_server(jinq::factory::matting::catalog(), "matting");
-    check_create_server(jinq::factory::enhancement::catalog(), "enhancement");
-    check_create_server(jinq::factory::feature_embedding::catalog(), "feature_embedding");
-    check_create_server(jinq::factory::feature_point::catalog(), "feature_point");
-    check_create_server(jinq::factory::mono_depth_estimation::catalog(), "mono_depth_estimation");
-    check_create_server(jinq::factory::diffusion::catalog(), "diffusion");
-    check_create_server(jinq::factory::segment_anything::amg_catalog(), "segment_anything_amg");
+    check_create_server(mortred::factory::classification::catalog(), "classification");
+    check_create_server(mortred::factory::object_detection::catalog(), "object_detection");
+    check_create_server(mortred::factory::object_detection::face_catalog(), "face_detection");
+    check_create_server(mortred::factory::scene_segmentation::catalog(), "scene_segmentation");
+    check_create_server(mortred::factory::ocr::catalog(), "ocr");
+    check_create_server(mortred::factory::matting::catalog(), "matting");
+    check_create_server(mortred::factory::enhancement::catalog(), "enhancement");
+    check_create_server(mortred::factory::feature_embedding::catalog(), "feature_embedding");
+    check_create_server(mortred::factory::feature_point::catalog(), "feature_point");
+    check_create_server(mortred::factory::mono_depth_estimation::catalog(), "mono_depth_estimation");
+    check_create_server(mortred::factory::diffusion::catalog(), "diffusion");
+    check_create_server(mortred::factory::segment_anything::amg_catalog(), "segment_anything_amg");
 }
 
 TEST_F(ModelCatalogTest, ServerConfigSectionsAndModelFilesExist) {
@@ -243,23 +243,23 @@ TEST_F(ModelCatalogTest, ServerConfigSectionsAndModelFilesExist) {
 }
 
 TEST_F(ModelCatalogTest, CatalogCoversEveryServedModel) {
-    EXPECT_EQ(jinq::factory::classification::catalog().size(), 3U);
-    EXPECT_EQ(jinq::factory::object_detection::catalog().size(), 10U);
-    EXPECT_EQ(jinq::factory::object_detection::face_catalog().size(), 2U);
-    EXPECT_EQ(jinq::factory::scene_segmentation::catalog().size(), 6U);
-    EXPECT_EQ(jinq::factory::ocr::catalog().size(), 1U);
-    EXPECT_EQ(jinq::factory::matting::catalog().size(), 5U);
-    EXPECT_EQ(jinq::factory::enhancement::catalog().size(), 3U);
-    EXPECT_EQ(jinq::factory::feature_embedding::catalog().size(), 3U);
-    EXPECT_EQ(jinq::factory::feature_point::catalog().size(), 1U);
-    EXPECT_EQ(jinq::factory::mono_depth_estimation::catalog().size(), 5U);
-    EXPECT_EQ(jinq::factory::diffusion::catalog().size(), 4U);
-    EXPECT_EQ(jinq::factory::segment_anything::amg_catalog().size(), 1U);
+    EXPECT_EQ(mortred::factory::classification::catalog().size(), 3U);
+    EXPECT_EQ(mortred::factory::object_detection::catalog().size(), 10U);
+    EXPECT_EQ(mortred::factory::object_detection::face_catalog().size(), 2U);
+    EXPECT_EQ(mortred::factory::scene_segmentation::catalog().size(), 6U);
+    EXPECT_EQ(mortred::factory::ocr::catalog().size(), 1U);
+    EXPECT_EQ(mortred::factory::matting::catalog().size(), 5U);
+    EXPECT_EQ(mortred::factory::enhancement::catalog().size(), 3U);
+    EXPECT_EQ(mortred::factory::feature_embedding::catalog().size(), 3U);
+    EXPECT_EQ(mortred::factory::feature_point::catalog().size(), 1U);
+    EXPECT_EQ(mortred::factory::mono_depth_estimation::catalog().size(), 5U);
+    EXPECT_EQ(mortred::factory::diffusion::catalog().size(), 4U);
+    EXPECT_EQ(mortred::factory::segment_anything::amg_catalog().size(), 1U);
     EXPECT_EQ(served_entries_.size(), 44U);
 }
 
 TEST_F(ModelCatalogTest, FeatureEmbeddingEntryDeclaresParamSpecs) {
-    const auto &entries = jinq::factory::feature_embedding::catalog();
+    const auto &entries = mortred::factory::feature_embedding::catalog();
     ASSERT_EQ(entries.size(), 3U);
     const auto found = std::find_if(entries.begin(), entries.end(), [](const auto &entry) {
         return entry.model_section == "dinov2_vitb14";
@@ -272,53 +272,53 @@ TEST_F(ModelCatalogTest, FeatureEmbeddingEntryDeclaresParamSpecs) {
     ASSERT_EQ(entry.param_specs.size(), 2U);
     const auto &normalize = entry.param_specs[0];
     EXPECT_EQ(normalize.key, "normalize");
-    EXPECT_EQ(normalize.type, jinq::models::backend::ParamSpec::Type::BOOL);
+    EXPECT_EQ(normalize.type, mortred::models::backend::ParamSpec::Type::BOOL);
     EXPECT_TRUE(normalize.request_overridable);
 
     const auto &pooling = entry.param_specs[1];
     EXPECT_EQ(pooling.key, "pooling");
-    EXPECT_EQ(pooling.type, jinq::models::backend::ParamSpec::Type::STRING);
+    EXPECT_EQ(pooling.type, mortred::models::backend::ParamSpec::Type::STRING);
     EXPECT_TRUE(pooling.request_overridable);
     ASSERT_EQ(pooling.enum_values.size(), 1U);
     EXPECT_EQ(pooling.enum_values[0], "cls");
 
     // the request validator round-trips the declared specs
-    jinq::models::backend::ParamSet accepted;
-    const auto violations = jinq::models::backend::validate_params(
+    mortred::models::backend::ParamSet accepted;
+    const auto violations = mortred::models::backend::validate_params(
         entry.param_specs,
-        {{"normalize", jinq::models::backend::ParamValue::of(true)},
-         {"pooling", jinq::models::backend::ParamValue::of(std::string("cls"))}},
+        {{"normalize", mortred::models::backend::ParamValue::of(true)},
+         {"pooling", mortred::models::backend::ParamValue::of(std::string("cls"))}},
         &accepted);
     EXPECT_TRUE(violations.empty());
     EXPECT_TRUE(accepted.get_bool("normalize", false));
     EXPECT_EQ(accepted.get_str("pooling", ""), "cls");
 
     // values outside the declared enum are rejected before they reach the model
-    jinq::models::backend::ParamSet rejected;
-    const auto enum_violations = jinq::models::backend::validate_params(
-        entry.param_specs, {{"pooling", jinq::models::backend::ParamValue::of(std::string("mean"))}}, &rejected);
+    mortred::models::backend::ParamSet rejected;
+    const auto enum_violations = mortred::models::backend::validate_params(
+        entry.param_specs, {{"pooling", mortred::models::backend::ParamValue::of(std::string("mean"))}}, &rejected);
     ASSERT_EQ(enum_violations.size(), 1U);
     EXPECT_NE(enum_violations[0].message.find("must be one of"), std::string::npos);
 }
 
 TEST(ModelCatalog, UnknownSectionIsRejected) {
-    EXPECT_EQ(jinq::factory::cv_catalog::create_server(jinq::factory::classification::catalog(), "NO_SUCH_MODEL", "no_such_server"),
+    EXPECT_EQ(mortred::factory::cv_catalog::create_server(mortred::factory::classification::catalog(), "NO_SUCH_MODEL", "no_such_server"),
               nullptr);
-    EXPECT_EQ(jinq::factory::model_catalog::create_model(jinq::factory::clip::catalog(), "NO_SUCH_MODEL"), nullptr);
+    EXPECT_EQ(mortred::factory::model_catalog::create_model(mortred::factory::clip::catalog(), "NO_SUCH_MODEL"), nullptr);
 }
 
 TEST(ModelCatalog, ModelOnlyCatalogsExposeWorkingCreators) {
-    EXPECT_NE(jinq::factory::model_catalog::create_model(jinq::factory::clip::catalog(), "OPENAI_CLIP"), nullptr);
-    EXPECT_NE(jinq::factory::model_catalog::create_model(jinq::factory::segment_anything::predictor_catalog(), "SAM_PREDICTOR"), nullptr);
-    EXPECT_NE(jinq::factory::model_catalog::create_model(jinq::factory::segment_anything::fast_sam_catalog(), "FAST_SAM"), nullptr);
+    EXPECT_NE(mortred::factory::model_catalog::create_model(mortred::factory::clip::catalog(), "OPENAI_CLIP"), nullptr);
+    EXPECT_NE(mortred::factory::model_catalog::create_model(mortred::factory::segment_anything::predictor_catalog(), "SAM_PREDICTOR"), nullptr);
+    EXPECT_NE(mortred::factory::model_catalog::create_model(mortred::factory::segment_anything::fast_sam_catalog(), "FAST_SAM"), nullptr);
 
-    for (const auto &entry : jinq::factory::clip::catalog()) {
+    for (const auto &entry : mortred::factory::clip::catalog()) {
         EXPECT_TRUE(model_entry_valid(entry));
     }
-    for (const auto &entry : jinq::factory::segment_anything::predictor_catalog()) {
+    for (const auto &entry : mortred::factory::segment_anything::predictor_catalog()) {
         EXPECT_TRUE(model_entry_valid(entry));
     }
-    for (const auto &entry : jinq::factory::segment_anything::fast_sam_catalog()) {
+    for (const auto &entry : mortred::factory::segment_anything::fast_sam_catalog()) {
         EXPECT_TRUE(model_entry_valid(entry));
     }
 }

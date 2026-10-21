@@ -13,7 +13,7 @@
 #include "kalman_filter.h"
 #include "data_type.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace mot {
 namespace byte_tracker {

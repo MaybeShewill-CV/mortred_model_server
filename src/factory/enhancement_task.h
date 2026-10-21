@@ -10,15 +10,15 @@
 #include "models/enhancement/enlightengan.h"
 #include "models/enhancement/real_esrgan.h"
 
-namespace jinq {
+namespace mortred {
 namespace factory {
 namespace enhancement {
 
-using jinq::models::BaseAiModel;
+using mortred::models::BaseAiModel;
 
-using jinq::models::enhancement::AttentiveGanDerain;
-using jinq::models::enhancement::EnlightenGan;
-using jinq::models::enhancement::RealEsrGan;
+using mortred::models::enhancement::AttentiveGanDerain;
+using mortred::models::enhancement::EnlightenGan;
+using mortred::models::enhancement::RealEsrGan;
 
 template <typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_enlightengan_enhancementor() {
@@ -35,25 +35,25 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_realesrgan_enhancementor() {
     return std::make_unique<RealEsrGan<INPUT, OUTPUT>>();
 }
 
-using Output = jinq::models::io_define::enhancement::std_enhancement_output;
-using jinq::server::ImageInput;
-using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
+using Output = mortred::models::io_define::enhancement::std_enhancement_output;
+using mortred::server::ImageInput;
+using Entry = mortred::factory::cv_catalog::CvModelEntry<Output>;
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
         Entry{"attentive_gan", "AttentiveGAN derain", "ATTENTIVE_GAN_DERAIN_SERVER",
-              &create_attentivegan_enhancementor<ImageInput, Output>, &jinq::server::response::fill_enhancement, {},
+              &create_attentivegan_enhancementor<ImageInput, Output>, &mortred::server::response::fill_enhancement, {},
               "attentive_gan"},
         Entry{"enlightengan", "EnlightenGAN", "ENLIGHTEN_GAN_SERVER", &create_enlightengan_enhancementor<ImageInput, Output>,
-              &jinq::server::response::fill_enhancement, {}, "enlightengan"},
+              &mortred::server::response::fill_enhancement, {}, "enlightengan"},
         Entry{"realesrgan", "Real-ESRGAN", "REAL_ESRGAN_SERVER", &create_realesrgan_enhancementor<ImageInput, Output>,
-              &jinq::server::response::fill_enhancement, {}, "realesrgan"},
+              &mortred::server::response::fill_enhancement, {}, "realesrgan"},
     };
     return entries;
 }
 
 } // namespace enhancement
 } // namespace factory
-} // namespace jinq
+} // namespace mortred
 
 #endif

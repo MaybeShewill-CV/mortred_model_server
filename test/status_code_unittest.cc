@@ -10,9 +10,9 @@
 
 #include "common/status_code.h"
 
-using jinq::common::status_code_to_str;
-using jinq::common::StatusCode;
-using jinq::common::to_underlying;
+using mortred::common::status_code_to_str;
+using mortred::common::StatusCode;
+using mortred::common::to_underlying;
 
 TEST(status_code, every_code_has_message) {
 #define CHECK_MESSAGE(name, value, desc) EXPECT_EQ(status_code_to_str(StatusCode::name), std::string(desc));

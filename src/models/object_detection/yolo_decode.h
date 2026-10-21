@@ -15,7 +15,7 @@
 #include "models/io/object_detection.h"
 #include "models/object_detection/detection_params.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace object_detection {
 
@@ -25,7 +25,7 @@ namespace object_detection {
  */
 inline void collect_yolo_cxcywh_obj_candidates(const float *out_data, int64_t batch_nums, int64_t proposal_counts, int class_nums,
                                                float score_threshold, float min_box_area_px,
-                                               jinq::models::io_define::object_detection::std_object_detection_output *candidates) {
+                                               mortred::models::io_define::object_detection::std_object_detection_output *candidates) {
     if (out_data == nullptr || candidates == nullptr || class_nums < 1 || proposal_counts <= 0 || batch_nums <= 0) {
         return;
     }
@@ -52,7 +52,7 @@ inline void collect_yolo_cxcywh_obj_candidates(const float *out_data, int64_t ba
             if (box_w <= 0.0f || box_h <= 0.0f) {
                 continue;
             }
-            jinq::models::io_define::object_detection::bbox tmp_bbox;
+            mortred::models::io_define::object_detection::bbox tmp_bbox;
             tmp_bbox.class_id = class_id;
             tmp_bbox.score = bbox_score;
             tmp_bbox.bbox = cv::Rect2f(out_data[offset + 0] - box_w / 2.0f, out_data[offset + 1] - box_h / 2.0f, box_w, box_h);
@@ -71,7 +71,7 @@ inline void collect_yolo_cxcywh_obj_candidates(const float *out_data, int64_t ba
  */
 inline void collect_yolov7_head_candidates(const float *data, int anchor_nums, int grid_h, int grid_w, int attrs, int stride,
                                            const float anchors[][2], float score_threshold, float min_box_area_px,
-                                           jinq::models::io_define::object_detection::std_object_detection_output *candidates) {
+                                           mortred::models::io_define::object_detection::std_object_detection_output *candidates) {
     if (data == nullptr || candidates == nullptr || anchors == nullptr || anchor_nums <= 0 || grid_h <= 0 || grid_w <= 0 ||
         attrs < 6 || stride <= 0) {
         return;
@@ -108,7 +108,7 @@ inline void collect_yolov7_head_candidates(const float *data, int anchor_nums, i
                 if (box_w <= 0.0f || box_h <= 0.0f) {
                     continue;
                 }
-                jinq::models::io_define::object_detection::bbox tmp_bbox;
+                mortred::models::io_define::object_detection::bbox tmp_bbox;
                 tmp_bbox.class_id = class_id;
                 tmp_bbox.score = bbox_score;
                 tmp_bbox.bbox.x = center_x - box_w / 2.0f;
@@ -132,7 +132,7 @@ inline void collect_yolov7_head_candidates(const float *data, int anchor_nums, i
  */
 inline void collect_yolov8_candidates(const float *out_data, int64_t row_size, int64_t proposal_counts, float score_threshold,
                                       float min_box_area_px,
-                                      jinq::models::io_define::object_detection::std_object_detection_output *candidates) {
+                                      mortred::models::io_define::object_detection::std_object_detection_output *candidates) {
     if (out_data == nullptr || candidates == nullptr || row_size < 5 || proposal_counts <= 0) {
         return;
     }
@@ -165,7 +165,7 @@ inline void collect_yolov8_candidates(const float *out_data, int64_t row_size, i
             continue;
         }
 
-        jinq::models::io_define::object_detection::bbox candidate;
+        mortred::models::io_define::object_detection::bbox candidate;
         candidate.bbox = cv::Rect2f(cx[i] - w / 2.0f, cy[i] - h / 2.0f, w, h);
         candidate.score = cls_score;
         candidate.class_id = best_class[i];
@@ -178,6 +178,6 @@ inline void collect_yolov8_candidates(const float *out_data, int64_t row_size, i
 
 } // namespace object_detection
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_OBJECT_DETECTION_YOLO_DECODE_H

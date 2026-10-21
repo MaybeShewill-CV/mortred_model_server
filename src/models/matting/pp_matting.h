@@ -16,12 +16,12 @@
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace matting {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT> class PPMatting : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class PPMatting : public mortred::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     PPMatting();
     ~PPMatting() override = default;
@@ -30,10 +30,10 @@ template <typename INPUT, typename OUTPUT> class PPMatting : public jinq::models
     PPMatting &operator=(const PPMatting &transformer) = delete;
 
   protected:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
+    std::vector<mortred::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode on_init(const toml::table &params) override;
 
@@ -43,7 +43,7 @@ template <typename INPUT, typename OUTPUT> class PPMatting : public jinq::models
 
 } // namespace matting
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "pp_matting.inl"
 

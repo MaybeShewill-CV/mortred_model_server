@@ -30,7 +30,7 @@
 #include "models/base_model.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace apps {
 
 template<typename INPUT, typename OUTPUT>
@@ -57,7 +57,7 @@ struct BenchmarkSpec {
     // has no image)
     std::function<std::string(int argc, char** argv)> image_path_of;
     // model construction: factory create_X or direct make_unique (diffusion)
-    std::function<std::unique_ptr<jinq::models::BaseAiModel<INPUT, OUTPUT>>()> make_model;
+    std::function<std::unique_ptr<mortred::models::BaseAiModel<INPUT, OUTPUT>>()> make_model;
     // called once after the loop: logging / visualization / saving
     std::function<void(const INPUT& in, const OUTPUT& out, const std::string& image_path)>
         handle_output;
@@ -76,15 +76,15 @@ inline std::string standard_image_path(int argc, char** argv, const std::string&
     return default_path;
 }
 
-inline jinq::models::io_define::common_io::mat_input make_single_image_input(
+inline mortred::models::io_define::common_io::mat_input make_single_image_input(
     int argc, char** argv, const std::string& default_path,
     int imread_flags = cv::IMREAD_COLOR) {
     const std::string path = standard_image_path(argc, argv, default_path);
-    if (!jinq::common::FilePathUtil::is_file_exist(path)) {
+    if (!mortred::common::FilePathUtil::is_file_exist(path)) {
         LOG(INFO) << "test input image file: " << path << " not exist";
-        return jinq::models::io_define::common_io::mat_input{};
+        return mortred::models::io_define::common_io::mat_input{};
     }
-    jinq::models::io_define::common_io::mat_input input;
+    mortred::models::io_define::common_io::mat_input input;
     input.input_image = cv::imread(path, imread_flags);
     if (input.input_image.empty()) {
         LOG(ERROR) << "image decode failed: " << path;
@@ -101,7 +101,7 @@ int run_single_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPU
     }
     const std::string cfg_file_path = argv[1];
     LOG(INFO) << "config file path: " << cfg_file_path;
-    if (!jinq::common::FilePathUtil::is_file_exist(cfg_file_path)) {
+    if (!mortred::common::FilePathUtil::is_file_exist(cfg_file_path)) {
         LOG(INFO) << "config file: " << cfg_file_path << " not exist";
         return -1;
     }
@@ -129,7 +129,7 @@ int run_single_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPU
     }
 
     LOG(INFO) << "start " << spec.display_name << " benchmark at: "
-              << jinq::common::Timestamp::now().to_format_str();
+              << mortred::common::Timestamp::now().to_format_str();
 
     // warmup run: not counted (removes first-iteration cold-start bias)
     if (spec.warmup) {
@@ -137,7 +137,7 @@ int run_single_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPU
     }
 
     std::vector<double> iter_ms(static_cast<size_t>(spec.loops));
-    auto ts = jinq::common::Timestamp::now();
+    auto ts = mortred::common::Timestamp::now();
     for (int i = 0; i < spec.loops; ++i) {
         const auto t0 = std::chrono::steady_clock::now();
         model->run(model_input, model_output);
@@ -145,14 +145,14 @@ int run_single_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPU
         iter_ms[static_cast<size_t>(i)] =
             std::chrono::duration<double, std::milli>(t1 - t0).count();
     }
-    auto cost_time = jinq::common::Timestamp::now() - ts;
+    auto cost_time = mortred::common::Timestamp::now() - ts;
 
     std::sort(iter_ms.begin(), iter_ms.end());
     const double mean_ms = std::accumulate(iter_ms.begin(), iter_ms.end(), 0.0) / iter_ms.size();
     const double p50_ms = iter_ms[iter_ms.size() / 2];
     const double p99_ms = iter_ms[static_cast<size_t>(
         std::ceil(0.99 * static_cast<double>(iter_ms.size())) - 1)];
-    LOG(INFO) << "benchmark ends at: " << jinq::common::Timestamp::now().to_format_str();
+    LOG(INFO) << "benchmark ends at: " << mortred::common::Timestamp::now().to_format_str();
     LOG(INFO) << "cost time: " << cost_time << "s, fps: " << spec.loops / cost_time
               << ", mean: " << mean_ms << " ms, p50: " << p50_ms
               << " ms, p99: " << p99_ms << " ms";
@@ -178,7 +178,7 @@ int run_batch_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPUT
         return -1;
     }
     const std::string cfg_file_path = argv[1];
-    if (!jinq::common::FilePathUtil::is_file_exist(cfg_file_path)) {
+    if (!mortred::common::FilePathUtil::is_file_exist(cfg_file_path)) {
         LOG(ERROR) << "config file: " << cfg_file_path << " not exist";
         return -1;
     }
@@ -203,21 +203,21 @@ int run_batch_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPUT
 
     const std::vector<INPUT> batch_inputs(static_cast<size_t>(batch_n), model_input);
     std::vector<OUTPUT> batch_outputs;
-    std::vector<jinq::common::StatusCode> item_status;
+    std::vector<mortred::common::StatusCode> item_status;
 
     LOG(INFO) << "start " << spec.display_name << " BATCH check (batch=" << batch_n
-              << ") at: " << jinq::common::Timestamp::now().to_format_str();
+              << ") at: " << mortred::common::Timestamp::now().to_format_str();
     // functional gate: one batch where every item must succeed
     const auto check_status = model->run_batch(batch_inputs, batch_outputs, item_status);
     size_t failed_items = 0;
     for (const auto status : item_status) {
-        if (status != jinq::common::StatusCode::OK) {
+        if (status != mortred::common::StatusCode::OK) {
             ++failed_items;
         }
     }
-    LOG(INFO) << "batch check: aggregate=" << jinq::common::to_underlying(check_status)
+    LOG(INFO) << "batch check: aggregate=" << mortred::common::to_underlying(check_status)
               << ", failed_items=" << failed_items << "/" << batch_n;
-    if (check_status != jinq::common::StatusCode::OK || failed_items != 0) {
+    if (check_status != mortred::common::StatusCode::OK || failed_items != 0) {
         LOG(ERROR) << "batch functional check FAILED for " << spec.display_name;
         return -1;
     }
@@ -235,26 +235,26 @@ int run_batch_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPUT
         model->run_batch(batch_inputs, batch_outputs, item_status);
     }
     std::vector<double> iter_ms(static_cast<size_t>(loops));
-    const auto ts = jinq::common::Timestamp::now();
+    const auto ts = mortred::common::Timestamp::now();
     for (int i = 0; i < loops; ++i) {
         const auto t0 = std::chrono::steady_clock::now();
         const auto status = model->run_batch(batch_inputs, batch_outputs, item_status);
         const auto t1 = std::chrono::steady_clock::now();
-        if (status != jinq::common::StatusCode::OK) {
+        if (status != mortred::common::StatusCode::OK) {
             LOG(ERROR) << "run_batch failed at loop " << i << ": "
-                       << jinq::common::to_underlying(status);
+                       << mortred::common::to_underlying(status);
             return -1;
         }
         iter_ms[static_cast<size_t>(i)] =
             std::chrono::duration<double, std::milli>(t1 - t0).count();
     }
-    const double cost_time = jinq::common::Timestamp::now() - ts;
+    const double cost_time = mortred::common::Timestamp::now() - ts;
 
     std::sort(iter_ms.begin(), iter_ms.end());
     const double mean_ms = std::accumulate(iter_ms.begin(), iter_ms.end(), 0.0) / iter_ms.size();
     const double p99_ms = iter_ms[static_cast<size_t>(
         std::ceil(0.99 * static_cast<double>(iter_ms.size())) - 1)];
-    LOG(INFO) << "batch benchmark ends at: " << jinq::common::Timestamp::now().to_format_str();
+    LOG(INFO) << "batch benchmark ends at: " << mortred::common::Timestamp::now().to_format_str();
     LOG(INFO) << "batch=" << batch_n << ", loops=" << loops << ", cost=" << cost_time
               << "s, batch/s=" << loops / cost_time
               << ", img/s=" << (static_cast<double>(loops) * batch_n) / cost_time
@@ -304,6 +304,6 @@ int run_benchmark(int argc, char** argv, const BenchmarkSpec<INPUT, OUTPUT>& spe
 }
 
 }  // namespace apps
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_APPS_BENCHMARK_RUNNER_H

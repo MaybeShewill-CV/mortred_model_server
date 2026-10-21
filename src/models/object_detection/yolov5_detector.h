@@ -20,12 +20,12 @@
 #include "models/model_io_define.h"
 #include "models/object_detection/detection_params.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace object_detection {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT> class YoloV5Detector : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class YoloV5Detector : public mortred::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     YoloV5Detector();
     ~YoloV5Detector() override = default;
@@ -34,10 +34,10 @@ template <typename INPUT, typename OUTPUT> class YoloV5Detector : public jinq::m
     YoloV5Detector &operator=(const YoloV5Detector &transformer) = delete;
 
   protected:
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
+    std::vector<mortred::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode on_init(const toml::table &params) override;
 
@@ -48,7 +48,7 @@ template <typename INPUT, typename OUTPUT> class YoloV5Detector : public jinq::m
 
 } // namespace object_detection
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "yolov5_detector.inl"
 

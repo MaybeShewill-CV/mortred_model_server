@@ -13,7 +13,7 @@
 #include <cstddef>
 #include <string>
 
-namespace jinq {
+namespace mortred {
 namespace common {
 
 /***
@@ -111,6 +111,6 @@ inline bool is_bearer_authorized(const std::string& authorization_header,
 }
 
 }  // namespace common
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_COMMON_AUTH_TOKEN_H

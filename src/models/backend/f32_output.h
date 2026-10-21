@@ -9,11 +9,11 @@
 #include "common/status_code.h"
 #include "models/backend/tensor_contract.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /*** typed view of an f32 output which passed its complete tensor contract ***/
 struct F32OutputView {
@@ -70,6 +70,6 @@ inline StatusCode validated_f32_first_output(const std::vector<NamedTensor> &out
 
 } // namespace backend
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_BACKEND_F32_OUTPUT_H

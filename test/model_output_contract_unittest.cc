@@ -17,15 +17,15 @@
 #include "models/scene_segmentation/bisenetv2.h"
 #include "models/scene_segmentation/pp_humanseg.h"
 
-using jinq::common::StatusCode;
-using jinq::models::backend::DType;
-using jinq::models::backend::F32OutputView;
-using jinq::models::backend::GeometryScale;
-using jinq::models::backend::InferenceContext;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using jinq::models::backend::TensorContract;
-using jinq::models::backend::validated_f32_named_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::DType;
+using mortred::models::backend::F32OutputView;
+using mortred::models::backend::GeometryScale;
+using mortred::models::backend::InferenceContext;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using mortred::models::backend::TensorContract;
+using mortred::models::backend::validated_f32_named_output;
 
 namespace {
 
@@ -69,10 +69,10 @@ template <typename MODEL> class CallableOcrFields : public MODEL {
 } // namespace
 
 TEST(ModelOutputContract, ClassificationTopKKeepsHighestScoresDescending) {
-    CallablePostprocess<jinq::models::classification::MobileNetv2<jinq::models::io_define::common_io::mat_input,
-                                                                 jinq::models::io_define::classification::std_classification_output>>
+    CallablePostprocess<mortred::models::classification::MobileNetv2<mortred::models::io_define::common_io::mat_input,
+                                                                 mortred::models::io_define::classification::std_classification_output>>
         model;
-    using ClsOutput = jinq::models::io_define::classification::std_classification_output;
+    using ClsOutput = mortred::models::io_define::classification::std_classification_output;
 
     // scores: [0.1, 0.7, 0.2, 0.6, 0.3] -> top 2 = {0.7, 0.6}, argmax = 1
     auto scores = f32_tensor("scores", {1, 5}, 0.1f);
@@ -91,7 +91,7 @@ TEST(ModelOutputContract, ClassificationTopKKeepsHighestScoresDescending) {
     EXPECT_EQ(full.class_id, 1);
 
     // top_k = 2: two highest scores, descending
-    jinq::models::backend::ParamSet params;
+    mortred::models::backend::ParamSet params;
     params.set_i32("top_k", 2);
     auto with_top_k = request;
     with_top_k.params = &params;
@@ -103,7 +103,7 @@ TEST(ModelOutputContract, ClassificationTopKKeepsHighestScoresDescending) {
     EXPECT_EQ(top.class_id, 1);  // argmax unchanged by truncation
 
     // top_k larger than the class count keeps everything
-    params = jinq::models::backend::ParamSet();
+    params = mortred::models::backend::ParamSet();
     params.set_i32("top_k", 100);
     with_top_k.params = &params;
     ClsOutput all;
@@ -115,21 +115,21 @@ TEST(RequestGeometry, BuildsNonUniformScaleAndRejectsInvalidContext) {
     const auto request = context(cv::Size(20, 30), cv::Size(10, 5));
     GeometryScale scale;
     std::string error;
-    ASSERT_TRUE(jinq::models::backend::make_geometry_scale(request, &scale, &error)) << error;
+    ASSERT_TRUE(mortred::models::backend::make_geometry_scale(request, &scale, &error)) << error;
     EXPECT_FLOAT_EQ(scale.width, 2.0f);
     EXPECT_FLOAT_EQ(scale.height, 6.0f);
 
-    const auto bbox = jinq::models::backend::scale_bbox({1.0f, 2.0f, 3.0f, 4.0f}, scale);
+    const auto bbox = mortred::models::backend::scale_bbox({1.0f, 2.0f, 3.0f, 4.0f}, scale);
     EXPECT_FLOAT_EQ(bbox.x, 2.0f);
     EXPECT_FLOAT_EQ(bbox.y, 12.0f);
     EXPECT_FLOAT_EQ(bbox.width, 6.0f);
     EXPECT_FLOAT_EQ(bbox.height, 24.0f);
 
-    const auto point = jinq::models::backend::scale_point({1.5f, 2.5f}, scale);
+    const auto point = mortred::models::backend::scale_point({1.5f, 2.5f}, scale);
     EXPECT_FLOAT_EQ(point.x, 3.0f);
     EXPECT_FLOAT_EQ(point.y, 15.0f);
 
-    EXPECT_FALSE(jinq::models::backend::make_geometry_scale(context(cv::Size(), cv::Size(10, 10)), &scale, &error));
+    EXPECT_FALSE(mortred::models::backend::make_geometry_scale(context(cv::Size(), cv::Size(10, 10)), &scale, &error));
     EXPECT_NE(error.find("invalid request geometry"), std::string::npos);
 }
 
@@ -155,10 +155,10 @@ TEST(F32OutputContract, ValidatesNameShapeBufferAndFiniteValues) {
 }
 
 TEST(ModelOutputContract, ClassificationAcceptsSingleAndBatchItemScores) {
-    CallablePostprocess<jinq::models::classification::MobileNetv2<jinq::models::io_define::common_io::mat_input,
-                                                                  jinq::models::io_define::classification::std_classification_output>>
+    CallablePostprocess<mortred::models::classification::MobileNetv2<mortred::models::io_define::common_io::mat_input,
+                                                                  mortred::models::io_define::classification::std_classification_output>>
         model;
-    using Output = jinq::models::io_define::classification::std_classification_output;
+    using Output = mortred::models::io_define::classification::std_classification_output;
 
     const auto run = [&model](const std::vector<int64_t> &shape, std::vector<float> values, StatusCode expected) {
         std::vector<NamedTensor> outputs;
@@ -180,10 +180,10 @@ TEST(ModelOutputContract, ClassificationAcceptsSingleAndBatchItemScores) {
 }
 
 TEST(ModelOutputContract, SceneSegmentationMapsToRequestSourceSize) {
-    CallableInputSize<jinq::models::scene_segmentation::BiseNetV2<
-        jinq::models::io_define::common_io::mat_input, jinq::models::io_define::scene_segmentation::std_scene_segmentation_output>>
+    CallableInputSize<mortred::models::scene_segmentation::BiseNetV2<
+        mortred::models::io_define::common_io::mat_input, mortred::models::io_define::scene_segmentation::std_scene_segmentation_output>>
         bisenet;
-    using SegOutput = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
+    using SegOutput = mortred::models::io_define::scene_segmentation::std_scene_segmentation_output;
     bisenet._m_input_size_host = cv::Size(3, 2);
 
     std::vector<NamedTensor> outputs{f32_tensor("final_output", {2, 3, 2})};
@@ -214,10 +214,10 @@ TEST(ModelOutputContract, SceneSegmentationMapsToRequestSourceSize) {
 }
 
 TEST(ModelOutputContract, BinarySegmentationDecodesNetworkPlanes) {
-    CallableInputSize<jinq::models::scene_segmentation::PPHumanSeg<
-        jinq::models::io_define::common_io::mat_input, jinq::models::io_define::scene_segmentation::std_scene_segmentation_output>>
+    CallableInputSize<mortred::models::scene_segmentation::PPHumanSeg<
+        mortred::models::io_define::common_io::mat_input, mortred::models::io_define::scene_segmentation::std_scene_segmentation_output>>
         model;
-    using SegOutput = jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
+    using SegOutput = mortred::models::io_define::scene_segmentation::std_scene_segmentation_output;
     model._m_input_size_host = cv::Size(3, 2);
 
     auto output = f32_tensor("softmax", {1, 2, 2, 3});
@@ -238,11 +238,11 @@ TEST(ModelOutputContract, BinarySegmentationDecodesNetworkPlanes) {
 }
 
 TEST(ModelOutputContract, MattingResizesAlphaToRequestSourceSize) {
-    using MatInput = jinq::models::io_define::common_io::mat_input;
-    using MatOutput = jinq::models::io_define::matting::std_matting_output;
+    using MatInput = mortred::models::io_define::common_io::mat_input;
+    using MatOutput = mortred::models::io_define::matting::std_matting_output;
 
-    CallableInputSize<jinq::models::matting::ModNetMatting<MatInput, MatOutput>> modnet;
-    CallableInputSize<jinq::models::matting::PPMatting<MatInput, MatOutput>> ppmatting;
+    CallableInputSize<mortred::models::matting::ModNetMatting<MatInput, MatOutput>> modnet;
+    CallableInputSize<mortred::models::matting::PPMatting<MatInput, MatOutput>> ppmatting;
     modnet._m_input_size_host = cv::Size(3, 2);
     ppmatting._m_input_size_host = cv::Size(3, 2);
 
@@ -267,10 +267,10 @@ TEST(ModelOutputContract, MattingResizesAlphaToRequestSourceSize) {
 }
 
 TEST(ModelOutputContract, OcrValidatesProbabilityMapAndMapsGeometry) {
-    CallableOcrFields<jinq::models::ocr::DBTextDetector<jinq::models::io_define::common_io::mat_input,
-                                                        jinq::models::io_define::ocr::std_text_regions_output>>
+    CallableOcrFields<mortred::models::ocr::DBTextDetector<mortred::models::io_define::common_io::mat_input,
+                                                        mortred::models::io_define::ocr::std_text_regions_output>>
         model;
-    using OcrOutput = jinq::models::io_define::ocr::std_text_regions_output;
+    using OcrOutput = mortred::models::io_define::ocr::std_text_regions_output;
     model._m_output_name = "prob";
     model._m_input_size_host = cv::Size(3, 2);
 
@@ -288,10 +288,10 @@ TEST(ModelOutputContract, OcrValidatesProbabilityMapAndMapsGeometry) {
 }
 
 TEST(ModelOutputContract, EnhancementValidatesSuperResolutionOutput) {
-    CallablePostprocess<jinq::models::enhancement::RealEsrGan<jinq::models::io_define::common_io::mat_input,
-                                                              jinq::models::io_define::enhancement::std_enhancement_output>>
+    CallablePostprocess<mortred::models::enhancement::RealEsrGan<mortred::models::io_define::common_io::mat_input,
+                                                              mortred::models::io_define::enhancement::std_enhancement_output>>
         model;
-    using EnhOutput = jinq::models::io_define::enhancement::std_enhancement_output;
+    using EnhOutput = mortred::models::io_define::enhancement::std_enhancement_output;
 
     auto image = f32_tensor("output", {1, 3, 4, 6}, 0.5f);
     EnhOutput result;
@@ -305,11 +305,11 @@ TEST(ModelOutputContract, EnhancementValidatesSuperResolutionOutput) {
 }
 
 TEST(ModelOutputContract, OcrScoreThresholdSweepIsMonotone) {
-    CallableOcrFields<jinq::models::ocr::DBTextDetector<jinq::models::io_define::common_io::mat_input,
-                                                         jinq::models::io_define::ocr::std_text_regions_output>>
+    CallableOcrFields<mortred::models::ocr::DBTextDetector<mortred::models::io_define::common_io::mat_input,
+                                                         mortred::models::io_define::ocr::std_text_regions_output>>
         model;
     model._m_output_name = "sigmoid_0.tmp_0";
-    using OcrOutput = jinq::models::io_define::ocr::std_text_regions_output;
+    using OcrOutput = mortred::models::io_define::ocr::std_text_regions_output;
 
     // 8x8 prob map: a 4x4 bright block (0.9) on a dark background (0.05);
     // network 8x8 == source 8x8 so the geometry scale is 1:1
@@ -325,7 +325,7 @@ TEST(ModelOutputContract, OcrScoreThresholdSweepIsMonotone) {
     auto run_with_threshold = [&model, &prob, &request](float request_threshold) {
         OcrOutput out;
         auto ctx = request;
-        jinq::models::backend::ParamSet params;
+        mortred::models::backend::ParamSet params;
         params.set_f32("score_threshold", request_threshold);
         ctx.params = &params;
         const auto status = model.postprocess({prob}, ctx, out);

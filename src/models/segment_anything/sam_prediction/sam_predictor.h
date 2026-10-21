@@ -20,10 +20,10 @@
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace segment_anything {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 class SamPromptDecoder;
 class SamVitEncoder;
@@ -32,8 +32,8 @@ class SamVitEncoder;
  * SAM prompt segmentation model with independent encoder and decoder sessions.
  */
 template <typename INPUT, typename OUTPUT>
-class SamPredictor : public jinq::models::backend::MultiSessionModel<SamPredictor<INPUT, OUTPUT>, INPUT, OUTPUT> {
-    using Base = jinq::models::backend::MultiSessionModel<SamPredictor<INPUT, OUTPUT>, INPUT, OUTPUT>;
+class SamPredictor : public mortred::models::backend::MultiSessionModel<SamPredictor<INPUT, OUTPUT>, INPUT, OUTPUT> {
+    using Base = mortred::models::backend::MultiSessionModel<SamPredictor<INPUT, OUTPUT>, INPUT, OUTPUT>;
     friend Base;
 
   public:
@@ -51,21 +51,21 @@ class SamPredictor : public jinq::models::backend::MultiSessionModel<SamPredicto
     StatusCode get_embedding(const cv::Mat &input_image, std::vector<float> &image_embeddings);
 
   private:
-    using SamInput = jinq::models::io_define::segment_anything::sam_prompt_input;
-    using SamOutput = jinq::models::io_define::segment_anything::std_sam_prompt_output;
+    using SamInput = mortred::models::io_define::segment_anything::sam_prompt_input;
+    using SamOutput = mortred::models::io_define::segment_anything::std_sam_prompt_output;
 
     // The encoder has a fixed input/output pair, so its contract lives here.
     // The decoder exposes optional inputs (orig_im_size) and alternative
     // outputs (masks or low_res_masks), which a fixed IoSpec cannot express,
     // so its spec is left empty and SamPromptDecoder validates its own IO.
-    static std::vector<jinq::models::backend::SessionSpec> sessions();
+    static std::vector<mortred::models::backend::SessionSpec> sessions();
 
     StatusCode on_init(const toml::table &params) override;
 
     StatusCode run_sessions(const INPUT &input, OUTPUT &output) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     std::vector<cv::Rect2f> transform_bboxes(const std::vector<cv::Rect> &bboxes, int target_size) const;
 
@@ -79,7 +79,7 @@ class SamPredictor : public jinq::models::backend::MultiSessionModel<SamPredicto
 
 } // namespace segment_anything
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "sam_predictor.inl"
 

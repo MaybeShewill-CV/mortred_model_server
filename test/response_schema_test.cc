@@ -16,26 +16,26 @@
 
 #include "server/response_serializers.h"
 
-using jinq::server::response::fill_classification;
-using jinq::server::response::fill_depth_estimation;
-using jinq::server::response::fill_enhancement;
-using jinq::server::response::fill_face_detection;
-using jinq::server::response::fill_feature_points;
-using jinq::server::response::fill_matting;
-using jinq::server::response::fill_object_detection;
-using jinq::server::response::fill_scene_segmentation;
-using jinq::server::response::fill_text_regions;
-using jinq::models::io_define::classification::std_classification_output;
-using jinq::models::io_define::enhancement::std_enhancement_output;
-using jinq::models::io_define::feature_point::std_feature_point_output;
-using jinq::models::io_define::matting::std_matting_output;
-using jinq::models::io_define::mono_depth_estimation::std_mde_output;
-using jinq::models::io_define::object_detection::bbox;
-using jinq::models::io_define::object_detection::face_bbox;
-using jinq::models::io_define::object_detection::std_face_detection_output;
-using jinq::models::io_define::object_detection::std_object_detection_output;
-using jinq::models::io_define::ocr::std_text_regions_output;
-using jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
+using mortred::server::response::fill_classification;
+using mortred::server::response::fill_depth_estimation;
+using mortred::server::response::fill_enhancement;
+using mortred::server::response::fill_face_detection;
+using mortred::server::response::fill_feature_points;
+using mortred::server::response::fill_matting;
+using mortred::server::response::fill_object_detection;
+using mortred::server::response::fill_scene_segmentation;
+using mortred::server::response::fill_text_regions;
+using mortred::models::io_define::classification::std_classification_output;
+using mortred::models::io_define::enhancement::std_enhancement_output;
+using mortred::models::io_define::feature_point::std_feature_point_output;
+using mortred::models::io_define::matting::std_matting_output;
+using mortred::models::io_define::mono_depth_estimation::std_mde_output;
+using mortred::models::io_define::object_detection::bbox;
+using mortred::models::io_define::object_detection::face_bbox;
+using mortred::models::io_define::object_detection::std_face_detection_output;
+using mortred::models::io_define::object_detection::std_object_detection_output;
+using mortred::models::io_define::ocr::std_text_regions_output;
+using mortred::models::io_define::scene_segmentation::std_scene_segmentation_output;
 
 namespace {
 
@@ -70,7 +70,7 @@ TEST(response_schema, classification_uses_numeric_class_id_and_scores) {
     out.scores = {0.1f, 0.8f, 0.1f};
 
     auto data = serialize([](AllocatorType& a, rapidjson::Document& d, const std_classification_output& o) {
-        fill_classification(a, d, o, jinq::server::OutputOptions{});
+        fill_classification(a, d, o, mortred::server::OutputOptions{});
     }, out);
 
     expect_only_members(data, {"class_id", "category", "scores"});
@@ -93,7 +93,7 @@ TEST(response_schema, detection_uses_class_id_bbox_and_numeric_score) {
     out.push_back(box);
 
     auto data = serialize([](AllocatorType& a, rapidjson::Document& d, const std_object_detection_output& o) {
-        fill_object_detection(a, d, o, jinq::server::OutputOptions{});
+        fill_object_detection(a, d, o, mortred::server::OutputOptions{});
     }, out);
 
     ASSERT_TRUE(data.IsArray());
@@ -122,7 +122,7 @@ TEST(response_schema, face_detection_uses_landmarks_plural) {
     out.push_back(box);
 
     auto data = serialize([](AllocatorType& a, rapidjson::Document& d, const std_face_detection_output& o) {
-        fill_face_detection(a, d, o, jinq::server::OutputOptions{});
+        fill_face_detection(a, d, o, mortred::server::OutputOptions{});
     }, out);
 
     ASSERT_TRUE(data.IsArray());
@@ -136,14 +136,14 @@ TEST(response_schema, face_detection_uses_landmarks_plural) {
 
 TEST(response_schema, ocr_uses_bbox_and_polygon) {
     std_text_regions_output out;
-    jinq::models::io_define::ocr::text_region region;
+    mortred::models::io_define::ocr::text_region region;
     region.bbox = cv::Rect2f(0, 0, 5, 5);
     region.score = 0.8f;
     region.polygon = {cv::Point2f(0, 0), cv::Point2f(5, 0), cv::Point2f(5, 5), cv::Point2f(0, 5)};
     out.push_back(region);
 
     auto data = serialize([](AllocatorType& a, rapidjson::Document& d, const std_text_regions_output& o) {
-        fill_text_regions(a, d, o, jinq::server::OutputOptions{});
+        fill_text_regions(a, d, o, mortred::server::OutputOptions{});
     }, out);
 
     ASSERT_TRUE(data.IsArray());
@@ -157,7 +157,7 @@ TEST(response_schema, image_outputs_use_image_key) {
     std_scene_segmentation_output seg;
     auto seg_data = serialize(
         [](AllocatorType& a, rapidjson::Document& d, const std_scene_segmentation_output& o) {
-            fill_scene_segmentation(a, d, o, jinq::server::OutputOptions{});
+            fill_scene_segmentation(a, d, o, mortred::server::OutputOptions{});
         },
         seg);
     expect_only_members(seg_data, {"image", "colorized_mask"});
@@ -169,7 +169,7 @@ TEST(response_schema, image_outputs_use_image_key) {
     std_matting_output matting;
     auto matting_data = serialize(
         [](AllocatorType& a, rapidjson::Document& d, const std_matting_output& o) {
-            fill_matting(a, d, o, jinq::server::OutputOptions{});
+            fill_matting(a, d, o, mortred::server::OutputOptions{});
         },
         matting);
     expect_only_members(matting_data, {"image"});
@@ -178,7 +178,7 @@ TEST(response_schema, image_outputs_use_image_key) {
     enhance.enhancement_result = make_small_image();
     auto enhance_data = serialize(
         [](AllocatorType& a, rapidjson::Document& d, const std_enhancement_output& o) {
-            fill_enhancement(a, d, o, jinq::server::OutputOptions{});
+            fill_enhancement(a, d, o, mortred::server::OutputOptions{});
         },
         enhance);
     expect_only_members(enhance_data, {"image"});
@@ -188,7 +188,7 @@ TEST(response_schema, image_outputs_use_image_key) {
     std_mde_output depth;
     auto depth_data = serialize(
         [](AllocatorType& a, rapidjson::Document& d, const std_mde_output& o) {
-            fill_depth_estimation(a, d, o, jinq::server::OutputOptions{});
+            fill_depth_estimation(a, d, o, mortred::server::OutputOptions{});
         },
         depth);
     expect_only_members(depth_data, {"image"});
@@ -202,8 +202,8 @@ TEST(response_schema, image_encoding_option_selects_format) {
     // default options: png magic (0x89 'P' 'N' 'G') -> base64 "iVBOR"
     auto png_data = serialize(
         [](AllocatorType& a, rapidjson::Document& d, const std_enhancement_output& o) {
-            jinq::server::OutputOptions options;
-            options.encoding = jinq::server::OutputOptions::ImageEncoding::PNG;
+            mortred::server::OutputOptions options;
+            options.encoding = mortred::server::OutputOptions::ImageEncoding::PNG;
             fill_enhancement(a, d, o, options);
         },
         out);
@@ -212,8 +212,8 @@ TEST(response_schema, image_encoding_option_selects_format) {
     // jpeg option: JFIF/JPEG magic (0xFF 0xD8) -> base64 "/9j/"
     auto jpeg_data = serialize(
         [](AllocatorType& a, rapidjson::Document& d, const std_enhancement_output& o) {
-            jinq::server::OutputOptions options;
-            options.encoding = jinq::server::OutputOptions::ImageEncoding::JPEG;
+            mortred::server::OutputOptions options;
+            options.encoding = mortred::server::OutputOptions::ImageEncoding::JPEG;
             fill_enhancement(a, d, o, options);
         },
         out);
@@ -222,14 +222,14 @@ TEST(response_schema, image_encoding_option_selects_format) {
 
 TEST(response_schema, feature_points_use_location_and_descriptor) {
     std_feature_point_output out;
-    jinq::models::io_define::feature_point::fp point;
+    mortred::models::io_define::feature_point::fp point;
     point.location = cv::Point2f(3.5f, 4.5f);
     point.score = 0.7f;
     point.descriptor = {0.1f, 0.2f, 0.3f};
     out.push_back(point);
 
     auto data = serialize([](AllocatorType& a, rapidjson::Document& d, const std_feature_point_output& o) {
-        fill_feature_points(a, d, o, jinq::server::OutputOptions{});
+        fill_feature_points(a, d, o, mortred::server::OutputOptions{});
     }, out);
 
     ASSERT_TRUE(data.IsArray());

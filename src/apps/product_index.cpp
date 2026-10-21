@@ -35,13 +35,13 @@
 #include "factory/sam_task.h"
 #include "factory/scene_segmentation_task.h"
 
-namespace jinq {
+namespace mortred {
 namespace apps {
 namespace {
 
-using jinq::apps::benchmark::run_image_family_benchmark;
-using jinq::factory::cv_catalog::CvModelEntry;
-using jinq::factory::model_catalog::ModelCatalogEntry;
+using mortred::apps::benchmark::run_image_family_benchmark;
+using mortred::factory::cv_catalog::CvModelEntry;
+using mortred::factory::model_catalog::ModelCatalogEntry;
 
 void push_unique(std::vector<ProductEntry> *out, std::set<std::string> *seen, ProductEntry entry) {
     if (!seen->insert(entry.id).second) {
@@ -54,7 +54,7 @@ void push_unique(std::vector<ProductEntry> *out, std::set<std::string> *seen, Pr
 template <typename OUTPUT>
 void project_http(std::vector<ProductEntry> *out, std::set<std::string> *seen, const char *family,
                   const std::vector<CvModelEntry<OUTPUT>> &catalog,
-                  jinq::apps::benchmark::ImageFamilyHooks<OUTPUT> hooks) {
+                  mortred::apps::benchmark::ImageFamilyHooks<OUTPUT> hooks) {
     for (const auto &entry : catalog) {
         ProductEntry product;
         product.id = entry.model_section;
@@ -66,7 +66,7 @@ void project_http(std::vector<ProductEntry> *out, std::set<std::string> *seen, c
         const auto captured = entry;
         if (product.http) {
             product.make_server = [captured](const std::string &name) {
-                return jinq::factory::cv_catalog::create_server(captured, name);
+                return mortred::factory::cv_catalog::create_server(captured, name);
             };
         }
         if (product.benchmark) {
@@ -123,28 +123,28 @@ std::vector<ProductEntry> build_index() {
     std::vector<ProductEntry> out;
     std::set<std::string> seen;
 
-    project_http(&out, &seen, "classification", jinq::factory::classification::catalog(),
-                 jinq::apps::benchmark::classification_hooks());
-    project_http(&out, &seen, "object_detection", jinq::factory::object_detection::catalog(),
-                 jinq::apps::benchmark::object_detection_hooks());
-    project_http(&out, &seen, "face_detection", jinq::factory::object_detection::face_catalog(),
-                 jinq::apps::benchmark::face_detection_hooks());
-    project_http(&out, &seen, "scene_segmentation", jinq::factory::scene_segmentation::catalog(),
-                 jinq::apps::benchmark::scene_segmentation_hooks());
-    project_http(&out, &seen, "ocr", jinq::factory::ocr::catalog(), jinq::apps::benchmark::ocr_hooks());
-    project_http(&out, &seen, "matting", jinq::factory::matting::catalog(), jinq::apps::benchmark::matting_hooks());
-    project_http(&out, &seen, "enhancement", jinq::factory::enhancement::catalog(),
-                 jinq::apps::benchmark::enhancement_hooks());
-    project_http(&out, &seen, "feature_point", jinq::factory::feature_point::catalog(),
-                 jinq::apps::benchmark::feature_point_hooks());
-    project_http(&out, &seen, "feature_embedding", jinq::factory::feature_embedding::catalog(),
-                 jinq::apps::benchmark::feature_embedding_hooks());
-    project_http(&out, &seen, "mono_depth_estimation", jinq::factory::mono_depth_estimation::catalog(),
-                 jinq::apps::benchmark::mono_depth_hooks());
-    project_http(&out, &seen, "segment_anything", jinq::factory::segment_anything::amg_catalog(),
-                 jinq::apps::benchmark::sam_amg_hooks());
+    project_http(&out, &seen, "classification", mortred::factory::classification::catalog(),
+                 mortred::apps::benchmark::classification_hooks());
+    project_http(&out, &seen, "object_detection", mortred::factory::object_detection::catalog(),
+                 mortred::apps::benchmark::object_detection_hooks());
+    project_http(&out, &seen, "face_detection", mortred::factory::object_detection::face_catalog(),
+                 mortred::apps::benchmark::face_detection_hooks());
+    project_http(&out, &seen, "scene_segmentation", mortred::factory::scene_segmentation::catalog(),
+                 mortred::apps::benchmark::scene_segmentation_hooks());
+    project_http(&out, &seen, "ocr", mortred::factory::ocr::catalog(), mortred::apps::benchmark::ocr_hooks());
+    project_http(&out, &seen, "matting", mortred::factory::matting::catalog(), mortred::apps::benchmark::matting_hooks());
+    project_http(&out, &seen, "enhancement", mortred::factory::enhancement::catalog(),
+                 mortred::apps::benchmark::enhancement_hooks());
+    project_http(&out, &seen, "feature_point", mortred::factory::feature_point::catalog(),
+                 mortred::apps::benchmark::feature_point_hooks());
+    project_http(&out, &seen, "feature_embedding", mortred::factory::feature_embedding::catalog(),
+                 mortred::apps::benchmark::feature_embedding_hooks());
+    project_http(&out, &seen, "mono_depth_estimation", mortred::factory::mono_depth_estimation::catalog(),
+                 mortred::apps::benchmark::mono_depth_hooks());
+    project_http(&out, &seen, "segment_anything", mortred::factory::segment_anything::amg_catalog(),
+                 mortred::apps::benchmark::sam_amg_hooks());
 
-    for (const auto &entry : jinq::factory::diffusion::catalog()) {
+    for (const auto &entry : mortred::factory::diffusion::catalog()) {
         ProductEntry product;
         product.id = entry.model_section;
         product.family = "diffusion";
@@ -156,39 +156,39 @@ std::vector<ProductEntry> build_index() {
 #endif
         const auto captured = entry;
         product.make_server = [captured](const std::string &name) {
-            return jinq::factory::cv_catalog::create_server(captured, name);
+            return mortred::factory::cv_catalog::create_server(captured, name);
         };
 #ifdef MORTRED_WITH_CUSTOM_DRIVERS
         product.run_benchmark = [id = entry.model_section](int argc, char **argv) {
-            return jinq::apps::benchmark::run_diffusion_family_benchmark(id, argc, argv);
+            return mortred::apps::benchmark::run_diffusion_family_benchmark(id, argc, argv);
         };
 #endif
         push_unique(&out, &seen, std::move(product));
     }
 
 #ifdef MORTRED_WITH_CUSTOM_DRIVERS
-    project_bench_only(&out, &seen, "scene_segmentation", jinq::factory::scene_segmentation::bench_catalog(),
+    project_bench_only(&out, &seen, "scene_segmentation", mortred::factory::scene_segmentation::bench_catalog(),
                        [](const auto &entry, int argc, char **argv) {
-                           return run_image_family_benchmark<jinq::apps::benchmark::SegOutput>(
+                           return run_image_family_benchmark<mortred::apps::benchmark::SegOutput>(
                                entry.model_section, entry.display_name, entry.make_model,
-                               jinq::apps::benchmark::scene_segmentation_hooks(), argc, argv);
+                               mortred::apps::benchmark::scene_segmentation_hooks(), argc, argv);
                        });
 
-    project_bench_only(&out, &seen, "clip", jinq::factory::clip::catalog(),
+    project_bench_only(&out, &seen, "clip", mortred::factory::clip::catalog(),
                        [](const auto &, int argc, char **argv) {
-                           return jinq::apps::benchmark::run_openai_clip_benchmark(argc, argv);
+                           return mortred::apps::benchmark::run_openai_clip_benchmark(argc, argv);
                        });
-    project_bench_only(&out, &seen, "segment_anything", jinq::factory::segment_anything::predictor_catalog(),
+    project_bench_only(&out, &seen, "segment_anything", mortred::factory::segment_anything::predictor_catalog(),
                        [](const auto &, int argc, char **argv) {
-                           return jinq::apps::benchmark::run_sam_predictor_benchmark(argc, argv);
+                           return mortred::apps::benchmark::run_sam_predictor_benchmark(argc, argv);
                        });
-    project_bench_only(&out, &seen, "segment_anything", jinq::factory::segment_anything::fast_sam_catalog(),
+    project_bench_only(&out, &seen, "segment_anything", mortred::factory::segment_anything::fast_sam_catalog(),
                        [](const auto &, int argc, char **argv) {
-                           return jinq::apps::benchmark::run_fast_sam_benchmark(argc, argv);
+                           return mortred::apps::benchmark::run_fast_sam_benchmark(argc, argv);
                        });
-    project_bench_only(&out, &seen, "feature_point", jinq::factory::feature_point::match_catalog(),
+    project_bench_only(&out, &seen, "feature_point", mortred::factory::feature_point::match_catalog(),
                        [](const auto &, int argc, char **argv) {
-                           return jinq::apps::benchmark::run_lightglue_benchmark(argc, argv);
+                           return mortred::apps::benchmark::run_lightglue_benchmark(argc, argv);
                        });
 
     ProductEntry mot;
@@ -198,7 +198,7 @@ std::vector<ProductEntry> build_index() {
     mot.http = false;
     mot.benchmark = true;
     mot.run_benchmark = [](int argc, char **argv) {
-        return jinq::apps::benchmark::run_byte_track_benchmark(argc, argv);
+        return mortred::apps::benchmark::run_byte_track_benchmark(argc, argv);
     };
     push_unique(&out, &seen, std::move(mot));
 #endif
@@ -236,4 +236,4 @@ void ProductIndex::print_list(std::FILE *out) {
 }
 
 } // namespace apps
-} // namespace jinq
+} // namespace mortred

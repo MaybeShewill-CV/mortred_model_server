@@ -17,13 +17,13 @@
 #include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace mono_depth_estimation {
 
-using MdeOutput = jinq::models::io_define::mono_depth_estimation::std_mde_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using MdeOutput = mortred::models::io_define::mono_depth_estimation::std_mde_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode DepthAnything<INPUT, OUTPUT>::on_init(const toml::table &params) {
     // focal_length / intrinsic are accepted for config parity with the metric
@@ -38,12 +38,12 @@ template <typename INPUT, typename OUTPUT> StatusCode DepthAnything<INPUT, OUTPU
     }
     _m_input_size_host.height = static_cast<int>(input_info.shape[2]);
     _m_input_size_host.width = static_cast<int>(input_info.shape[3]);
-    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "depth_anything"));
+    this->set_image_decode_hint(_m_input_size_host, mortred::models::cv_input::parse_image_decode_upscale(params, "depth_anything"));
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::KEEP_RATIO_PAD_ZERO,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::KEEP_RATIO_PAD_ZERO,
         // CPU chain stays BGR (cv::Scalar on the unconverted mat)
-        .norm = jinq::models::backend::bgr_norm(1.0f / 255.0f, {0.406f, 0.456f, 0.485f}, {0.225f, 0.224f, 0.229f}),
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::BGR,
+        .norm = mortred::models::backend::bgr_norm(1.0f / 255.0f, {0.406f, 0.456f, 0.485f}, {0.225f, 0.224f, 0.229f}),
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::BGR,
         .pad_value = 0,
         .output_dtype = input_info.dtype,
         .output_nhwc = false,
@@ -76,7 +76,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> DepthAnythin
 
     // geometry (keep-ratio resize + pad) stays hand-written: ImagePipeline
     // has no padding step; only the packing goes through the toolkit
-    auto result = jinq::models::backend::ImagePipeline(out).nchw(this->session().inputs().front());
+    auto result = mortred::models::backend::ImagePipeline(out).nchw(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};
@@ -86,19 +86,19 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> DepthAnythin
 
 template <typename INPUT, typename OUTPUT>
 StatusCode DepthAnything<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                     const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                     const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "depth anything output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto source_status = jinq::models::backend::validated_source_size(context, "depth anything");
+    const auto source_status = mortred::models::backend::validated_source_size(context, "depth anything");
     if (source_status != StatusCode::OK) {
         return source_status;
     }
-    jinq::models::backend::F32OutputView output_view;
-    const auto output_status = jinq::models::backend::validated_f32_first_output(
-        outputs, {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
-                  jinq::models::backend::TensorLayout::Nchw}, "depth anything",
+    mortred::models::backend::F32OutputView output_view;
+    const auto output_status = mortred::models::backend::validated_f32_first_output(
+        outputs, {mortred::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
+                  mortred::models::backend::TensorLayout::Nchw}, "depth anything",
         &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
@@ -120,7 +120,7 @@ StatusCode DepthAnything<INPUT, OUTPUT>::postprocess(const std::vector<NamedTens
 
     MdeOutput internal_out;
     internal_out.depth_map = depth_map.clone();
-    jinq::common::CvUtils::colorize_depth_map(depth_map, internal_out.colorized_depth_map);
+    mortred::common::CvUtils::colorize_depth_map(depth_map, internal_out.colorized_depth_map);
     output = std::move(internal_out);
     return StatusCode::OK;
 }
@@ -128,8 +128,8 @@ StatusCode DepthAnything<INPUT, OUTPUT>::postprocess(const std::vector<NamedTens
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-DepthAnything<INPUT, OUTPUT>::DepthAnything() : jinq::models::BackendCvModel<INPUT, OUTPUT>("DEPTH_ANYTHING") {}
+DepthAnything<INPUT, OUTPUT>::DepthAnything() : mortred::models::BackendCvModel<INPUT, OUTPUT>("DEPTH_ANYTHING") {}
 
 } // namespace mono_depth_estimation
 } // namespace models
-} // namespace jinq
+} // namespace mortred

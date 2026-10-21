@@ -9,7 +9,7 @@
 
 #include "server/backpressure.h"
 
-using jinq::server::compute_retry_after_seconds;
+using mortred::server::compute_retry_after_seconds;
 
 TEST(backpressure, degenerate_inputs_fall_back_to_one_second) {
     EXPECT_EQ(compute_retry_after_seconds(0, 1000, 4), 1);

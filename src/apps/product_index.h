@@ -16,7 +16,7 @@
 
 #include "server/abstract_server.h"
 
-namespace jinq {
+namespace mortred {
 namespace apps {
 
 /***
@@ -31,7 +31,7 @@ struct ProductEntry {
     std::string server_section;
     bool http = false;
     bool benchmark = false;
-    std::function<std::unique_ptr<jinq::server::BaseAiServer>(const std::string &server_name)> make_server;
+    std::function<std::unique_ptr<mortred::server::BaseAiServer>(const std::string &server_name)> make_server;
     std::function<int(int argc, char **argv)> run_benchmark;
 };
 
@@ -43,6 +43,6 @@ class ProductIndex {
 };
 
 } // namespace apps
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_APPS_PRODUCT_INDEX_H

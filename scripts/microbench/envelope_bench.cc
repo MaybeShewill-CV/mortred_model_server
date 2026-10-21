@@ -14,7 +14,7 @@
 #include "common/base64.h"
 #include "common/request_envelope.h"
 
-using jinq::common::envelope::Request;
+using mortred::common::envelope::Request;
 
 static std::string read_file(const char *path) {
     std::ifstream in(path, std::ios::binary);
@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
     }
     const std::string image = read_file(argv[1]);
     const int reps = argc > 2 ? std::atoi(argv[2]) : 200;
-    const std::string b64 = jinq::common::base64::encode(image.data(), image.size());
+    const std::string b64 = mortred::common::base64::encode(image.data(), image.size());
     std::string body;
     body.reserve(b64.size() + 64);
     body += "{\"images\":[\"";
@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
 
         t0 = now_ms();
         for (const auto &img : req.images) {
-            auto decoded = jinq::common::base64::decode(img);
+            auto decoded = mortred::common::base64::decode(img);
             check_current += decoded.size();
         }
         t_decode += now_ms() - t0;
@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
         for (rapidjson::SizeType i = 0; i < images2.Size(); ++i) {
             const std::string_view view(images2[i].GetString(),
                                         static_cast<size_t>(images2[i].GetStringLength()));
-            auto decoded = jinq::common::base64::decode(view);
+            auto decoded = mortred::common::base64::decode(view);
             check_insitu += decoded.size();
         }
         t_insitu_decode += now_ms() - t0;

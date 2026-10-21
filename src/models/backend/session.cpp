@@ -15,10 +15,10 @@
 #include "models/backend/trt_session.h"
 #endif
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 std::unique_ptr<InferenceSession> InferenceSession::create(const BackendConfig& config,
                                                            std::string* err) {
@@ -72,4 +72,4 @@ std::unique_ptr<InferenceSession> InferenceSession::create(const BackendConfig& 
 
 }  // namespace backend
 }  // namespace models
-}  // namespace jinq
+}  // namespace mortred

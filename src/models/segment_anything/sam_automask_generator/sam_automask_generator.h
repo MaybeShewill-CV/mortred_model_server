@@ -20,10 +20,10 @@
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace segment_anything {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 class SamAmgDecoder;
 class SamVitEncoder;
@@ -32,7 +32,7 @@ class SamVitEncoder;
  * SAM automatic mask generator with independent encoder and AMG decoder
  * sessions.
  */
-template <typename INPUT, typename OUTPUT> class SamAutoMaskGenerator : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class SamAutoMaskGenerator : public mortred::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     SamAutoMaskGenerator();
     ~SamAutoMaskGenerator() override;
@@ -40,19 +40,19 @@ template <typename INPUT, typename OUTPUT> class SamAutoMaskGenerator : public j
     SamAutoMaskGenerator(const SamAutoMaskGenerator &) = delete;
     SamAutoMaskGenerator &operator=(const SamAutoMaskGenerator &) = delete;
 
-    StatusCode generate(const cv::Mat &input_image, jinq::models::io_define::segment_anything::sam_amg_output &amg_output,
-                        const jinq::models::backend::ParamSet *request_params = nullptr);
+    StatusCode generate(const cv::Mat &input_image, mortred::models::io_define::segment_anything::sam_amg_output &amg_output,
+                        const mortred::models::backend::ParamSet *request_params = nullptr);
 
   protected:
     StatusCode on_init(const toml::table &params) override;
 
     StatusCode run_sessions(const INPUT &input, OUTPUT &output) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     // the encoder session is owned here: SamVitEncoder only drives it
-    std::unique_ptr<jinq::models::backend::InferenceSession> _m_encoder_session;
+    std::unique_ptr<mortred::models::backend::InferenceSession> _m_encoder_session;
     std::unique_ptr<SamVitEncoder> _m_encoder;
     std::unique_ptr<SamAmgDecoder> _m_decoder;
     cv::Size _m_encoder_input_size;
@@ -65,7 +65,7 @@ template <typename INPUT, typename OUTPUT> class SamAutoMaskGenerator : public j
 
 } // namespace segment_anything
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "sam_automask_generator.inl"
 

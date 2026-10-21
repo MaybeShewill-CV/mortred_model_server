@@ -167,7 +167,7 @@ def catalog_entry_line(task: str, spec: dict, values: dict) -> str:
         return f'{kind}{{"{section}", "{values["CLASS_NAME"]}", &{creator}<Input, Output>}},'
     return (
         f'{kind}{{"{section}", "{values["CLASS_NAME"]}", "{section}{suffix}", '
-        f'&{creator}<ImageInput, Output>, &jinq::server::response::{filler}}},'
+        f'&{creator}<ImageInput, Output>, &mortred::server::response::{filler}}},'
     )
 
 
@@ -222,7 +222,7 @@ def catalog_snippet(task: str, spec: dict, values: dict) -> str:
         creator_block
         + "\nEntry{\"" + section + "\", \"" + model_class + "\", \"" + section + suffix + "\",\n"
         "      &" + creator + "<ImageInput, Output>,\n"
-        "      &jinq::server::response::" + filler + "},"
+        "      &mortred::server::response::" + filler + "},"
     )
 
 

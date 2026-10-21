@@ -333,7 +333,7 @@ bool GatewayApp::resolve_route(const std::string& path, ResolvedRoute* out) cons
 
 void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
                                   const std::string& method, const std::string& query,
-                                  const std::shared_ptr<jinq::common::stage_timing::StageTrace>& stage_trace,
+                                  const std::shared_ptr<mortred::common::stage_timing::StageTrace>& stage_trace,
                                   const StageClocks& clocks,
                                   std::shared_ptr<const ApiKey> inflight_key) {
     struct ForwardClock {
@@ -630,7 +630,7 @@ bool GatewayApp::admit_source_limit(
     resp->add_header_pair("RateLimit-Remaining", "0");
     resp->add_header_pair("RateLimit-Reset", std::to_string(retry_s).c_str());
     resp->add_header_pair("X-Mortred-RateLimit-Layer", layer);
-    reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED, limited_message);
+    reply_unified_error(task, 429, mortred::common::StatusCode::RATE_LIMITED, limited_message);
     return false;
 }
 
@@ -666,7 +666,7 @@ void GatewayApp::process(WFHttpTask* task) {
     }
     if (path == "/metrics") {
         const std::string auth_header = header_value(task->get_req(), "authorization");
-        if (!jinq::common::is_bearer_authorized(auth_header, metrics_token_)) {
+        if (!mortred::common::is_bearer_authorized(auth_header, metrics_token_)) {
             metrics_.inc_http_requests(method, "401");
             task->get_resp()->add_header_pair("WWW-Authenticate",
                                              "Bearer realm=\"Mortred\"");
@@ -685,8 +685,8 @@ void GatewayApp::process(WFHttpTask* task) {
         return;
     }
 
-    auto stage_trace = jinq::common::stage_timing::enabled()
-                           ? std::make_shared<jinq::common::stage_timing::StageTrace>()
+    auto stage_trace = mortred::common::stage_timing::enabled()
+                           ? std::make_shared<mortred::common::stage_timing::StageTrace>()
                            : nullptr;
     StageClocks clocks;
     clocks.enter = t_enter;
@@ -749,7 +749,7 @@ void GatewayApp::process(WFHttpTask* task) {
                     resp->add_header_pair("RateLimit-Reset", std::to_string(retry_s).c_str());
                 }
                 resp->add_header_pair("X-Mortred-RateLimit-Layer", "api-key-gcra");
-                reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
+                reply_unified_error(task, 429, mortred::common::StatusCode::RATE_LIMITED,
                                     "api key rate limit exceeded");
                 return;
             }
@@ -765,12 +765,12 @@ void GatewayApp::process(WFHttpTask* task) {
     // unauthenticated request must stay denied instead of falling through to
     // the empty static token (fail-open).
     if (!authorized && !auth_token_.empty() &&
-        jinq::common::is_bearer_authorized(auth_header, auth_token_)) {
+        mortred::common::is_bearer_authorized(auth_header, auth_token_)) {
         authorized = true;
         key_name = "legacy";
     }
     if (!authorized && !admin_token_.empty() &&
-        jinq::common::is_bearer_authorized(auth_header, admin_token_)) {
+        mortred::common::is_bearer_authorized(auth_header, admin_token_)) {
         authorized = true;
         key_name = "admin";
     }
@@ -812,7 +812,7 @@ void GatewayApp::process(WFHttpTask* task) {
             auto* resp = task->get_resp();
             mortred::control::ratelimit::apply_rate_limit_headers(
                 resp, 1000, api_key_held->max_queue, "api-key-max-queue", 0);
-            reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
+            reply_unified_error(task, 429, mortred::common::StatusCode::RATE_LIMITED,
                                 "api key max_queue exceeded");
             return;
         }
@@ -827,12 +827,12 @@ void GatewayApp::process(WFHttpTask* task) {
             if (api_key_held->worker_budget > 0 && cur >= api_key_held->worker_budget) {
                 mortred::control::ratelimit::apply_rate_limit_headers(
                     resp, 1000, api_key_held->worker_budget, "api-key-worker-budget", 0);
-                reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
+                reply_unified_error(task, 429, mortred::common::StatusCode::RATE_LIMITED,
                                     "api key worker_budget exceeded");
             } else {
                 mortred::control::ratelimit::apply_rate_limit_headers(
                     resp, 1000, api_key_held->max_inflight, "api-key-max-inflight", 0);
-                reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
+                reply_unified_error(task, 429, mortred::common::StatusCode::RATE_LIMITED,
                                     "api key max_inflight exceeded");
             }
             return;
@@ -888,7 +888,7 @@ bool GatewayApp::init(const GatewayInitOptions& options) {
 // (neither enforce nor shadow). Operators who truly need that set
 // MORTRED_RATE_LIMIT_ALLOW_DISABLE=1.
 if (!rate_limit_enabled_) {
-    const bool public_listen = !jinq::common::is_loopback_host(cfg_.gateway.host);
+    const bool public_listen = !mortred::common::is_loopback_host(cfg_.gateway.host);
     const char* allow = std::getenv("MORTRED_RATE_LIMIT_ALLOW_DISABLE");
     const bool allow_disable = allow != nullptr && allow[0] != '\0'
         && (std::string(allow) == "1" || std::string(allow) == "true");
@@ -954,14 +954,14 @@ if (!rate_limit_enabled_) {
         }
     }
 
-    if (!jinq::common::listen_host_permitted(cfg_.gateway.host)) {
+    if (!mortred::common::listen_host_permitted(cfg_.gateway.host)) {
         std::fprintf(stderr,
                      "mortred-gateway: refusing to listen on %s (MORTRED_EXPOSE=%s). "
                      "Bind 127.0.0.1 and terminate TLS at Nginx (deploy/nginx). "
                      "Containers: MORTRED_EXPOSE=docker. Metal wildcard: MORTRED_EXPOSE=unsafe "
                      "(plaintext; doctor --strict fails)\n",
                      cfg_.gateway.host.c_str(),
-                     jinq::common::mortred_expose_mode().c_str());
+                     mortred::common::mortred_expose_mode().c_str());
         return false;
     }
     const auto listen = tokens_usable_for_listen(metrics_token_, auth_token_, admin_token_);
@@ -1080,7 +1080,7 @@ int GatewayApp::run(int argc, char** argv) {
         return 1;
     }
 
-    jinq::common::ProcessStop process_stop;
+    mortred::common::ProcessStop process_stop;
     process_stop.arm();
 
     if (!listen()) {
@@ -1092,7 +1092,7 @@ int GatewayApp::run(int argc, char** argv) {
                  "mortred-gateway listening on http://%s:%d (routes: %zu) [%s, metrics scrape "
                  "token, expose=%s]\n",
                  cfg_.gateway.host.c_str(), cfg_.gateway.port, catalog_.entries().size(),
-                 auth_mode, jinq::common::mortred_expose_mode().c_str());
+                 auth_mode, mortred::common::mortred_expose_mode().c_str());
 
     process_stop.wait();
     // drain before cutting the socket: /ready -> 503 pulls this instance from

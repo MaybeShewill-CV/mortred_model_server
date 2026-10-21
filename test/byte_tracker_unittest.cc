@@ -15,16 +15,16 @@
 #include "models/mot/byte_tracker/lapjv.h"
 #include "models/mot/byte_tracker/strack.h"
 
-using jinq::common::StatusCode;
-using jinq::models::mot::byte_tracker::ByteTracker;
-using jinq::models::mot::byte_tracker::DETECTBOX;
-using jinq::models::mot::byte_tracker::KalmanFilter;
-using jinq::models::mot::byte_tracker::STrack;
-using jinq::models::mot::byte_tracker::TrackState;
-using jinq::models::mot::byte_tracker::cost_t;
-using jinq::models::mot::byte_tracker::int_t;
-using jinq::models::mot::byte_tracker::lapjv_internal;
-using jinq::models::io_define::object_detection::bbox;
+using mortred::common::StatusCode;
+using mortred::models::mot::byte_tracker::ByteTracker;
+using mortred::models::mot::byte_tracker::DETECTBOX;
+using mortred::models::mot::byte_tracker::KalmanFilter;
+using mortred::models::mot::byte_tracker::STrack;
+using mortred::models::mot::byte_tracker::TrackState;
+using mortred::models::mot::byte_tracker::cost_t;
+using mortred::models::mot::byte_tracker::int_t;
+using mortred::models::mot::byte_tracker::lapjv_internal;
+using mortred::models::io_define::object_detection::bbox;
 
 TEST(kalman_filter, initiate_shapes_and_values) {
     KalmanFilter kf;

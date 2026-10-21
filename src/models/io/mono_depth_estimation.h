@@ -15,7 +15,7 @@
 
 #include <opencv2/core.hpp>
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace io_define {
 namespace mono_depth_estimation {
@@ -32,6 +32,6 @@ using std_mde_output = mde_output;
 } // namespace mono_depth_estimation
 } // namespace io_define
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_IO_MONO_DEPTH_ESTIMATION_H

@@ -16,13 +16,13 @@
 #include "models/object_detection/detector_common.h"
 #include "models/object_detection/yolo_decode.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace object_detection {
 
-using DetectionOutput = jinq::models::io_define::object_detection::std_object_detection_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using DetectionOutput = mortred::models::io_define::object_detection::std_object_detection_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode YoloV7Detector<INPUT, OUTPUT>::on_init(const toml::table &params) {
     _m_detection_params.score_threshold = 0.4f;
@@ -63,13 +63,13 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV7Detect
 
 template <typename INPUT, typename OUTPUT>
 StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                      const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                      const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     // Three raw heads [1, 3, H, W, C]. Official yolov7.mnn names them
     // output/518/532 (80/40/20). yolov7x ONNX uses output/598/612 for the
     // same grids, so bind by descending spatial size when those names are absent.
-    std::array<const NamedTensor *, 3> heads = {jinq::models::backend::find_output(outputs, "output"),
-                                                jinq::models::backend::find_output(outputs, "518"),
-                                                jinq::models::backend::find_output(outputs, "532")};
+    std::array<const NamedTensor *, 3> heads = {mortred::models::backend::find_output(outputs, "output"),
+                                                mortred::models::backend::find_output(outputs, "518"),
+                                                mortred::models::backend::find_output(outputs, "532")};
     if (std::any_of(heads.begin(), heads.end(), [](const NamedTensor *head) { return head == nullptr; })) {
         std::vector<const NamedTensor *> ranked;
         ranked.reserve(outputs.size());
@@ -116,8 +116,8 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
     for (std::size_t hi = 0; hi < heads.size(); ++hi) {
         const auto &shape = heads[hi]->tensor.shape;
         std::string contract_error;
-        if (!jinq::models::backend::validate_output_tensor(
-                *heads[hi], {jinq::models::backend::DType::F32, 5, {1, 3, -1, -1, contract_attrs}}, &contract_error)) {
+        if (!mortred::models::backend::validate_output_tensor(
+                *heads[hi], {mortred::models::backend::DType::F32, 5, {1, 3, -1, -1, contract_attrs}}, &contract_error)) {
             LOG(ERROR) << "yolov7 output contract failed for head " << hi << ": " << contract_error;
             return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
         }
@@ -126,8 +126,8 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
         const int grid_w = static_cast<int>(shape[3]);
         const int attrs = static_cast<int>(shape[4]);
         const float *data = nullptr;
-        if (!jinq::models::backend::get_f32_data(heads[hi]->tensor, &data, &contract_error) ||
-            !jinq::models::backend::require_finite_f32(data, heads[hi]->tensor.element_count(), heads[hi]->name, &contract_error)) {
+        if (!mortred::models::backend::get_f32_data(heads[hi]->tensor, &data, &contract_error) ||
+            !mortred::models::backend::require_finite_f32(data, heads[hi]->tensor.element_count(), heads[hi]->name, &contract_error)) {
             LOG(ERROR) << "yolov7 output contract failed for head " << hi << ": " << contract_error;
             return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
         }
@@ -146,8 +146,8 @@ StatusCode YoloV7Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-YoloV7Detector<INPUT, OUTPUT>::YoloV7Detector() : jinq::models::BackendCvModel<INPUT, OUTPUT>("YOLOV7") {}
+YoloV7Detector<INPUT, OUTPUT>::YoloV7Detector() : mortred::models::BackendCvModel<INPUT, OUTPUT>("YOLOV7") {}
 
 } // namespace object_detection
 } // namespace models
-} // namespace jinq
+} // namespace mortred

@@ -10,15 +10,15 @@
 #include "models/classification/mobilenetv2.h"
 #include "models/classification/resnet.h"
 
-namespace jinq {
+namespace mortred {
 namespace factory {
 namespace classification {
 
-using jinq::models::BaseAiModel;
+using mortred::models::BaseAiModel;
 
-using jinq::models::classification::DenseNet;
-using jinq::models::classification::MobileNetv2;
-using jinq::models::classification::ResNet;
+using mortred::models::classification::DenseNet;
+using mortred::models::classification::MobileNetv2;
+using mortred::models::classification::ResNet;
 
 template <typename INPUT, typename OUTPUT>
 std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_mobilenetv2_classifier() {
@@ -35,16 +35,16 @@ std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_densenet_classifier() {
     return std::make_unique<DenseNet<INPUT, OUTPUT>>();
 }
 
-using Output = jinq::models::io_define::classification::std_classification_output;
-using jinq::server::ImageInput;
-using Entry = jinq::factory::cv_catalog::CvModelEntry<Output>;
+using Output = mortred::models::io_define::classification::std_classification_output;
+using mortred::server::ImageInput;
+using Entry = mortred::factory::cv_catalog::CvModelEntry<Output>;
 
 /*** request-overridable classification parameters: top_k keeps the k highest
  * scores (descending) and shrinks the response payload; the full class-index
  * ordered array is the legacy/default behavior */
-inline const std::vector<jinq::models::backend::ParamSpec> &classification_param_specs() {
-    static const std::vector<jinq::models::backend::ParamSpec> specs = {
-        jinq::models::backend::ParamSpec::i32("top_k").range(1, 1000).desc("keep the k highest scores, descending"),
+inline const std::vector<mortred::models::backend::ParamSpec> &classification_param_specs() {
+    static const std::vector<mortred::models::backend::ParamSpec> specs = {
+        mortred::models::backend::ParamSpec::i32("top_k").range(1, 1000).desc("keep the k highest scores, descending"),
     };
     return specs;
 }
@@ -52,18 +52,18 @@ inline const std::vector<jinq::models::backend::ParamSpec> &classification_param
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
         Entry{"mobilenetv2", "Mobilenetv2 classification", "MOBILENETV2_CLASSIFICATION_SERVER",
-              &create_mobilenetv2_classifier<ImageInput, Output>, &jinq::server::response::fill_classification,
+              &create_mobilenetv2_classifier<ImageInput, Output>, &mortred::server::response::fill_classification,
               classification_param_specs(), "mobilenetv2"},
         Entry{"resnet", "Resnet classification", "RESNET_CLASSIFICATION_SERVER", &create_resnet_classifier<ImageInput, Output>,
-              &jinq::server::response::fill_classification, classification_param_specs(), "resnet"},
+              &mortred::server::response::fill_classification, classification_param_specs(), "resnet"},
         Entry{"densenet", "Densenet classification", "DENSENET_CLASSIFICATION_SERVER", &create_densenet_classifier<ImageInput, Output>,
-              &jinq::server::response::fill_classification, classification_param_specs(), "densenet"},
+              &mortred::server::response::fill_classification, classification_param_specs(), "densenet"},
     };
     return entries;
 }
 
 } // namespace classification
 } // namespace factory
-} // namespace jinq
+} // namespace mortred
 
 #endif

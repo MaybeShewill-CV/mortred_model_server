@@ -16,10 +16,10 @@
 #include "models/backend/backend_config.h"
 #include "models/backend/tensor.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /***
  * Metadata of one model io tensor. shape may contain -1 dims for dynamic
@@ -88,6 +88,6 @@ class InferenceSession {
 
 }  // namespace backend
 }  // namespace models
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_MODELS_BACKEND_SESSION_H

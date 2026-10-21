@@ -18,10 +18,10 @@
 #include "models/backend/session.h"
 #include "models/backend/tensor.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace segment_anything {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /***
  * SAM prompt decoder backed by the unified inference-session layer. ONNX
@@ -30,7 +30,7 @@ using jinq::common::StatusCode;
  */
 class SamPromptDecoder {
   public:
-    explicit SamPromptDecoder(jinq::models::backend::InferenceSession *session);
+    explicit SamPromptDecoder(mortred::models::backend::InferenceSession *session);
     ~SamPromptDecoder();
 
     SamPromptDecoder(const SamPromptDecoder &) = delete;
@@ -52,11 +52,11 @@ class SamPromptDecoder {
 
   protected:
     /*** Missing iou or both mask outputs → MODEL_EMPTY_OUTPUT; present but bad rank → CONTRACT. */
-    static StatusCode classify_decoder_outputs(const std::vector<jinq::models::backend::NamedTensor> &outputs);
+    static StatusCode classify_decoder_outputs(const std::vector<mortred::models::backend::NamedTensor> &outputs);
 
-    static StatusCode classify_full_mask_tensor(const jinq::models::backend::Tensor &tensor);
+    static StatusCode classify_full_mask_tensor(const mortred::models::backend::Tensor &tensor);
 
-    static StatusCode classify_low_res_mask_tensor(const jinq::models::backend::Tensor &tensor);
+    static StatusCode classify_low_res_mask_tensor(const mortred::models::backend::Tensor &tensor);
 
   private:
     class Impl;
@@ -65,6 +65,6 @@ class SamPromptDecoder {
 
 } // namespace segment_anything
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODEL_SERVER_SAM_PROMPT_DECODER_H

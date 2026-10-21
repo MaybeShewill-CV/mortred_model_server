@@ -11,7 +11,7 @@
 #include <ostream>
 #include <string>
 
-namespace jinq {
+namespace mortred {
 namespace common {
 
 // single source of truth: enumerators, wire codes and messages are kept together.
@@ -69,6 +69,6 @@ inline std::string status_code_to_str(StatusCode code) {
 inline std::ostream &operator<<(std::ostream &os, StatusCode code) { return os << static_cast<int>(code); }
 
 } // namespace common
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODEL_SERVER_STATUSCODE_H

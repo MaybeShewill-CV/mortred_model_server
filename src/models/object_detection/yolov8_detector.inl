@@ -12,13 +12,13 @@
 #include "models/object_detection/detector_common.h"
 #include "models/object_detection/yolo_decode.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace object_detection {
 
-using DetectionOutput = jinq::models::io_define::object_detection::std_object_detection_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using DetectionOutput = mortred::models::io_define::object_detection::std_object_detection_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode YoloV8Detector<INPUT, OUTPUT>::on_init(const toml::table &params) {
     _m_detection_params.score_threshold = 0.4f;
@@ -59,10 +59,10 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> YoloV8Detect
 
 template <typename INPUT, typename OUTPUT>
 StatusCode YoloV8Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                      const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                      const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     F32OutputView output_view;
     const auto output_status = backend::validated_f32_named_output(
-        outputs, "output0", {jinq::models::backend::DType::F32, 3, {1, _m_detection_params.class_nums + 4, -1}}, "yolov8", &output_view);
+        outputs, "output0", {mortred::models::backend::DType::F32, 3, {1, _m_detection_params.class_nums + 4, -1}}, "yolov8", &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
     }
@@ -90,8 +90,8 @@ StatusCode YoloV8Detector<INPUT, OUTPUT>::postprocess(const std::vector<NamedTen
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-YoloV8Detector<INPUT, OUTPUT>::YoloV8Detector() : jinq::models::BackendCvModel<INPUT, OUTPUT>("YOLOV8") {}
+YoloV8Detector<INPUT, OUTPUT>::YoloV8Detector() : mortred::models::BackendCvModel<INPUT, OUTPUT>("YOLOV8") {}
 
 } // namespace object_detection
 } // namespace models
-} // namespace jinq
+} // namespace mortred

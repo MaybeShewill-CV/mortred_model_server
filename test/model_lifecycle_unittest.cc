@@ -31,21 +31,21 @@
 
 namespace {
 
-using jinq::common::StatusCode;
-using jinq::models::io_define::classification::std_classification_output;
-using jinq::models::io_define::common_io::mat_input;
-using jinq::models::io_define::diffusion::std_cls_cond_ddpm_unet_input;
-using jinq::models::io_define::diffusion::std_cls_cond_ddpm_unet_output;
-using jinq::models::io_define::diffusion::std_ddpm_unet_input;
-using jinq::models::io_define::diffusion::std_ddpm_unet_output;
-using jinq::models::io_define::diffusion::std_vae_decode_input;
-using jinq::models::io_define::diffusion::std_vae_decode_output;
-using jinq::models::io_define::mono_depth_estimation::std_mde_output;
-using jinq::models::io_define::object_detection::std_object_detection_output;
-using jinq::models::io_define::segment_anything::sam_prompt_input;
-using jinq::models::io_define::segment_anything::sam_amg_output;
-using jinq::models::io_define::segment_anything::std_sam_prompt_output;
-using jinq::models::io_define::scene_segmentation::std_scene_segmentation_output;
+using mortred::common::StatusCode;
+using mortred::models::io_define::classification::std_classification_output;
+using mortred::models::io_define::common_io::mat_input;
+using mortred::models::io_define::diffusion::std_cls_cond_ddpm_unet_input;
+using mortred::models::io_define::diffusion::std_cls_cond_ddpm_unet_output;
+using mortred::models::io_define::diffusion::std_ddpm_unet_input;
+using mortred::models::io_define::diffusion::std_ddpm_unet_output;
+using mortred::models::io_define::diffusion::std_vae_decode_input;
+using mortred::models::io_define::diffusion::std_vae_decode_output;
+using mortred::models::io_define::mono_depth_estimation::std_mde_output;
+using mortred::models::io_define::object_detection::std_object_detection_output;
+using mortred::models::io_define::segment_anything::sam_prompt_input;
+using mortred::models::io_define::segment_anything::sam_amg_output;
+using mortred::models::io_define::segment_anything::std_sam_prompt_output;
+using mortred::models::io_define::scene_segmentation::std_scene_segmentation_output;
 
 cv::Mat make_test_image() {
     return cv::Mat(8, 8, CV_8UC3, cv::Scalar(30, 60, 90));
@@ -68,7 +68,7 @@ toml::table parse_toml_or_fail(const std::string& content) {
  ************************************************/
 
 TEST(ModelLifecycleGuard, RunBeforeInitReturnsInitFailed) {
-    jinq::models::classification::MobileNetv2<mat_input, std_classification_output> model;
+    mortred::models::classification::MobileNetv2<mat_input, std_classification_output> model;
     mat_input in{make_test_image()};
     std_classification_output out;
     EXPECT_FALSE(model.is_successfully_initialized());
@@ -76,7 +76,7 @@ TEST(ModelLifecycleGuard, RunBeforeInitReturnsInitFailed) {
 }
 
 TEST(ModelLifecycleGuard, RunAfterFailedInitReturnsInitFailed) {
-    jinq::models::classification::MobileNetv2<mat_input, std_classification_output> model;
+    mortred::models::classification::MobileNetv2<mat_input, std_classification_output> model;
     toml::table empty_cfg;
     EXPECT_EQ(model.init(empty_cfg), StatusCode::MODEL_INIT_FAILED);
 
@@ -90,13 +90,13 @@ TEST(ModelLifecycleGuard, RunAfterFailedInitReturnsInitFailed) {
  ************************************************/
 
 TEST(BackendConfigGuard, DdpmUnetEmptyConfigFailsCleanly) {
-    jinq::models::diffusion::DDPMUNet<std_ddpm_unet_input, std_ddpm_unet_output> model;
+    mortred::models::diffusion::DDPMUNet<std_ddpm_unet_input, std_ddpm_unet_output> model;
     toml::table empty_cfg;
     EXPECT_EQ(model.init(empty_cfg), StatusCode::MODEL_INIT_FAILED);
 }
 
 TEST(BackendConfigGuard, DdpmUnetUnknownBackendNameFailsCleanly) {
-    jinq::models::diffusion::DDPMUNet<std_ddpm_unet_input, std_ddpm_unet_output> model;
+    mortred::models::diffusion::DDPMUNet<std_ddpm_unet_input, std_ddpm_unet_output> model;
     auto cfg = parse_toml_or_fail(R"toml(
 [DDPM_UNET]
 [DDPM_UNET.backend]
@@ -107,45 +107,45 @@ model_file_path="whatever.engine"
 }
 
 TEST(BackendConfigGuard, ClsCondDdpmUnetEmptyConfigFailsCleanly) {
-    jinq::models::diffusion::ClsCondDDPMUNet<std_cls_cond_ddpm_unet_input,
+    mortred::models::diffusion::ClsCondDDPMUNet<std_cls_cond_ddpm_unet_input,
                                              std_cls_cond_ddpm_unet_output> model;
     toml::table empty_cfg;
     EXPECT_EQ(model.init(empty_cfg), StatusCode::MODEL_INIT_FAILED);
 }
 
 TEST(BackendConfigGuard, AutoencoderKlEmptyConfigFailsCleanly) {
-    jinq::models::diffusion::AutoEncoderKL<std_vae_decode_input, std_vae_decode_output> model;
+    mortred::models::diffusion::AutoEncoderKL<std_vae_decode_input, std_vae_decode_output> model;
     toml::table empty_cfg;
     EXPECT_EQ(model.init(empty_cfg), StatusCode::MODEL_INIT_FAILED);
 }
 
 TEST(BackendConfigGuard, HrnetEmptyConfigFailsCleanly) {
-    jinq::models::scene_segmentation::HRNetSegmentation<mat_input,
+    mortred::models::scene_segmentation::HRNetSegmentation<mat_input,
                                                         std_scene_segmentation_output> model;
     toml::table empty_cfg;
     EXPECT_EQ(model.init(empty_cfg), StatusCode::MODEL_INIT_FAILED);
 }
 
 TEST(BackendConfigGuard, Metric3dEmptyConfigFailsCleanly) {
-    jinq::models::mono_depth_estimation::Metric3D<mat_input, std_mde_output> model;
+    mortred::models::mono_depth_estimation::Metric3D<mat_input, std_mde_output> model;
     toml::table empty_cfg;
     EXPECT_EQ(model.init(empty_cfg), StatusCode::MODEL_INIT_FAILED);
 }
 
 TEST(BackendConfigGuard, DepthAnythingEmptyConfigFailsCleanly) {
-    jinq::models::mono_depth_estimation::DepthAnything<mat_input, std_mde_output> model;
+    mortred::models::mono_depth_estimation::DepthAnything<mat_input, std_mde_output> model;
     toml::table empty_cfg;
     EXPECT_EQ(model.init(empty_cfg), StatusCode::MODEL_INIT_FAILED);
 }
 
 TEST(BackendConfigGuard, MsocrnetEmptyConfigFailsCleanly) {
-    jinq::models::scene_segmentation::MsOcrNet<mat_input, std_scene_segmentation_output> model;
+    mortred::models::scene_segmentation::MsOcrNet<mat_input, std_scene_segmentation_output> model;
     toml::table empty_cfg;
     EXPECT_EQ(model.init(empty_cfg), StatusCode::MODEL_INIT_FAILED);
 }
 
 TEST(BackendConfigGuard, Yolov8UnknownBackendNameFailsCleanly) {
-    jinq::models::object_detection::YoloV8Detector<mat_input, std_object_detection_output> model;
+    mortred::models::object_detection::YoloV8Detector<mat_input, std_object_detection_output> model;
     auto cfg = parse_toml_or_fail(R"toml(
 [YOLOV8]
 [YOLOV8.backend]
@@ -156,14 +156,14 @@ model_file_path="whatever.engine"
 }
 
 TEST(BackendConfigGuard, SamPredictorEmptyConfigFailsCleanly) {
-    jinq::models::segment_anything::SamPredictor<sam_prompt_input,
+    mortred::models::segment_anything::SamPredictor<sam_prompt_input,
                                                   std_sam_prompt_output> model;
     toml::table empty_cfg;
     EXPECT_EQ(model.init(empty_cfg), StatusCode::MODEL_INIT_FAILED);
 }
 
 TEST(BackendConfigGuard, SamAutoMaskGeneratorEmptyConfigFailsCleanly) {
-    jinq::models::segment_anything::SamAutoMaskGenerator<mat_input, sam_amg_output> model;
+    mortred::models::segment_anything::SamAutoMaskGenerator<mat_input, sam_amg_output> model;
     toml::table empty_cfg;
     EXPECT_EQ(model.init(empty_cfg), StatusCode::MODEL_INIT_FAILED);
 }

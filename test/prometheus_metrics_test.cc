@@ -15,9 +15,9 @@
 #include "common/status_code.h"
 #include "server/prometheus_metrics.h"
 
-using jinq::common::StatusCode;
-using jinq::common::to_underlying;
-using jinq::server::PrometheusMetrics;
+using mortred::common::StatusCode;
+using mortred::common::to_underlying;
+using mortred::server::PrometheusMetrics;
 
 namespace {
 
@@ -263,7 +263,7 @@ int main(int argc, char **argv) {
 }
 
 TEST(PrometheusMetricsTest, waiting_depth_bound_to_atomic_shows_live_value) {
-    jinq::server::PrometheusMetrics m;
+    mortred::server::PrometheusMetrics m;
     m.set_model("demo");
     m.set_queue_depth(7);
     m.set_waiting_jobs(7);

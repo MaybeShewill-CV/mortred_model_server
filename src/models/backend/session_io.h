@@ -15,7 +15,7 @@
 #include "common/status_code.h"
 #include "models/backend/session.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
 
@@ -147,6 +147,6 @@ inline StatusCode require_output_count(size_t expected, size_t actual, const cha
 
 }  // namespace backend
 }  // namespace models
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_MODELS_BACKEND_SESSION_IO_H

@@ -29,7 +29,7 @@
 #include <utility>
 #include <vector>
 
-namespace jinq {
+namespace mortred {
 namespace common {
 namespace stage_timing {
 
@@ -133,6 +133,6 @@ inline void annotate(const char* key, const char* value) {
 
 }  // namespace stage_timing
 }  // namespace common
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_COMMON_STAGE_TIMING_H

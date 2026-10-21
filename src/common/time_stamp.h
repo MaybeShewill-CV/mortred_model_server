@@ -12,7 +12,7 @@
 #include <cstdint>
 #include <string>
 
-namespace jinq {
+namespace mortred {
 namespace common {
 
 // thin wrapper over system_clock time_point with microsecond precision
@@ -79,6 +79,6 @@ inline double operator-(const Timestamp& high, const Timestamp& low) {
 }
 
 }  // namespace common
-}  // namespace jinq
+}  // namespace mortred
 
 #endif //MORTRED_MODEL_SERVER_TIMESTAMP_H

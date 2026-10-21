@@ -7,9 +7,9 @@
 #include "models/segment_anything/sam_prediction/sam_prompt_decoder.h"
 #include "models/segment_anything/sam_prediction/sam_vit_encoder.h"
 
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
 
 namespace {
 
@@ -25,8 +25,8 @@ template <typename T> class CallableSamPromptDecoder : public T {
     using T::classify_low_res_mask_tensor;
 };
 
-using TestEncoder = CallableSamVitEncoder<jinq::models::segment_anything::SamVitEncoder>;
-using TestDecoder = CallableSamPromptDecoder<jinq::models::segment_anything::SamPromptDecoder>;
+using TestEncoder = CallableSamVitEncoder<mortred::models::segment_anything::SamVitEncoder>;
+using TestDecoder = CallableSamPromptDecoder<mortred::models::segment_anything::SamPromptDecoder>;
 
 NamedTensor make_named(const std::string &name, Tensor tensor) {
     NamedTensor named;
@@ -38,7 +38,7 @@ NamedTensor make_named(const std::string &name, Tensor tensor) {
 NamedTensor zero_element_f32(const std::string &name) {
     NamedTensor named;
     named.name = name;
-    named.tensor.dtype = jinq::models::backend::DType::F32;
+    named.tensor.dtype = mortred::models::backend::DType::F32;
     named.tensor.shape = {1, 0, 2, 2};
     return named;
 }

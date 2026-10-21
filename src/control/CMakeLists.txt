@@ -23,7 +23,7 @@ if(MORTRED_WORKFLOW_AVAILABLE)
         supervisor/supervisor_app.cpp
     )
     # `common` propagates the src/ + 3rd_party/include scopes (header-only
-    # jinq::common helpers, server/prometheus_metrics.h); vendored::crypto is
+    # mortred::common helpers, server/prometheus_metrics.h); vendored::crypto is
     # the inlined OpenSSL SHA-256 of ApiKeyManager
     target_link_libraries(control_workflow
         PUBLIC control common vendored::workflow vendored::crypto Threads::Threads)

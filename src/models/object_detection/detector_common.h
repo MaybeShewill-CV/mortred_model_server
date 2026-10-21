@@ -18,11 +18,11 @@
 #include "models/cv_image_input.h"
 #include "models/object_detection/detection_params.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace object_detection {
 
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /***
  * Request-scoped scale from the network input space to the source image space.
@@ -45,7 +45,7 @@ inline void unmap_letterbox_detections(std::vector<T> &detections, const backend
  * Model-specific decoding deliberately remains in each detector.
  */
 template <typename T> inline std::vector<T> finalize_detections(std::vector<T> detections, const DetectionParams &params) {
-    auto result = jinq::common::CvUtils::nms_boxes_per_class(detections, params.score_threshold, params.nms_threshold);
+    auto result = mortred::common::CvUtils::nms_boxes_per_class(detections, params.score_threshold, params.nms_threshold);
     if (result.size() > static_cast<size_t>(params.keep_top_k)) {
         result.resize(static_cast<size_t>(params.keep_top_k));
     }
@@ -154,7 +154,7 @@ inline bool make_nchw_input(const std::string &input_name, const cv::Mat &image,
         return false;
     }
 
-    const auto chw_data = jinq::common::CvUtils::convert_to_chw_vec(image);
+    const auto chw_data = mortred::common::CvUtils::convert_to_chw_vec(image);
     output->name = input_name;
     output->tensor = backend::Tensor::make<float>({1, 3, image.rows, image.cols});
     if (chw_data.size() * sizeof(float) != output->tensor.byte_size()) {
@@ -167,6 +167,6 @@ inline bool make_nchw_input(const std::string &input_name, const cv::Mat &image,
 
 } // namespace object_detection
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_OBJECT_DETECTION_DETECTOR_COMMON_H

@@ -19,10 +19,10 @@
 #include "models/backend/backend_config.h"
 #include "models/backend/session.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace backend {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /***
  * RAII MNN inference session. Owns the interpreter and session, caches the
@@ -67,6 +67,6 @@ class MnnSession : public InferenceSession {
 
 }  // namespace backend
 }  // namespace models
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_MODELS_BACKEND_MNN_SESSION_H

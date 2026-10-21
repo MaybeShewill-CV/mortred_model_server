@@ -14,13 +14,13 @@
 #include "models/backend/f32_output.h"
 #include "models/backend/model_runtime.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace enhancement {
 
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
-using jinq::models::io_define::enhancement::std_enhancement_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
+using mortred::models::io_define::enhancement::std_enhancement_output;
 
 template <typename INPUT, typename OUTPUT> StatusCode RealEsrGan<INPUT, OUTPUT>::on_init(const toml::table &params) {
     (void)params;
@@ -34,9 +34,9 @@ template <typename INPUT, typename OUTPUT> StatusCode RealEsrGan<INPUT, OUTPUT>:
     // network H/W, so the decode hint stays empty
     this->set_image_decode_hint(cv::Size(), 1.0f);
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::NONE,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::NONE,
         .norm = {.scale = 1.0f / 255.0f},
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .output_dtype = inputs.front().dtype,
         .output_nhwc = true,
@@ -47,9 +47,9 @@ template <typename INPUT, typename OUTPUT> StatusCode RealEsrGan<INPUT, OUTPUT>:
 }
 
 template <typename INPUT, typename OUTPUT>
-jinq::models::backend::PreparedInput RealEsrGan<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
-    jinq::models::backend::PreparedInput prepared;
-    if constexpr (std::is_same<INPUT, jinq::models::io_define::common_io::image_input>::value) {
+mortred::models::backend::PreparedInput RealEsrGan<INPUT, OUTPUT>::prepare_inputs(const INPUT &input) {
+    mortred::models::backend::PreparedInput prepared;
+    if constexpr (std::is_same<INPUT, mortred::models::io_define::common_io::image_input>::value) {
         prepared.context.params = input.params;
     }
     cv::Mat image = this->load_model_image(input, &prepared.status, &prepared.error);
@@ -57,7 +57,7 @@ jinq::models::backend::PreparedInput RealEsrGan<INPUT, OUTPUT>::prepare_inputs(c
         if (prepared.status == StatusCode::OK) {
             prepared.status = StatusCode::MODEL_EMPTY_INPUT_IMAGE;
         }
-        return jinq::models::backend::PreparedInput::invalid(prepared.status,
+        return mortred::models::backend::PreparedInput::invalid(prepared.status,
                                                              prepared.error.empty() ? "input image is empty" : prepared.error);
     }
 
@@ -67,14 +67,14 @@ jinq::models::backend::PreparedInput RealEsrGan<INPUT, OUTPUT>::prepare_inputs(c
     const bool channels_ok = image.channels() == 3 || image.channels() == 4;
     if (channels_ok && (image.rows != 256 || image.cols != 256)) {
         LOG(ERROR) << "real esrgan input size rejected: " << image.size();
-        return jinq::models::backend::PreparedInput::invalid(
-            StatusCode::MODEL_INPUT_SIZE_REJECTED, jinq::common::status_code_to_str(StatusCode::MODEL_INPUT_SIZE_REJECTED));
+        return mortred::models::backend::PreparedInput::invalid(
+            StatusCode::MODEL_INPUT_SIZE_REJECTED, mortred::common::status_code_to_str(StatusCode::MODEL_INPUT_SIZE_REJECTED));
     }
 
     prepared.inputs = preprocess(image);
-    jinq::common::stage_timing::mark("pre");
+    mortred::common::stage_timing::mark("pre");
     if (prepared.inputs.empty()) {
-        return jinq::models::backend::PreparedInput::invalid(StatusCode::MODEL_EMPTY_INPUT_IMAGE,
+        return mortred::models::backend::PreparedInput::invalid(StatusCode::MODEL_EMPTY_INPUT_IMAGE,
                                                              "model preprocess produced no input tensors");
     }
     prepared.context.source_size = image.size();
@@ -91,7 +91,7 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> RealEsrGan<I
 
     // BGRA/BGR -> RGB -> f32 -> [0,1]; no resize: the network runs at the
     // request resolution, so the tensor shape follows the source image
-    auto pipeline = jinq::models::backend::ImagePipeline(input_image);
+    auto pipeline = mortred::models::backend::ImagePipeline(input_image);
     if (input_image.channels() == 4) {
         pipeline.bgra_to_rgb();
     } else {
@@ -107,28 +107,28 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> RealEsrGan<I
 
 template <typename INPUT, typename OUTPUT>
 StatusCode RealEsrGan<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                  const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
+                                                  const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "real esrgan output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
     const auto &tensor = outputs.front().tensor;
-    jinq::models::backend::F32OutputView output_view;
-    const auto output_status = jinq::models::backend::validated_f32_first_output(
-        outputs, {jinq::models::backend::DType::F32, 4, {1, 3, -1, -1}, jinq::models::backend::TensorLayout::Nchw}, "real esrgan", &output_view);
+    mortred::models::backend::F32OutputView output_view;
+    const auto output_status = mortred::models::backend::validated_f32_first_output(
+        outputs, {mortred::models::backend::DType::F32, 4, {1, 3, -1, -1}, mortred::models::backend::TensorLayout::Nchw}, "real esrgan", &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
     }
     // the exported mnn output is nchw ([1,3,H,W]); the old TENSORFLOW host
     // wrapper reordered it to hwc, do the same here
     if (tensor.shape.size() != 4 || tensor.shape[0] != 1 || tensor.shape[1] != 3) {
-        LOG(ERROR) << "unexpected real esrgan output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
+        LOG(ERROR) << "unexpected real esrgan output shape: " << mortred::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
     const auto output_h = static_cast<int>(tensor.shape[2]);
     const auto output_w = static_cast<int>(tensor.shape[3]);
     if (output_w <= 0 || output_h <= 0 || tensor.element_count() != 3 * output_w * output_h) {
-        LOG(ERROR) << "invalid real esrgan output shape: " << jinq::models::backend::shape_to_string(tensor.shape);
+        LOG(ERROR) << "invalid real esrgan output shape: " << mortred::models::backend::shape_to_string(tensor.shape);
         return StatusCode::MODEL_OUTPUT_CONTRACT_FAILED;
     }
 
@@ -145,7 +145,7 @@ StatusCode RealEsrGan<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
         output_img_data[static_cast<size_t>(index)] = static_cast<uchar>(pix_val_f);
     }
 
-    auto hwc_data = jinq::common::CvUtils::convert_to_hwc_vec<uchar>(output_img_data, 3, output_h, output_w);
+    auto hwc_data = mortred::common::CvUtils::convert_to_hwc_vec<uchar>(output_img_data, 3, output_h, output_w);
     std_enhancement_output internal_out;
     cv::Mat result_image(cv::Size(output_w, output_h), CV_8UC3, hwc_data.data());
     cv::cvtColor(result_image, internal_out.enhancement_result, cv::COLOR_RGB2BGR);
@@ -154,8 +154,8 @@ StatusCode RealEsrGan<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor>
 }
 
 template <typename INPUT, typename OUTPUT>
-RealEsrGan<INPUT, OUTPUT>::RealEsrGan() : jinq::models::BackendCvModel<INPUT, OUTPUT>("REALESRGAN") {}
+RealEsrGan<INPUT, OUTPUT>::RealEsrGan() : mortred::models::BackendCvModel<INPUT, OUTPUT>("REALESRGAN") {}
 
 } // namespace enhancement
 } // namespace models
-} // namespace jinq
+} // namespace mortred

@@ -35,7 +35,7 @@
 
 namespace {
 
-using jinq::models::backend::ParamSpec;
+using mortred::models::backend::ParamSpec;
 
 rapidjson::Document param_spec_json(const ParamSpec &spec, rapidjson::Document::AllocatorType &allocator) {
     rapidjson::Document value(rapidjson::kObjectType, &allocator);
@@ -63,7 +63,7 @@ rapidjson::Document param_spec_json(const ParamSpec &spec, rapidjson::Document::
 }
 
 template <typename OUTPUT>
-rapidjson::Document entry_json(const jinq::factory::cv_catalog::CvModelEntry<OUTPUT> &entry,
+rapidjson::Document entry_json(const mortred::factory::cv_catalog::CvModelEntry<OUTPUT> &entry,
                                 rapidjson::Document::AllocatorType &allocator) {
     rapidjson::Document value(rapidjson::kObjectType, &allocator);
     auto &a = value.GetAllocator();
@@ -81,7 +81,7 @@ rapidjson::Document entry_json(const jinq::factory::cv_catalog::CvModelEntry<OUT
 
 template <typename OUTPUT>
 void add_task(rapidjson::Document &doc, rapidjson::Document::AllocatorType &allocator, const char *task,
-              const std::vector<jinq::factory::cv_catalog::CvModelEntry<OUTPUT>> &entries) {
+              const std::vector<mortred::factory::cv_catalog::CvModelEntry<OUTPUT>> &entries) {
     rapidjson::Document task_obj(rapidjson::kObjectType, &allocator);
     task_obj.AddMember("task", rapidjson::Value(task, task_obj.GetAllocator()), task_obj.GetAllocator());
     rapidjson::Document array(rapidjson::kArrayType, &allocator);
@@ -108,18 +108,18 @@ int main() {
     rapidjson::Document::AllocatorType &allocator = doc.GetAllocator();
 
     rapidjson::Document tasks(rapidjson::kArrayType, &allocator);
-    add_task(tasks, allocator, "classification", jinq::factory::classification::catalog());
-    add_task(tasks, allocator, "object_detection", jinq::factory::object_detection::catalog());
-    add_task(tasks, allocator, "face_detection", jinq::factory::object_detection::face_catalog());
-    add_task(tasks, allocator, "scene_segmentation", jinq::factory::scene_segmentation::catalog());
-    add_task(tasks, allocator, "ocr", jinq::factory::ocr::catalog());
-    add_task(tasks, allocator, "matting", jinq::factory::matting::catalog());
-    add_task(tasks, allocator, "enhancement", jinq::factory::enhancement::catalog());
-    add_task(tasks, allocator, "feature_point", jinq::factory::feature_point::catalog());
-    add_task(tasks, allocator, "feature_embedding", jinq::factory::feature_embedding::catalog());
-    add_task(tasks, allocator, "mono_depth_estimation", jinq::factory::mono_depth_estimation::catalog());
-    add_task(tasks, allocator, "diffusion", jinq::factory::diffusion::catalog());
-    add_task(tasks, allocator, "segment_anything_amg", jinq::factory::segment_anything::amg_catalog());
+    add_task(tasks, allocator, "classification", mortred::factory::classification::catalog());
+    add_task(tasks, allocator, "object_detection", mortred::factory::object_detection::catalog());
+    add_task(tasks, allocator, "face_detection", mortred::factory::object_detection::face_catalog());
+    add_task(tasks, allocator, "scene_segmentation", mortred::factory::scene_segmentation::catalog());
+    add_task(tasks, allocator, "ocr", mortred::factory::ocr::catalog());
+    add_task(tasks, allocator, "matting", mortred::factory::matting::catalog());
+    add_task(tasks, allocator, "enhancement", mortred::factory::enhancement::catalog());
+    add_task(tasks, allocator, "feature_point", mortred::factory::feature_point::catalog());
+    add_task(tasks, allocator, "feature_embedding", mortred::factory::feature_embedding::catalog());
+    add_task(tasks, allocator, "mono_depth_estimation", mortred::factory::mono_depth_estimation::catalog());
+    add_task(tasks, allocator, "diffusion", mortred::factory::diffusion::catalog());
+    add_task(tasks, allocator, "segment_anything_amg", mortred::factory::segment_anything::amg_catalog());
     doc.AddMember("tasks", tasks, allocator);
 
     rapidjson::Document options = output_options_json(allocator);

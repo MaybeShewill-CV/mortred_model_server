@@ -27,20 +27,20 @@
 #include "models/backend/session.h"
 #include "models/backend/tensor.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 
-using jinq::common::StatusCode;
-using jinq::common::FilePathUtil;
-using jinq::common::Timestamp;
+using mortred::common::StatusCode;
+using mortred::common::FilePathUtil;
+using mortred::common::Timestamp;
 
 namespace segment_anything {
 
-using jinq::models::backend::BackendConfig;
-using jinq::models::backend::InferenceSession;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using jinq::models::backend::TensorInfo;
+using mortred::models::backend::BackendConfig;
+using mortred::models::backend::InferenceSession;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using mortred::models::backend::TensorInfo;
 
 class SamAmgDecoder::Impl {
   public:
@@ -247,7 +247,7 @@ StatusCode SamAmgDecoder::Impl::init(const toml::table &cfg) {
     }
     BackendConfig backend_config;
     std::string backend_err;
-    if (!jinq::models::backend::parse_backend_table(
+    if (!mortred::models::backend::parse_backend_table(
             *backend_table, &backend_config, &backend_err)) {
         LOG(ERROR) << "invalid sam amg decoder backend config: " << backend_err;
         return StatusCode::MODEL_INIT_FAILED;
@@ -438,7 +438,7 @@ bool SamAmgDecoder::Impl::validate_session(const InferenceSession& session) cons
         "image_embeddings", "point_coords", "point_labels", "mask_input", "has_mask_input"};
     for (const auto& name : required_inputs) {
         const auto* info = find_info(session, name);
-        if (info == nullptr || info->dtype != jinq::models::backend::DType::F32) {
+        if (info == nullptr || info->dtype != mortred::models::backend::DType::F32) {
             LOG(ERROR) << "sam amg decoder input missing or invalid: " << name;
             return false;
         }
@@ -450,8 +450,8 @@ bool SamAmgDecoder::Impl::validate_session(const InferenceSession& session) cons
     const auto* low_res = find_output(session, "low_res_masks");
     const auto* iou = find_output(session, "iou_predictions");
     if (low_res == nullptr || iou == nullptr ||
-        low_res->dtype != jinq::models::backend::DType::F32 ||
-        iou->dtype != jinq::models::backend::DType::F32) {
+        low_res->dtype != mortred::models::backend::DType::F32 ||
+        iou->dtype != mortred::models::backend::DType::F32) {
         LOG(ERROR) << "sam amg decoder outputs low_res_masks/iou_predictions are invalid";
         return false;
     }
@@ -536,13 +536,13 @@ void SamAmgDecoder::Impl::thread_decode_mask_proc(
         !fill(
             inputs, "mask_input",
             std::vector<float>(
-                static_cast<size_t>(jinq::models::backend::shape_volume(mask_info->shape))),
+                static_cast<size_t>(mortred::models::backend::shape_volume(mask_info->shape))),
             mask_info->shape) ||
         !fill(
             inputs, "has_mask_input",
             std::vector<float>(
                 static_cast<size_t>(
-                    jinq::models::backend::shape_volume(has_mask_info->shape))),
+                    mortred::models::backend::shape_volume(has_mask_info->shape))),
             has_mask_info->shape)) {
         LOG(ERROR) << "create sam amg decoder input tensors failed";
         ctx->model_run_status = StatusCode::MODEL_RUN_SESSION_FAILED;

@@ -3,7 +3,7 @@
 
 #include <string>
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace catalog {
 
@@ -31,6 +31,6 @@ inline bool served_model_entry_valid(const ServedModelEntry &entry) { return mod
 
 } // namespace catalog
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODELS_CATALOG_MODEL_ENTRY_H

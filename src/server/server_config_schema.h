@@ -21,7 +21,7 @@
 
 #include <toml/toml.hpp>
 
-namespace jinq {
+namespace mortred {
 namespace server {
 
 namespace detail {
@@ -198,6 +198,6 @@ inline bool validate_server_section(const toml::table& section,
 }
 
 }  // namespace server
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_SERVER_CONFIG_SCHEMA_H

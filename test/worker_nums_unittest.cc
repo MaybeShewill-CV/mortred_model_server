@@ -8,7 +8,7 @@
 
 #include "server/server_runtime_config.h"
 
-using jinq::server::parse_worker_nums;
+using mortred::server::parse_worker_nums;
 
 TEST(worker_nums, missing_key_is_rejected) {
     toml::table config;

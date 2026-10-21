@@ -34,8 +34,8 @@ inline void reply_json(WFHttpTask *task, int http_status, const std::string &bod
     resp->append_output_body(body.data(), body.size());
 }
 
-inline jinq::common::StatusCode status_for_proxy_http(int http_status) {
-    using jinq::common::StatusCode;
+inline mortred::common::StatusCode status_for_proxy_http(int http_status) {
+    using mortred::common::StatusCode;
     switch (http_status) {
     case 400:
         return StatusCode::JSON_DECODE_ERROR;
@@ -58,18 +58,18 @@ inline jinq::common::StatusCode status_for_proxy_http(int http_status) {
     }
 }
 
-inline void reply_unified_error(WFHttpTask *task, int http_status, jinq::common::StatusCode status,
+inline void reply_unified_error(WFHttpTask *task, int http_status, mortred::common::StatusCode status,
                                 const std::string &message, const std::string &pointer = {}) {
-    jinq::common::UnifiedResponse unified;
-    unified.status = jinq::common::to_underlying(status);
-    unified.status_str = jinq::common::status_code_to_str(status);
+    mortred::common::UnifiedResponse unified;
+    unified.status = mortred::common::to_underlying(status);
+    unified.status_str = mortred::common::status_code_to_str(status);
     if (!message.empty()) {
-        jinq::common::ResponseError err;
+        mortred::common::ResponseError err;
         err.pointer = pointer;
         err.message = message;
         unified.errors.push_back(std::move(err));
     }
-    reply_json(task, http_status, jinq::common::envelope::encode(unified));
+    reply_json(task, http_status, mortred::common::envelope::encode(unified));
 }
 
 inline void reply_unified_error(WFHttpTask *task, int http_status, const std::string &message,

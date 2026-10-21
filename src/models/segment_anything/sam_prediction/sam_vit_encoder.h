@@ -18,10 +18,10 @@
 #include "models/backend/session.h"
 #include "models/backend/tensor.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace segment_anything {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /***
  * SAM ViT image encoder backed by the unified inference-session layer.
@@ -30,7 +30,7 @@ using jinq::common::StatusCode;
  */
 class SamVitEncoder {
   public:
-    explicit SamVitEncoder(jinq::models::backend::InferenceSession *session);
+    explicit SamVitEncoder(mortred::models::backend::InferenceSession *session);
     ~SamVitEncoder();
 
     SamVitEncoder(const SamVitEncoder &) = delete;
@@ -46,7 +46,7 @@ class SamVitEncoder {
 
   protected:
     /*** Empty output vector → MODEL_EMPTY_OUTPUT; non-empty dtype/size miss → MODEL_OUTPUT_CONTRACT_FAILED. */
-    static StatusCode classify_encoder_outputs(const std::vector<jinq::models::backend::NamedTensor> &outputs);
+    static StatusCode classify_encoder_outputs(const std::vector<mortred::models::backend::NamedTensor> &outputs);
 
   private:
     class Impl;
@@ -55,6 +55,6 @@ class SamVitEncoder {
 
 } // namespace segment_anything
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_MODEL_SERVER_SAM_VIT_ENCODER_H

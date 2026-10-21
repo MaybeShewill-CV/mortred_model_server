@@ -17,9 +17,9 @@
 
 #include "common/status_code.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 /*** Thread-pool / go-task fence: model code returns StatusCode, but OpenCV
  * and allocators can still throw. An uncaught exception on a workflow go

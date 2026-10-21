@@ -18,11 +18,11 @@
 #include "models/model_io_define.h"
 #include "server/generic_cv_server.h"
 
-namespace jinq {
+namespace mortred {
 namespace apps {
 namespace benchmark {
 
-using ImageInput = jinq::server::ImageInput;
+using ImageInput = mortred::server::ImageInput;
 
 template <typename OUTPUT>
 struct ImageFamilyHooks {
@@ -37,7 +37,7 @@ struct ImageFamilyHooks {
 
 inline ImageInput make_raw_image_input(const std::string &path) {
     ImageInput in;
-    in.image.origin = jinq::models::io_define::common_io::byte_source::origin_kind::raw_bytes;
+    in.image.origin = mortred::models::io_define::common_io::byte_source::origin_kind::raw_bytes;
     std::ifstream file(path, std::ios::binary);
     if (!file) {
         return in;
@@ -48,18 +48,18 @@ inline ImageInput make_raw_image_input(const std::string &path) {
 
 inline std::string result_image_path(const std::string &output_dir, const std::string &image_path,
                                      const std::string &model_id) {
-    std::string name = jinq::common::FilePathUtil::get_file_name(image_path);
+    std::string name = mortred::common::FilePathUtil::get_file_name(image_path);
     const auto dot = name.find_last_of('.');
     if (dot != std::string::npos) {
         name = name.substr(0, dot);
     }
-    return jinq::common::FilePathUtil::concat_path(output_dir, name + "_" + model_id + "_result.png");
+    return mortred::common::FilePathUtil::concat_path(output_dir, name + "_" + model_id + "_result.png");
 }
 
 template <typename OUTPUT>
 int run_image_family_benchmark(
     const std::string &model_id, const std::string &display_name,
-    const std::function<std::unique_ptr<jinq::models::BaseAiModel<ImageInput, OUTPUT>>()> &make_model,
+    const std::function<std::unique_ptr<mortred::models::BaseAiModel<ImageInput, OUTPUT>>()> &make_model,
     const ImageFamilyHooks<OUTPUT> &hooks, int argc, char **argv) {
     BenchmarkSpec<ImageInput, OUTPUT> spec;
     spec.model_name = model_id;
@@ -71,7 +71,7 @@ int run_image_family_benchmark(
     spec.input_ok = [](const ImageInput &in) { return !in.image.data.empty(); };
     spec.make_input = [hooks](int argc, char **argv, const toml::table &) {
         const std::string path = standard_image_path(argc, argv, hooks.default_image);
-        if (!jinq::common::FilePathUtil::is_file_exist(path)) {
+        if (!mortred::common::FilePathUtil::is_file_exist(path)) {
             LOG(INFO) << "test input image file: " << path << " not exist";
             return ImageInput{};
         }
@@ -97,6 +97,6 @@ int run_image_family_benchmark(
 
 } // namespace benchmark
 } // namespace apps
-} // namespace jinq
+} // namespace mortred
 
 #endif // MORTRED_APPS_BENCHMARK_IMAGE_FAMILY_H

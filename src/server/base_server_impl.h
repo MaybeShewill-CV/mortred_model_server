@@ -56,11 +56,11 @@
 #include "server/server_runtime_config.h"
 #include "server/worker_pool.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
-using jinq::common::StatusCode;
-using jinq::common::Timestamp;
-using jinq::common::k_default_request_size_limit_mb;
+using mortred::common::StatusCode;
+using mortred::common::Timestamp;
+using mortred::common::k_default_request_size_limit_mb;
 
 template<typename WORKER, typename MODEL_OUTPUT>
 class BaseAiServerImpl {
@@ -147,7 +147,7 @@ protected:
     BatchCollector<WORKER, MODEL_OUTPUT> _m_batch{_m_workers, _m_metrics};
     bool _m_async_enabled = false;
     int _m_async_timeout = 300000;
-    std::vector<jinq::models::backend::ParamSpec> _m_param_specs;
+    std::vector<mortred::models::backend::ParamSpec> _m_param_specs;
     std::string _m_model_name;
     using AsyncTable = AsyncJobTable<MODEL_OUTPUT>;
     AsyncTable _m_async_table;
@@ -159,7 +159,7 @@ protected:
         _m_workers.adopt(std::move(worker));
     }
     void commit_identity(std::string server_uri, std::string model_name,
-                         std::vector<jinq::models::backend::ParamSpec> param_specs) {
+                         std::vector<mortred::models::backend::ParamSpec> param_specs) {
         _m_server_uri = std::move(server_uri);
         _m_model_name = std::move(model_name);
         _m_param_specs = std::move(param_specs);
@@ -187,10 +187,10 @@ protected:
         rapidjson::Document::AllocatorType& allocator,
         rapidjson::Document& data,
         const MODEL_OUTPUT& model_output,
-        const jinq::server::OutputOptions& options) = 0;
+        const mortred::server::OutputOptions& options) = 0;
 
-    using InferenceResult = jinq::server::InferenceResult<MODEL_OUTPUT>;
-    using InferenceTask = jinq::server::InferenceTask;
+    using InferenceResult = mortred::server::InferenceResult<MODEL_OUTPUT>;
+    using InferenceTask = mortred::server::InferenceTask;
     using SyncState = SyncRequestState<WORKER, MODEL_OUTPUT>;
 
     void async_run_job(const std::string& job_id);
@@ -318,7 +318,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::async_run_job(const std::string& jo
         _m_async_table.finish(job_id, std::move(result));
         _m_metrics.inc_async_jobs("done");
     } else {
-        _m_async_table.fail(job_id, jinq::common::status_code_to_str(result.model_run_status));
+        _m_async_table.fail(job_id, mortred::common::status_code_to_str(result.model_run_status));
         _m_metrics.inc_async_jobs("failed");
     }
     _m_metrics.observe_async_job_duration_ms(run_ms);
@@ -349,11 +349,11 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
                                    (request_uri[5] == '\0' || request_uri[5] == '/');
     const bool is_metrics_endpoint = strcmp(request_uri, "/metrics") == 0;
     const auto auth_header = authorization_header_of(task->get_req());
-    bool authorized = jinq::common::is_bearer_authorized(auth_header, _m_auth_token);
+    bool authorized = mortred::common::is_bearer_authorized(auth_header, _m_auth_token);
     if (!authorized && is_metrics_endpoint) {
         const char* metrics_env = std::getenv("MORTRED_METRICS_TOKEN");
         if (metrics_env != nullptr && *metrics_env != '\0') {
-            authorized = jinq::common::is_bearer_authorized(auth_header, std::string(metrics_env));
+            authorized = mortred::common::is_bearer_authorized(auth_header, std::string(metrics_env));
         }
     }
     if (!is_health_endpoint && !authorized) {
@@ -422,8 +422,8 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
             return;
         }
         auto* req = task->get_req();
-        auto stage_trace = jinq::common::stage_timing::enabled()
-                               ? std::make_shared<jinq::common::stage_timing::StageTrace>()
+        auto stage_trace = mortred::common::stage_timing::enabled()
+                               ? std::make_shared<mortred::common::stage_timing::StageTrace>()
                                : nullptr;
         if (stage_trace != nullptr) {
             stage_trace->mark("srv_in");
@@ -443,7 +443,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
             }
         }
         std::string request_encoding = "json";
-        jinq::server::ParsedRequest parsed;
+        mortred::server::ParsedRequest parsed;
         const auto kind = content_type_kind(content_type);
         if (kind == ContentTypeKind::Json) {
             parsed = parse_model_request(req);
@@ -466,15 +466,15 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
 
         const std::string task_id = parsed.req_id.empty() ? generate_req_id() : parsed.req_id;
         auto reply_reject = [&](StatusCode status,
-                                std::vector<jinq::common::ResponseError> errors) {
+                                std::vector<mortred::common::ResponseError> errors) {
             _m_metrics.inc_http_requests(request_method, std::to_string(http_status_of(status)));
-            _m_metrics.inc_inference_requests(jinq::common::to_underlying(status));
+            _m_metrics.inc_inference_requests(mortred::common::to_underlying(status));
             _m_metrics.inc_inference_failure();
             reply_unified_json(task->get_resp(),
                                unified_rejection(task_id, status, std::move(errors)));
         };
         if (!parsed.is_valid) {
-            std::vector<jinq::common::ResponseError> errors;
+            std::vector<mortred::common::ResponseError> errors;
             errors.reserve(parsed.violations.size());
             for (const auto& violation : parsed.violations) {
                 errors.push_back({violation.pointer, violation.message});
@@ -483,7 +483,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
             return;
         }
         if (item_count_exceeds(parsed.items.size(), _m_max_request_items)) {
-            std::vector<jinq::common::ResponseError> limit_error;
+            std::vector<mortred::common::ResponseError> limit_error;
             limit_error.push_back({"/images", "too many items in one request (max " +
                                                     std::to_string(_m_max_request_items) + ")"});
             reply_reject(StatusCode::REQUEST_ITEM_LIMIT, std::move(limit_error));
@@ -666,9 +666,9 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::start_sync_item(
         }
         const auto t0 = Timestamp::now();
         auto* prev_stage_trace =
-            jinq::common::stage_timing::StageTrace::swap_active(state->trace.get());
+            mortred::common::stage_timing::StageTrace::swap_active(state->trace.get());
         work->status = run_one(state->worker, state->req, k, &work->output);
-        jinq::common::stage_timing::StageTrace::swap_active(prev_stage_trace);
+        mortred::common::stage_timing::StageTrace::swap_active(prev_stage_trace);
         work->ran = true;
         work->run_ms = (Timestamp::now() - t0) * 1000.0;
     });
@@ -776,10 +776,10 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_sync_request(
             fill_response_data(allocator, data, output, options);
         });
     const StatusCode status = snap.model_run_status;
-    unified.status = jinq::common::to_underlying(status);
-    unified.status_str = jinq::common::status_code_to_str(status);
+    unified.status = mortred::common::to_underlying(status);
+    unified.status_str = mortred::common::status_code_to_str(status);
     if (status != StatusCode::OK) {
-        LOG(ERROR) << "worker run failed with status " << jinq::common::to_underlying(status);
+        LOG(ERROR) << "worker run failed with status " << mortred::common::to_underlying(status);
     }
     reply_unified_json(state->resp, unified);
 
@@ -790,7 +790,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_sync_request(
 
     size_t ok_items = 0;
     for (const auto& item : unified.results) {
-        if (item.status == jinq::common::to_underlying(StatusCode::OK)) {
+        if (item.status == mortred::common::to_underlying(StatusCode::OK)) {
             ++ok_items;
         }
     }

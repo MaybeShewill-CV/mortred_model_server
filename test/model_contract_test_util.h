@@ -42,14 +42,14 @@
 #include "models/backend/inference_context.h"
 #include "models/backend/tensor.h"
 
-namespace jinq {
+namespace mortred {
 namespace test {
 namespace contract {
 
-using jinq::common::StatusCode;
-using jinq::models::backend::DType;
-using jinq::models::backend::InferenceContext;
-using jinq::models::backend::NamedTensor;
+using mortred::common::StatusCode;
+using mortred::models::backend::DType;
+using mortred::models::backend::InferenceContext;
+using mortred::models::backend::NamedTensor;
 
 /*** exposes the protected postprocess hook to the test ***/
 template <typename MODEL> class PostprocessHarness : public MODEL {
@@ -100,7 +100,7 @@ template <typename MODEL, typename OUTPUT> void expect_rejected(const char *case
 
 } // namespace contract
 } // namespace test
-} // namespace jinq
+} // namespace mortred
 
 /*** One macro per model; the trailing arguments are the expected shape.
  *
@@ -110,19 +110,19 @@ template <typename MODEL, typename OUTPUT> void expect_rejected(const char *case
 
 #define MORTRED_CONTRACT_VARIANT(ModelType, Output, out_name, case_label, fill, mutate, ...)                                               \
     TEST(ModelType, case_label) {                                                                                                          \
-        std::vector<::jinq::models::backend::NamedTensor> outputs;                                                                         \
+        std::vector<::mortred::models::backend::NamedTensor> outputs;                                                                         \
         auto tensor =                                                                                                                      \
-            ::jinq::test::contract::tensor(out_name, ::jinq::models::backend::DType::F32, std::vector<int64_t>{__VA_ARGS__}, fill);        \
+            ::mortred::test::contract::tensor(out_name, ::mortred::models::backend::DType::F32, std::vector<int64_t>{__VA_ARGS__}, fill);        \
         mutate;                                                                                                                            \
         outputs.push_back(tensor);                                                                                                         \
-        ::jinq::test::contract::expect_rejected<ModelType, Output>(#case_label, outputs);                                                  \
+        ::mortred::test::contract::expect_rejected<ModelType, Output>(#case_label, outputs);                                                  \
     }
 
 #define POSTPROCESS_CONTRACT_TEST(Model, Input, Output, out_name, ...)                                                                     \
     using Model##ContractModel = Model<Input, Output>;                                                                                     \
     MORTRED_CONTRACT_VARIANT(Model##ContractModel, Output, out_name, rejects_missing_output, 0.5f, (void)0, __VA_ARGS__)                   \
     MORTRED_CONTRACT_VARIANT(Model##ContractModel, Output, out_name, rejects_wrong_dtype, 0.5f,                                            \
-                             tensor.tensor.dtype = ::jinq::models::backend::DType::I32, __VA_ARGS__)                                       \
+                             tensor.tensor.dtype = ::mortred::models::backend::DType::I32, __VA_ARGS__)                                       \
     MORTRED_CONTRACT_VARIANT(Model##ContractModel, Output, out_name, rejects_wrong_rank, 0.5f, tensor.tensor.shape.push_back(1),           \
                              __VA_ARGS__)                                                                                                  \
     MORTRED_CONTRACT_VARIANT(Model##ContractModel, Output, out_name, rejects_wrong_shape, 0.5f, tensor.tensor.shape.front() += 1,          \

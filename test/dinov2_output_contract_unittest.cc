@@ -12,12 +12,12 @@
 #include "models/io/feature_embedding.h"
 #include "models/model_io_define.h"
 
-using jinq::common::StatusCode;
-using jinq::models::backend::InferenceContext;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using jinq::models::feature_embedding::Dinov2;
-using EmbeddingOutput = jinq::models::io_define::feature_embedding::std_feature_embedding_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::InferenceContext;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using mortred::models::feature_embedding::Dinov2;
+using EmbeddingOutput = mortred::models::io_define::feature_embedding::std_feature_embedding_output;
 
 namespace {
 
@@ -41,7 +41,7 @@ template <typename MODEL> class CallableDinov2 : public MODEL {
     using MODEL::postprocess;
 };
 
-using TestModel = CallablePostprocess<Dinov2<jinq::models::io_define::common_io::mat_input, EmbeddingOutput>>;
+using TestModel = CallablePostprocess<Dinov2<mortred::models::io_define::common_io::mat_input, EmbeddingOutput>>;
 
 } // namespace
 
@@ -96,7 +96,7 @@ TEST(Dinov2FeatureEmbedding, L2NormalizesOnlyWhenRequested) {
     EXPECT_FLOAT_EQ(raw.embedding[2], 4.0f);
 
     // normalize=true: unit L2 norm
-    jinq::models::backend::ParamSet params;
+    mortred::models::backend::ParamSet params;
     params.set_bool("normalize", true);
     InferenceContext with_params;
     with_params.params = &params;
@@ -111,7 +111,7 @@ TEST(Dinov2FeatureEmbedding, L2NormalizesOnlyWhenRequested) {
     EXPECT_FLOAT_EQ(normalized.embedding[2], 0.8f);
 
     // normalize=false: explicit false keeps the raw vector
-    params = jinq::models::backend::ParamSet();
+    params = mortred::models::backend::ParamSet();
     params.set_bool("normalize", false);
     EmbeddingOutput explicit_raw;
     ASSERT_EQ(model.postprocess({output}, with_params, explicit_raw), StatusCode::OK);
@@ -138,7 +138,7 @@ TEST(Dinov2FeatureEmbedding, PoolingDefaultsToClsAndAcceptsExplicitCls) {
     EXPECT_FLOAT_EQ(cls.embedding[2], 3.0f);
 
     // explicit pooling=cls request: identical result
-    jinq::models::backend::ParamSet params;
+    mortred::models::backend::ParamSet params;
     params.set_str("pooling", "cls");
     InferenceContext with_params;
     with_params.params = &params;
@@ -150,7 +150,7 @@ TEST(Dinov2FeatureEmbedding, PoolingDefaultsToClsAndAcceptsExplicitCls) {
 TEST(Dinov2FeatureEmbedding, MeanPoolingAveragesAllTokens) {
     // the mean branch is gated behind _m_supports_mean, which is set at init
     // from the exported output rank; an all-token export ([1,T,D]) enables it
-    CallableDinov2<Dinov2<jinq::models::io_define::common_io::mat_input, EmbeddingOutput>> model;
+    CallableDinov2<Dinov2<mortred::models::io_define::common_io::mat_input, EmbeddingOutput>> model;
     model._m_supports_mean = true;
     model._m_default_pooling = "mean";
 
@@ -174,7 +174,7 @@ TEST(Dinov2FeatureEmbedding, MeanPoolingAveragesAllTokens) {
 TEST(Dinov2FeatureEmbedding, MeanPoolingRejectedOnClsOnlyExport) {
     // a rank-2 export ([1,D]) carries only the [CLS] token: mean must fail
     // loudly instead of silently returning a wrong-semantics embedding
-    CallableDinov2<Dinov2<jinq::models::io_define::common_io::mat_input, EmbeddingOutput>> model;
+    CallableDinov2<Dinov2<mortred::models::io_define::common_io::mat_input, EmbeddingOutput>> model;
     model._m_supports_mean = false;
     model._m_default_pooling = "mean";
 
@@ -209,7 +209,7 @@ TEST(Dinov2FeatureEmbedding, RejectsMalformedOutputs) {
     // zero-volume shape, so the malformed tensor is assembled by hand.
     NamedTensor no_tokens;
     no_tokens.name = "tokens";
-    no_tokens.tensor.dtype = jinq::models::backend::DType::F32;
+    no_tokens.tensor.dtype = mortred::models::backend::DType::F32;
     no_tokens.tensor.shape = {1, 0, 3};
     EXPECT_EQ(model.postprocess({no_tokens}, empty_context, result), StatusCode::MODEL_OUTPUT_CONTRACT_FAILED);
 

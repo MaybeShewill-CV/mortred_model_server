@@ -18,13 +18,13 @@
 #include "models/backend/model_runtime.h"
 #include "models/backend/request_geometry.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace matting {
 
-using MattingOutput = jinq::models::io_define::matting::std_matting_output;
-using jinq::common::StatusCode;
-using jinq::models::backend::NamedTensor;
+using MattingOutput = mortred::models::io_define::matting::std_matting_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::NamedTensor;
 
 template <typename INPUT, typename OUTPUT> StatusCode PPMatting<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto &input_info = this->session().inputs().front();
@@ -42,11 +42,11 @@ template <typename INPUT, typename OUTPUT> StatusCode PPMatting<INPUT, OUTPUT>::
         LOG(ERROR) << "ppmatting model exposes no output tensor";
         return StatusCode::MODEL_INIT_FAILED;
     }
-    this->set_image_decode_hint(_m_input_size_host, jinq::models::cv_input::parse_image_decode_upscale(params, "ppmatting"));
+    this->set_image_decode_hint(_m_input_size_host, mortred::models::cv_input::parse_image_decode_upscale(params, "ppmatting"));
     this->set_gpu_preprocess({
-        .resize = jinq::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
+        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
         .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f, 0.5f, 0.5f}, .std = {0.5f, 0.5f, 0.5f}},
-        .color = jinq::models::backend::GpuPreprocessDescriptor::Color::RGB,
+        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .output_dtype = input_info.dtype,
         .output_nhwc = false,
@@ -57,7 +57,7 @@ template <typename INPUT, typename OUTPUT> StatusCode PPMatting<INPUT, OUTPUT>::
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> PPMatting<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
 
-    auto result = jinq::models::backend::ImagePipeline(input_image)
+    auto result = mortred::models::backend::ImagePipeline(input_image)
                       .bgr_to_rgb()
                       .resize(_m_input_size_host)
                       .to_float()
@@ -74,19 +74,19 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> PPMatting<IN
 
 template <typename INPUT, typename OUTPUT>
 StatusCode PPMatting<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> &outputs,
-                                                 const jinq::models::backend::InferenceContext &context, OUTPUT &output) {
+                                                 const mortred::models::backend::InferenceContext &context, OUTPUT &output) {
     if (outputs.empty()) {
         LOG(ERROR) << "ppmatting output tensor is empty";
         return StatusCode::MODEL_EMPTY_OUTPUT;
     }
-    const auto source_status = jinq::models::backend::validated_source_size(context, "ppmatting");
+    const auto source_status = mortred::models::backend::validated_source_size(context, "ppmatting");
     if (source_status != StatusCode::OK) {
         return source_status;
     }
-    jinq::models::backend::F32OutputView output_view;
-    const auto output_status = jinq::models::backend::validated_f32_first_output(
-        outputs, {jinq::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
-                  jinq::models::backend::TensorLayout::Nchw}, "ppmatting",
+    mortred::models::backend::F32OutputView output_view;
+    const auto output_status = mortred::models::backend::validated_f32_first_output(
+        outputs, {mortred::models::backend::DType::F32, 4, {1, 1, context.network_size.height, context.network_size.width},
+                  mortred::models::backend::TensorLayout::Nchw}, "ppmatting",
         &output_view);
     if (output_status != StatusCode::OK) {
         return output_status;
@@ -110,8 +110,8 @@ StatusCode PPMatting<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor> 
 /************* Export Function Sets *************/
 
 template <typename INPUT, typename OUTPUT>
-PPMatting<INPUT, OUTPUT>::PPMatting() : jinq::models::BackendCvModel<INPUT, OUTPUT>("PP_MATTING") {}
+PPMatting<INPUT, OUTPUT>::PPMatting() : mortred::models::BackendCvModel<INPUT, OUTPUT>("PP_MATTING") {}
 
 } // namespace matting
 } // namespace models
-} // namespace jinq
+} // namespace mortred

@@ -18,12 +18,12 @@
 #include "models/backend/tensor.h"
 #include "models/model_io_define.h"
 
-namespace jinq {
+namespace mortred {
 namespace models {
 namespace classification {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
-template <typename INPUT, typename OUTPUT> class MobileNetv2 : public jinq::models::BackendCvModel<INPUT, OUTPUT> {
+template <typename INPUT, typename OUTPUT> class MobileNetv2 : public mortred::models::BackendCvModel<INPUT, OUTPUT> {
   public:
     MobileNetv2();
     ~MobileNetv2() override = default;
@@ -35,10 +35,10 @@ template <typename INPUT, typename OUTPUT> class MobileNetv2 : public jinq::mode
     // image -> normalized CV_32FC3 HWC mat of _m_input_tensor_size (batch share)
     cv::Mat preprocess_mat(const cv::Mat &image);
 
-    std::vector<jinq::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
+    std::vector<mortred::models::backend::NamedTensor> preprocess(const cv::Mat &image) override;
 
-    StatusCode postprocess(const std::vector<jinq::models::backend::NamedTensor> &outputs,
-                           const jinq::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
+    StatusCode postprocess(const std::vector<mortred::models::backend::NamedTensor> &outputs,
+                           const mortred::models::backend::InferenceContext & /*context*/, OUTPUT &output) override;
 
     StatusCode on_init(const toml::table &params) override;
 
@@ -50,7 +50,7 @@ template <typename INPUT, typename OUTPUT> class MobileNetv2 : public jinq::mode
 
 } // namespace classification
 } // namespace models
-} // namespace jinq
+} // namespace mortred
 
 #include "mobilenetv2.inl"
 

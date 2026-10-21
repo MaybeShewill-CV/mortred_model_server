@@ -48,9 +48,9 @@
 #include "server/prometheus_metrics.h"
 #include "server/request_admission.h"
 
-namespace jinq {
+namespace mortred {
 namespace server {
-using jinq::common::StatusCode;
+using mortred::common::StatusCode;
 
 template <typename MODEL_OUTPUT>
 class AsyncJobEndpoints {
@@ -291,7 +291,7 @@ private:
         auto parsed = _parse(req);
         const std::string task_id = parsed.req_id.empty() ? generate_req_id() : parsed.req_id;
         if (!parsed.is_valid) {
-            std::vector<jinq::common::ResponseError> errors;
+            std::vector<mortred::common::ResponseError> errors;
             errors.reserve(parsed.violations.size());
             for (const auto& violation : parsed.violations) {
                 errors.push_back({violation.pointer, violation.message});
@@ -303,7 +303,7 @@ private:
             return;
         }
         if (item_count_exceeds(parsed.items.size(), _max_request_items)) {
-            std::vector<jinq::common::ResponseError> limit_error;
+            std::vector<mortred::common::ResponseError> limit_error;
             limit_error.push_back({"/images", "too many items in one request (max " +
                                                     std::to_string(_max_request_items) + ")"});
             _metrics->inc_http_requests("POST", "413");
@@ -444,7 +444,7 @@ private:
     bool _enabled = false;
     int _timeout_ms = 300000;
     size_t _max_request_items = 16;
-    size_t _request_size_limit_mb = jinq::common::k_default_request_size_limit_mb;
+    size_t _request_size_limit_mb = mortred::common::k_default_request_size_limit_mb;
     std::atomic<int> _inflight{0};
     std::atomic<int> _wait_inflight{0};
     std::atomic<uint64_t> _wait_seq{0};
@@ -453,6 +453,6 @@ private:
 };
 
 }  // namespace server
-}  // namespace jinq
+}  // namespace mortred
 
 #endif  // MORTRED_SERVER_ASYNC_ENDPOINTS_H

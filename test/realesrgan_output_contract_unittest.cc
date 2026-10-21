@@ -10,11 +10,11 @@
 #include "models/enhancement/real_esrgan.h"
 #include "models/io/enhancement.h"
 
-using jinq::common::StatusCode;
-using jinq::models::backend::InferenceContext;
-using jinq::models::backend::NamedTensor;
-using jinq::models::backend::Tensor;
-using Output = jinq::models::io_define::enhancement::std_enhancement_output;
+using mortred::common::StatusCode;
+using mortred::models::backend::InferenceContext;
+using mortred::models::backend::NamedTensor;
+using mortred::models::backend::Tensor;
+using Output = mortred::models::io_define::enhancement::std_enhancement_output;
 
 namespace {
 
@@ -23,8 +23,8 @@ template <typename MODEL> class CallableRealEsrGan : public MODEL {
     using MODEL::postprocess;
 };
 
-using TestModel = CallableRealEsrGan<jinq::models::enhancement::RealEsrGan<
-    jinq::models::io_define::common_io::mat_input, Output>>;
+using TestModel = CallableRealEsrGan<mortred::models::enhancement::RealEsrGan<
+    mortred::models::io_define::common_io::mat_input, Output>>;
 
 class CaptureSink : public google::LogSink {
   public:
