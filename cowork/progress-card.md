@@ -62,3 +62,4 @@ batch infer 优化 + P0-4 第 3 步（4 个 sampler 收敛迁移到 BackendCvMod
 - 2026-10-21 16:3x 阶段 8 完成：5 分支合并（000f232b→05fed40f）、全量门禁、WERROR 清零（5d45c4ee）、活体验证、移交清单落卡。
 - 2026-10-21 17:0x 收尾：CHANGELOG [Unreleased] 条目（912d6c9f）；最终 HEAD 全量 check 97/98；合并分支清理；本地 main 领先 origin/main 15 个提交（未推送，等用户指示）。
 - 2026-10-21 23:5x 用户决策 1-3 执行完毕：main 推送 origin（9b930bc6..eb246207）；契约管线修复（797e37e8）；CLI 大小写容错（f42b6ba1）。batch 战役、enlightengan/p0_1 追查、P1 排期、旧 stash 处置按用户指示暂缓。
+- 2026-10-21 23:59x 用户决策批次二：enlightengan 间歇 segfault 根因修复（1fedfdea，preprocess 无 init 时 dtype 尾部解引用空 session，0/20→20/20）；旧 stash 已删；三件套微基准入库 scripts/microbench（run.sh 复现基线数字）。batch infer 按指示继续押后。
