@@ -66,17 +66,6 @@ void override_env_entry(std::vector<std::string>& block, const char* key,
 
 // Remove every entry whose name matches key exactly. Exact match matters: a
 // prefix test would also drop unrelated keys such as MORTRED_API_TOKEN_FILE.
-void drop_env_entry(std::vector<std::string>& block, const char* key) {
-    const std::string prefix = std::string(key) + "=";
-    for (auto it = block.begin(); it != block.end();) {
-        if (it->compare(0, prefix.size(), prefix) == 0) {
-            it = block.erase(it);
-        } else {
-            ++it;
-        }
-    }
-}
-
 // Deliver sig to a managed child's whole process group so that a grandchild
 // dies with its leader. pgid <= 0 means no group was recorded (a genuine
 // setpgid failure): fall back to the single pid, never to the supervisor's own
@@ -295,8 +284,7 @@ void ProcessSupervisor::apply_exit_decision(Child* child,
     }
 }
 
-bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
-                                         std::unique_lock<std::mutex>& lock) {
+bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
     if (child->is_gateway) {
         const auto listen = tokens_usable_for_listen(_gateway_metrics_token, _gateway_infer_token,
                                                      _gateway_admin_token);
@@ -660,7 +648,7 @@ bool ProcessSupervisor::start_server(const std::string& id, std::string* err) {
     child->stopping = false;
     std::string local_err;
     std::string* spawn_err = err != nullptr ? err : &local_err;
-    if (!spawn_locked(child, spawn_err, lock)) {
+    if (!spawn_locked(child, spawn_err)) {
         if (is_permanent_spawn_error(*spawn_err)) {
             child->wanted = false;
             child->error = *spawn_err;
@@ -1145,7 +1133,7 @@ void ProcessSupervisor::monitor_loop() {
                 }
                 child->backoff_due_ms = 0;
                 std::string err;
-                if (!spawn_locked(child, &err, lock)) {
+                if (!spawn_locked(child, &err)) {
                     if (is_permanent_spawn_error(err)) {
                         child->wanted = false;
                         child->error = err;

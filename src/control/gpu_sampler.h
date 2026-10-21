@@ -206,6 +206,7 @@ class GpuSampler {
 
     static GpuSample parse_sample(const std::string& csv, int name_len,
                                    std::string* util_col = nullptr) {
+        (void)name_len;  // fields[0] (the name) is skipped unconditionally below
         GpuSample s;
         s.t_unix_ms = unix_ms();
         std::vector<std::string> fields;
