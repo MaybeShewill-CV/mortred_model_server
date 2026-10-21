@@ -17,15 +17,24 @@ set(memcheck_command
     --leak-check=full
     --suppressions=${_mortred_valgrind_supp})
 
-# Exclude label=valgrind from default check; CI/local run those via `ctest -L valgrind`.
-# Emit a JUnit report so scripts/ctest_summary.py can make skipped tests visible
-# (SKIP_RETURN_CODE 77 otherwise looks exactly like a pass in ctest's summary).
+# Default check excludes label=valgrind and label=heavy-golden.
+# MORTRED_CHECK_HEAVY=1 includes heavy-golden and still excludes valgrind.
+# Excluded ctest names, why, and alternate gates: test/CHECK_SSOT.md
+# (fail-closed via scripts/check_check_ssot.py).
+# JUnit lets scripts/ctest_summary.py see SKIP_RETURN_CODE 77 on tests that run.
 if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.21)
-    add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -LE valgrind
-        --output-junit ${CMAKE_BINARY_DIR}/ctest-junit.xml)
+    set(_mortred_check_junit "${CMAKE_BINARY_DIR}/ctest-junit.xml")
 else()
-    add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -LE valgrind)
+    set(_mortred_check_junit "")
 endif()
+add_custom_target(check
+    COMMAND ${CMAKE_COMMAND}
+        -DCTEST=${CMAKE_CTEST_COMMAND}
+        -DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}
+        -DJUNIT=${_mortred_check_junit}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_default_check.cmake
+    COMMENT "default check excludes valgrind and heavy-golden unless MORTRED_CHECK_HEAVY=1"
+    VERBATIM)
 
 find_package(GTest REQUIRED)
 
@@ -362,10 +371,6 @@ foreach(src ${TEST_LIST})
         target_compile_options(${src} PRIVATE ${EXTRA_COMPILE_OPTIONS})
     endif()
     add_test(NAME ${src} COMMAND $<TARGET_FILE:${src}> WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
-    if(${src} STREQUAL "model_golden_test")
-        # local/ctest without weights: skip≠pass (exit 77)
-        set_tests_properties(${src} PROPERTIES SKIP_RETURN_CODE 77)
-    endif()
     add_dependencies(check ${src})
     if((${src} STREQUAL "async_job_unittest") OR (${src} STREQUAL "async_job_stress_test") OR
        (${src} STREQUAL "api_key_manager_unittest") OR (${src} STREQUAL "do_work_lifetime_unittest") OR
@@ -447,21 +452,44 @@ if(TARGET model_golden_test)
         NAME Yolov8TrtDetection
         COMMAND $<TARGET_FILE:model_golden_test> --gtest_filter=Yolov8TrtDetection.*
         WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
-    # empty filter match (cpu profile) or partial skips must not read as pass
-    set_tests_properties(Yolov8TrtDetection PROPERTIES SKIP_RETURN_CODE 77)
     # ctest -R matches the CTest name. The CPU case lives inside model_golden_test,
     # so list it under a name that contains yolov8_detection.
     add_test(
         NAME yolov8_detection
         COMMAND $<TARGET_FILE:model_golden_test> --gtest_filter=model_golden.yolov8_detection
         WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
-    set_tests_properties(yolov8_detection PROPERTIES SKIP_RETURN_CODE 77)
     add_dependencies(check model_golden_test)
 endif()
 
+# SSOT: test/CHECK_SSOT.md rows with label heavy-golden. scripts/check_check_ssot.py
+# fails if this list, the label, or RUN_SERIAL drifts. Applied only on a full
+# build, which is when model_golden_test and its aliases are registered.
+# tests-only does not register them; default check still passes -LE heavy-golden.
+set(MORTRED_HEAVY_GOLDEN_TESTS
+    model_golden_test
+    Yolov8TrtDetection
+    yolov8_detection
+)
+if(MORTRED_BUILD_FULL)
+    foreach(heavy ${MORTRED_HEAVY_GOLDEN_TESTS})
+        if(NOT TEST ${heavy})
+            message(FATAL_ERROR
+                "heavy-golden ctest '${heavy}' is listed in MORTRED_HEAVY_GOLDEN_TESTS "
+                "but was not registered. See test/CHECK_SSOT.md.")
+        endif()
+        # SKIP_RETURN_CODE 77: missing weights are a skip when someone opts in
+        # with MORTRED_CHECK_HEAVY=1. Hosted CI does not use that path; it runs
+        # the binary with MORTRED_CI_REQUIRE_WEIGHTS=1 and ci_assert_gtest_xml.py.
+        set_tests_properties(${heavy} PROPERTIES
+            SKIP_RETURN_CODE 77
+            RUN_SERIAL TRUE
+            LABELS "heavy-golden")
+    endforeach()
+endif()
+
 # P0-1 fail-closed black box. Script owns PASS/FAIL/SKIP and exits 0 when
-# FAILS=0 (AC8 skip does not fail the process). No valgrind label so the
-# default check target (ctest -LE valgrind) runs it. RUN_SERIAL: the script
+# FAILS=0 (AC8 skip does not fail the process). No valgrind or heavy-golden
+# label, so the default check target runs it. RUN_SERIAL: the script
 # rewrites stub scripts under scripts/ and restores them on exit.
 add_test(
     NAME p0_1_engine_fail_closed
@@ -470,7 +498,7 @@ add_test(
 set_tests_properties(p0_1_engine_fail_closed PROPERTIES RUN_SERIAL TRUE)
 
 # P2-4 resident pair rules. --check only: no model processes and no live json.
-# No valgrind label, so the default check target (ctest -LE valgrind) runs it.
+# No valgrind or heavy-golden label, so the default check target runs it.
 # The live run is not registered.
 add_test(
     NAME resident_pair_record_rules
@@ -478,8 +506,8 @@ add_test(
     WORKING_DIRECTORY ${PROJECT_ROOT_DIR})
 
 # P2-6 stop order rules. --check only: no supervisor, gateway, or model
-# processes and no live json. No valgrind label, so the default check
-# target (ctest -LE valgrind) runs it. The live run is not registered.
+# processes and no live json. No valgrind or heavy-golden label, so the
+# default check target runs it. The live run is not registered.
 add_test(
     NAME stop_order_record_rules
     COMMAND python3 scripts/stop_order_record.py --check
