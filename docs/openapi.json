@@ -4,7 +4,7 @@
     "title": "Mortred Model Server API",
     "version": "1.0.0",
     "description": "Unified HTTP API for Mortred model servers. Model endpoints require `Authorization: Bearer <token>` when auth_token is configured. Request envelope: {req_id, images[], params, options}; response envelope: {status, status_str, task_id, model, results[], server_time_ms, partial}. The legacy img_data field was removed: it answers 422 with a migration hint.",
-    "x-contract-hash": "b320c08dde6d040146cc649381361fae41acb57ea3ba9e531c842e6b0aece400"
+    "x-contract-hash": "cdbb2df2855d94e08d8efa52da86ff1fff9aac9546ecb3034f1cbcdbf206a2eb"
   },
   "paths": {
     "/healthz": {
@@ -78,7 +78,7 @@
     },
     "/mortred_ai_server_v1/enhancement/attentive_gan": {
       "post": {
-        "summary": "attentive gan derain",
+        "summary": "AttentiveGAN derain",
         "tags": [
           "enhancement"
         ],
@@ -240,7 +240,7 @@
     },
     "/mortred_ai_server_v1/scene_segmentation/bisenetv2": {
       "post": {
-        "summary": "bisenetv2 segmentation",
+        "summary": "BiSeNetV2 segmentation",
         "tags": [
           "scene_segmentation"
         ],
@@ -403,7 +403,7 @@
     },
     "/mortred_ai_server_v1/obj_detection/centerface": {
       "post": {
-        "summary": "center face detection",
+        "summary": "CenterFace detection",
         "tags": [
           "face_detection"
         ],
@@ -735,7 +735,7 @@
     },
     "/mortred_ai_server_v1/ocr/dbnet": {
       "post": {
-        "summary": "dbnet",
+        "summary": "DBNet text detection",
         "tags": [
           "ocr"
         ],
@@ -1198,7 +1198,7 @@
     },
     "/mortred_ai_server_v1/classification/densenet": {
       "post": {
-        "summary": "densenet classification",
+        "summary": "Densenet classification",
         "tags": [
           "classification"
         ],
@@ -1366,7 +1366,7 @@
     },
     "/mortred_ai_server_v1/mono_depth_estimation/depth_vitb14": {
       "post": {
-        "summary": "depth anything estimation",
+        "summary": "Depth Anything ViT-L/14",
         "tags": [
           "mono_depth_estimation"
         ],
@@ -1528,7 +1528,7 @@
     },
     "/mortred_ai_server_v1/mono_depth_estimation/depth_vitl14": {
       "post": {
-        "summary": "depth anything estimation",
+        "summary": "Depth Anything ViT-L/14",
         "tags": [
           "mono_depth_estimation"
         ],
@@ -1690,7 +1690,7 @@
     },
     "/mortred_ai_server_v1/mono_depth_estimation/depth_vits14": {
       "post": {
-        "summary": "depth anything estimation",
+        "summary": "Depth Anything ViT-L/14",
         "tags": [
           "mono_depth_estimation"
         ],
@@ -1852,7 +1852,7 @@
     },
     "/mortred_ai_server_v1/feature_embedding/dinov2_vitb14": {
       "post": {
-        "summary": "DINOv2 image feature embedding",
+        "summary": "DINOv2 ViT-L/14 feature embedding",
         "tags": [
           "feature_embedding"
         ],
@@ -2019,7 +2019,7 @@
     },
     "/mortred_ai_server_v1/feature_embedding/dinov2_vitl14": {
       "post": {
-        "summary": "DINOv2 image feature embedding",
+        "summary": "DINOv2 ViT-L/14 feature embedding",
         "tags": [
           "feature_embedding"
         ],
@@ -2186,7 +2186,7 @@
     },
     "/mortred_ai_server_v1/feature_embedding/dinov2_vits14": {
       "post": {
-        "summary": "DINOv2 image feature embedding",
+        "summary": "DINOv2 ViT-L/14 feature embedding",
         "tags": [
           "feature_embedding"
         ],
@@ -2353,7 +2353,7 @@
     },
     "/mortred_ai_server_v1/enhancement/enlightengan": {
       "post": {
-        "summary": "enlighten gan",
+        "summary": "EnlightenGAN",
         "tags": [
           "enhancement"
         ],
@@ -2515,7 +2515,7 @@
     },
     "/mortred_ai_server_v1/scene_segmentation/hrnet": {
       "post": {
-        "summary": "hrnet segmentation",
+        "summary": "HRNet segmentation",
         "tags": [
           "scene_segmentation"
         ],
@@ -2815,7 +2815,7 @@
     },
     "/mortred_ai_server_v1/obj_detection/libface": {
       "post": {
-        "summary": "libface face detection",
+        "summary": "YuNet face detection",
         "tags": [
           "face_detection"
         ],
@@ -3010,7 +3010,7 @@
     },
     "/mortred_ai_server_v1/mono_depth_estimation/metric3d_1088": {
       "post": {
-        "summary": "metric3d estimation",
+        "summary": "Metric3D 1088x1920",
         "tags": [
           "mono_depth_estimation"
         ],
@@ -3172,7 +3172,7 @@
     },
     "/mortred_ai_server_v1/mono_depth_estimation/metric3d_512": {
       "post": {
-        "summary": "metric3d estimation",
+        "summary": "Metric3D 1088x1920",
         "tags": [
           "mono_depth_estimation"
         ],
@@ -3502,7 +3502,7 @@
     },
     "/mortred_ai_server_v1/matting/modnet": {
       "post": {
-        "summary": "modnet",
+        "summary": "MODNet matting",
         "tags": [
           "matting"
         ],
@@ -3664,9 +3664,9 @@
     },
     "/mortred_ai_server_v1/scene_segmentation/msocrnet": {
       "post": {
-        "summary": "MSOCRNET_SERVER inference",
+        "summary": "MSOCRNet segmentation",
         "tags": [
-          "unknown"
+          "scene_segmentation"
         ],
         "security": [
           {
@@ -3827,7 +3827,7 @@
     },
     "/mortred_ai_server_v1/obj_detection/nanodet_1x5": {
       "post": {
-        "summary": "nanodet object detection",
+        "summary": "NanoDet 416 object detection",
         "tags": [
           "object_detection"
         ],
@@ -4000,7 +4000,7 @@
     },
     "/mortred_ai_server_v1/obj_detection/nanodet_416": {
       "post": {
-        "summary": "nanodet object detection",
+        "summary": "NanoDet 416 object detection",
         "tags": [
           "object_detection"
         ],
@@ -4173,7 +4173,7 @@
     },
     "/mortred_ai_server_v1/scene_segmentation/pphuman_lite": {
       "post": {
-        "summary": "pphuman segmentation",
+        "summary": "PP-HumanSeg server segmentation",
         "tags": [
           "scene_segmentation"
         ],
@@ -4336,7 +4336,7 @@
     },
     "/mortred_ai_server_v1/scene_segmentation/pphuman_mobile": {
       "post": {
-        "summary": "pphuman segmentation",
+        "summary": "PP-HumanSeg server segmentation",
         "tags": [
           "scene_segmentation"
         ],
@@ -4499,7 +4499,7 @@
     },
     "/mortred_ai_server_v1/scene_segmentation/pphuman_server": {
       "post": {
-        "summary": "pphuman segmentation",
+        "summary": "PP-HumanSeg server segmentation",
         "tags": [
           "scene_segmentation"
         ],
@@ -4662,7 +4662,7 @@
     },
     "/mortred_ai_server_v1/matting/ppmatting_1024": {
       "post": {
-        "summary": "pp matting",
+        "summary": "PP-Matting v2",
         "tags": [
           "matting"
         ],
@@ -4824,7 +4824,7 @@
     },
     "/mortred_ai_server_v1/matting/ppmatting_512": {
       "post": {
-        "summary": "pp matting",
+        "summary": "PP-Matting v2",
         "tags": [
           "matting"
         ],
@@ -4986,7 +4986,7 @@
     },
     "/mortred_ai_server_v1/matting/ppmatting_resnet34": {
       "post": {
-        "summary": "pp matting",
+        "summary": "PP-Matting v2",
         "tags": [
           "matting"
         ],
@@ -5148,7 +5148,7 @@
     },
     "/mortred_ai_server_v1/matting/ppmatting_v2": {
       "post": {
-        "summary": "pp matting",
+        "summary": "PP-Matting v2",
         "tags": [
           "matting"
         ],
@@ -5310,7 +5310,7 @@
     },
     "/mortred_ai_server_v1/enhancement/realesrgan": {
       "post": {
-        "summary": "real esr-gan",
+        "summary": "Real-ESRGAN",
         "tags": [
           "enhancement"
         ],
@@ -5777,7 +5777,7 @@
     },
     "/mortred_ai_server_v1/feature_point/superpoint": {
       "post": {
-        "summary": "Superpoint feature point detection",
+        "summary": "SuperPoint feature detection",
         "tags": [
           "feature_point"
         ],
@@ -5950,7 +5950,7 @@
     },
     "/mortred_ai_server_v1/obj_detection/yolov5l": {
       "post": {
-        "summary": "Yolov5 object detection",
+        "summary": "YOLOv5l object detection",
         "tags": [
           "object_detection"
         ],
@@ -6123,7 +6123,7 @@
     },
     "/mortred_ai_server_v1/obj_detection/yolov6s": {
       "post": {
-        "summary": "Yolov6 object detection",
+        "summary": "YOLOv6s object detection",
         "tags": [
           "object_detection"
         ],
@@ -6296,7 +6296,7 @@
     },
     "/mortred_ai_server_v1/obj_detection/yolov7": {
       "post": {
-        "summary": "Yolov7 object detection",
+        "summary": "YOLOv7x object detection",
         "tags": [
           "object_detection"
         ],
@@ -6469,7 +6469,7 @@
     },
     "/mortred_ai_server_v1/obj_detection/yolov7x": {
       "post": {
-        "summary": "Yolov7 object detection",
+        "summary": "YOLOv7x object detection",
         "tags": [
           "object_detection"
         ],
@@ -6642,7 +6642,7 @@
     },
     "/mortred_ai_server_v1/obj_detection/yolov8l": {
       "post": {
-        "summary": "Yolov8 object detection",
+        "summary": "YOLOv8x object detection",
         "tags": [
           "object_detection"
         ],
@@ -6815,7 +6815,7 @@
     },
     "/mortred_ai_server_v1/obj_detection/yolov8n": {
       "post": {
-        "summary": "Yolov8 object detection",
+        "summary": "YOLOv8x object detection",
         "tags": [
           "object_detection"
         ],
@@ -6988,7 +6988,7 @@
     },
     "/mortred_ai_server_v1/obj_detection/yolov8s": {
       "post": {
-        "summary": "Yolov8 object detection",
+        "summary": "YOLOv8x object detection",
         "tags": [
           "object_detection"
         ],
@@ -7161,7 +7161,7 @@
     },
     "/mortred_ai_server_v1/obj_detection/yolov8x": {
       "post": {
-        "summary": "Yolov8 object detection",
+        "summary": "YOLOv8x object detection",
         "tags": [
           "object_detection"
         ],

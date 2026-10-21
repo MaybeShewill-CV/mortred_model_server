@@ -347,7 +347,11 @@ def model_path_for(section: str, uri: str, entry: dict | None) -> dict:
                                                             "properties": {
                                                                 "data": {
                                                                     "$ref": "#/components/schemas/%s"
-                                                                    % data_schema_ref(task)
+                                                                    % (
+                                                                        "EnvelopeData"
+                                                                        if entry and entry.get("model_section") in _ENVELOPE_DATA
+                                                                        else data_schema_ref(task)
+                                                                    )
                                                                 }
                                                             }
                                                         },
