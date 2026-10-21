@@ -52,8 +52,11 @@
 // per-key rate_limit_qps; see control/rate_limit/rate_limiter.h.
 // 429 responses share RateLimit-* / Retry-After and set
 // X-Mortred-RateLimit-Layer to identify the rejecting layer:
-// gateway-gcra | api-key-gcra | api-key-max-inflight | api-key-max-queue |
-// api-key-worker-budget (model FixedWindow product path retired).
+// gateway-gcra (authorized L2, after auth) | gateway-abuse (optional L0,
+// pre-auth, separate bucket) | api-key-gcra | api-key-max-inflight |
+// api-key-max-queue | api-key-worker-budget (model FixedWindow product path
+// retired). The gateway does not admit the authorized limiter and then
+// release() it on 401: failed auth never calls admit on that bucket.
 
 
 

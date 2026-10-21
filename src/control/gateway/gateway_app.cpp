@@ -575,23 +575,23 @@ std::string GatewayApp::render_stage_metrics() const {
     return ss.str();
 }
 
-/*** L1 per-source metering (PR-3b). Runs BEFORE route resolution and auth.
- * init turns counting on only after [gateway.rate_limit] and
- * MORTRED_RATE_LIMIT (off / shadow / enforce). enabled and shadow both
- * false: return before admit, write no 429, and leave no per-source
- * budget for this request. rate_per_sec and burst stay in config and
- * apply only while counting. Ordering inside process():
- *   OPTIONS -> /healthz -> /metrics -> [THIS] -> route -> auth(L2) -> forward
- * 429 carries Retry-After (exact GCRA budget, rounded up to whole seconds)
- * and the IETF draft RateLimit-Limit/Remaining/Reset triple. Enforce uses
- * the configured rate_per_sec and burst. Shadow mode counts but never
- * rejects. proceed is false only when enforce already wrote the 429.
- * An allowed admit is not released here: process() does that on the
- * pre-forward 401 path, for both enforce and shadow. */
-GatewayApp::IpRateGate GatewayApp::check_ip_rate_limit(WFHttpTask* task, const std::string& method) {
-    IpRateGate gate;
-    if (!rate_limit_enabled_ || ip_limiter_ == nullptr || method == "OPTIONS") {
-        return gate;
+/*** One source-limiter admission. Ordering inside process() for model routes
+ * (ST2): OPTIONS -> /healthz -> /metrics -> route -> optional L0 abuse
+ * (this, layer gateway-abuse, separate bucket) -> auth -> authorized GCRA
+ * L2 (this, layer gateway-gcra) -> method -> max_queue/inflight -> forward.
+ * L2 is not called on the 401 path, so failed auth does not admit or
+ * release the authorized infer budget. enabled and shadow both false, or a
+ * null limiter: return before admit and write no 429. 429 carries
+ * Retry-After (exact GCRA budget, rounded up to whole seconds) and the
+ * IETF draft RateLimit-Limit/Remaining/Reset triple. Shadow mode counts
+ * but never rejects. false means enforce already wrote the 429. */
+bool GatewayApp::admit_source_limit(
+    WFHttpTask* task, const std::string& method,
+    mortred::control::ratelimit::ShardedIpLimiter* limiter, bool enabled, bool shadow,
+    int limit_rate, const mortred::control::ratelimit::TrustedProxies& proxies,
+    const char* layer, const char* limited_message) {
+    if (!enabled || limiter == nullptr || method == "OPTIONS") {
+        return true;
     }
     // peer address from the TCP endpoint (same shape as the model-server
     // peer_ip_of; workflow gives sockaddr storage directly)
@@ -607,36 +607,31 @@ GatewayApp::IpRateGate GatewayApp::check_ip_rate_limit(WFHttpTask* task, const s
             ::inet_ntop(AF_INET6, &v6->sin6_addr, ip_buf, sizeof(ip_buf));
         }
     }
-    const bool used_header = false;
-    gate.subject = mortred::control::ratelimit::derive_subject(
-        ip_buf, trusted_proxies_,
-        header_value(task->get_req(), "forwarded"),
+    const auto subject = mortred::control::ratelimit::derive_subject(
+        ip_buf, proxies, header_value(task->get_req(), "forwarded"),
         header_value(task->get_req(), "x-forwarded-for"));
     const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                std::chrono::steady_clock::now().time_since_epoch())
                                .count();
-    const auto decision = ip_limiter_->admit(gate.subject, now_ms);
+    const auto decision = limiter->admit(subject, now_ms);
     if (decision.allowed) {
-        gate.admitted = true;
-        return gate;
+        return true;
     }
     const int retry_s = (decision.retry_after_ms + 999) / 1000;
-    if (rate_limit_shadow_) {
+    if (shadow) {
         metrics_.inc_http_requests(method, "shadow429");
-        return gate;
+        return true;
     }
     metrics_.inc_http_requests(method, "429");
     auto* resp = task->get_resp();
     resp->add_header_pair("Retry-After", std::to_string(retry_s).c_str());
     // IETF draft rate-limit header fields
-    resp->add_header_pair("RateLimit-Limit", std::to_string(rate_limit_rate_).c_str());
+    resp->add_header_pair("RateLimit-Limit", std::to_string(limit_rate).c_str());
     resp->add_header_pair("RateLimit-Remaining", "0");
     resp->add_header_pair("RateLimit-Reset", std::to_string(retry_s).c_str());
-    resp->add_header_pair("X-Mortred-RateLimit-Layer", "gateway-gcra");
-    reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED,
-                        "per-source rate limit exceeded");
-    gate.proceed = false;
-    return gate;
+    resp->add_header_pair("X-Mortred-RateLimit-Layer", layer);
+    reply_unified_error(task, 429, jinq::common::StatusCode::RATE_LIMITED, limited_message);
+    return false;
 }
 
 void GatewayApp::process(WFHttpTask* task) {
@@ -690,11 +685,6 @@ void GatewayApp::process(WFHttpTask* task) {
         stage_trace->mark("gw_in");
     }
 
-    const IpRateGate ip_gate = check_ip_rate_limit(task, method);
-    if (!ip_gate.proceed) {
-        return;
-    }
-
     ResolvedRoute route;
     if (!resolve_route(path, &route)) {
         metrics_.inc_http_requests(method, "404");
@@ -705,6 +695,12 @@ void GatewayApp::process(WFHttpTask* task) {
     if (stage_trace != nullptr) {
         stage_trace->mark("route");
     }
+    // Optional L0. Separate bucket from the authorized infer limiter below.
+    if (!admit_source_limit(task, method, abuse_limiter_.get(), abuse_limit_enabled_,
+                            abuse_limit_shadow_, abuse_limit_rate_, abuse_proxies_,
+                            "gateway-abuse", "pre-auth abuse rate limit exceeded")) {
+        return;
+    }
     // external auth is enforced here, once, for every model endpoint
     const std::string auth_header = header_value(task->get_req(), "authorization");
     bool authorized = false;
@@ -714,9 +710,9 @@ void GatewayApp::process(WFHttpTask* task) {
     // try multi-key auth first (P0-4)
     if (api_keys_.key_count() > 0) {
         // shared_ptr ownership: safe across a concurrent reload() that swaps
-        // the whole key set (P0-2). The per-key window increments only after
-        // key_may_infer is already true, so a scope that cannot infer keeps
-        // the existing 401 and does not take a rate_window_count slot.
+        // the whole key set (P0-2). consume_rate_limit runs only after
+        // key_may_infer is already true, so an unknown, disabled, or
+        // non-infer key keeps the 401 and does not take a per-key slot.
         const auto auth = api_keys_.identify(auth_header);
         if (key_may_infer(auth.key)) {
             const auto limited = api_keys_.consume_rate_limit(auth.key);
@@ -762,11 +758,8 @@ void GatewayApp::process(WFHttpTask* task) {
     }
 
     if (!authorized) {
-        // Allowed admit, 401 before forward: give back one emission interval.
-        // Enforce and shadow share this path. 404/405/502/503 and key 429 do not.
-        if (ip_gate.admitted && ip_limiter_ != nullptr) {
-            ip_limiter_->release(ip_gate.subject);
-        }
+        // 401 before the authorized limiter. Do not admit L2 and do not
+        // release a prior admit: failed auth never touches that bucket.
         metrics_.inc_http_requests(method, "401");
         task->get_resp()->add_header_pair("WWW-Authenticate", "Bearer realm=\"Mortred\"");
         reply_error(task, 401, "unauthorized");
@@ -779,6 +772,13 @@ void GatewayApp::process(WFHttpTask* task) {
     clocks.auth = std::chrono::steady_clock::now();
     if (stage_trace != nullptr) {
         stage_trace->mark("auth");
+    }
+    // Authorized per-source GCRA (L2). Only reached after auth succeeded,
+    // so the remaining budget is independent of any earlier 401s.
+    if (!admit_source_limit(task, method, ip_limiter_.get(), rate_limit_enabled_,
+                            rate_limit_shadow_, rate_limit_rate_, trusted_proxies_,
+                            "gateway-gcra", "per-source rate limit exceeded")) {
+        return;
     }
     if (method != route.allowed_method) {
         metrics_.inc_http_requests(method, "405");
@@ -848,9 +848,9 @@ bool GatewayApp::init(const GatewayInitOptions& options) {
     internal_token_ = options.internal_token;
     load_cors_origins(options.cors_origins);
 
-    // L1 per-IP limiter: construct AFTER config load so [gateway.rate_limit]
-    // from mortred.toml applies; MORTRED_RATE_LIMIT env (values: off|shadow|
-    // enforce) overrides for docker/compose without editing the toml
+    // Limiters are built AFTER config load so the toml applies.
+    // MORTRED_RATE_LIMIT (off|shadow|enforce) overrides only the authorized
+    // L2 table, not [gateway.abuse_limit].
     if (const char* env = std::getenv("MORTRED_RATE_LIMIT"); env != nullptr &&
         *env != '\0') {
         const std::string mode(env);
@@ -890,10 +890,26 @@ if (!rate_limit_enabled_) {
                 static_cast<uint32_t>(rl.rate_per_sec), static_cast<uint32_t>(rl.burst)},
             static_cast<size_t>(rl.max_tracked));
         std::fprintf(stderr,
-                     "mortred-gateway: per-IP rate limiting %s: %d/s burst %d, %zu trusted "
-                     "proxies\n",
+                     "mortred-gateway: authorized per-source rate limiting (L2, after auth) %s: "
+                     "%d/s burst %d, %zu trusted proxies\n",
                      rate_limit_shadow_ ? "SHADOW (count, never reject)" : "ENFORCED",
                      rl.rate_per_sec, rl.burst, trusted_proxies_.entries.size());
+    }
+    const auto& abuse = cfg_.gateway.abuse_limit;
+    abuse_limit_enabled_ = abuse.enabled || abuse.shadow;
+    abuse_limit_shadow_ = abuse.shadow;
+    abuse_limit_rate_ = abuse.rate_per_sec;
+    abuse_proxies_ = mortred::control::ratelimit::TrustedProxies::parse(split_csv(abuse.trusted_proxies));
+    if (abuse_limit_enabled_) {
+        abuse_limiter_ = std::make_unique<mortred::control::ratelimit::ShardedIpLimiter>(
+            mortred::control::ratelimit::GcraPolicy{
+                static_cast<uint32_t>(abuse.rate_per_sec), static_cast<uint32_t>(abuse.burst)},
+            static_cast<size_t>(abuse.max_tracked));
+        std::fprintf(stderr,
+                     "mortred-gateway: pre-auth abuse rate limiting (L0, separate bucket) %s: "
+                     "%d/s burst %d, %zu trusted proxies\n",
+                     abuse_limit_shadow_ ? "SHADOW (count, never reject)" : "ENFORCED",
+                     abuse.rate_per_sec, abuse.burst, abuse_proxies_.entries.size());
     }
 
     // A loaded key file does not replace a missing inference or management token.
