@@ -166,6 +166,15 @@ cmake --preset tests-only && cmake --build --preset tests-only
 # buildPreset default target is `check` (EXCLUDE_FROM_ALL tests + ctest)
 ```
 
+Default `check` excludes ctest labels `valgrind` and `heavy-golden`.
+The excluded names are `model_golden_test`, `Yolov8TrtDetection`, and
+`yolov8_detection`, plus the curated `*-memory-check` tests. Reasons and
+alternate gates are in `test/CHECK_SSOT.md`. A green `check` does not run
+those names. `MORTRED_CHECK_HEAVY=1` includes `heavy-golden` and still
+excludes `valgrind`. Numerical proof stays on the hosted / GPU path
+(`MORTRED_CI_REQUIRE_WEIGHTS=1`, `scripts/ci_assert_gtest_xml.py`); see
+`docs/ci-golden-regression.md`.
+
 > The complete operations manual - architecture diagrams, per-track walkthroughs,
 > security checklist, upgrades, troubleshooting - lives in
 > [docs/deployment.md](docs/deployment.md) / [中文版](docs/deployment.zh-cn.md).

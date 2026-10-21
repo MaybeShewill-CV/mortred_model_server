@@ -158,6 +158,12 @@ class ApiKeyManager {
     /*** number of loaded keys */
     size_t key_count() const;
 
+    /*** Entries into consume_rate_limit. Invalid, disabled, and non-infer
+     * bearers must leave this unchanged (ST2). */
+    uint64_t consume_calls() const {
+        return consume_calls_.load(std::memory_order_relaxed);
+    }
+
     /*** compute SHA-256 hex of a string (for generating key hashes) */
     static std::string sha256_hex(const std::string& input);
 
@@ -165,6 +171,7 @@ class ApiKeyManager {
     mutable std::mutex mu_;
     std::string config_path_;
     std::unordered_map<std::string, std::shared_ptr<ApiKey>> keys_;  // hash -> key
+    std::atomic<uint64_t> consume_calls_{0};
 
     bool allow_rate_limit(const ApiKey* key);
 };
@@ -269,6 +276,7 @@ inline AuthResult ApiKeyManager::identify(const std::string& authorization_heade
 }
 
 inline AuthResult ApiKeyManager::consume_rate_limit(const std::shared_ptr<const ApiKey>& key) {
+    consume_calls_.fetch_add(1, std::memory_order_relaxed);
     AuthResult out;
     if (!key) {
         out.reason = AuthReason::UNKNOWN;

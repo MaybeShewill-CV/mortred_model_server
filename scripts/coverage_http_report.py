@@ -20,6 +20,11 @@ official --raw load, and append the row before the next id.
 --from <id> keeps rows already in that file and continues at <id>.
 --id <id> runs one id and replaces that section only.
 Product-static live runs require --id or --from so the skeleton is not wiped.
+
+A passing row calls pf5_retest.record_baseline. The first report creates
+docs/perf/baselines/<id>.json (schema pf5-baseline-v1). A later run on the
+same hardware keeps that recorded RPS and p99. A different hardware string
+refuses to rewrite the file.
 """
 
 from __future__ import annotations
@@ -52,6 +57,7 @@ from calibrate_pack import (  # noqa: E402
 )
 from http_infer_rps import close_client_first  # noqa: E402
 from pack_trt import server_listen  # noqa: E402
+from pf5_retest import Pf5Error, record_baseline  # noqa: E402
 from repo_toml import load_toml  # noqa: E402
 
 import http.client  # noqa: E402
@@ -942,59 +948,6 @@ def row_from_fields(model_id: str, fields: dict[str, str]) -> dict:
     }
 
 
-def record_pf5_baseline(row: dict, source: str, dest: Path | None = None) -> str:
-    """Write docs/perf/baselines/<id>.json the first time. Keep it afterwards.
-
-    Same hardware keeps the recorded numbers. A different hardware string
-    refuses and does not rewrite the file. Schema matches pf5-baseline-v1
-    so a later PF5 checker can read the file without this driver importing it.
-    """
-    directory = BASELINE_DIR if dest is None else dest
-    directory.mkdir(parents=True, exist_ok=True)
-    image = row.get("image")
-    if image in (None, "", "-"):
-        image = None
-    workers = int(row["worker_nums"])
-    doc = {
-        "schema": "pf5-baseline-v1",
-        "id": row["id"],
-        "source": source,
-        "date": row["date"],
-        "hardware": row["hardware"],
-        "worker_nums": workers,
-        "decode_auto": row["decode_auto"],
-        "success_rps": row["success_rps"],
-        "p50_ms": row["p50_ms"],
-        "p99_ms": row["p99_ms"],
-        "concurrency": workers * 2,
-        "duration": "60s",
-        "warmup": "5s",
-        "warmup_s": row["warmup_s"],
-        "wall_s": row["wall_s"],
-        "error_rate": row["error_rate"],
-        "load_command": row["load_command"],
-        "load_url": row["load_url"],
-        "image": image,
-        "server_uri": row["server_uri"],
-        "conf_server": row["conf_server"],
-        "engine": row["engine"],
-    }
-    path = directory / ("%s.json" % row["id"])
-    if path.is_file():
-        try:
-            existing = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("baseline %s is not json: %s" % (path.name, exc)) from exc
-        if existing.get("hardware") != doc["hardware"]:
-            raise RuntimeError(
-                "baseline hardware mismatch for %s: have %s, current %s (baseline not rewritten)"
-                % (row["id"], existing.get("hardware"), doc["hardware"])
-            )
-        return "kept"
-    path.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
-    return "created"
-
-
 def _status_table(rows: list[tuple[str, str, str]]) -> str:
     lines = ["id\tstatus\tdetail"]
     for model_id, status, detail in rows:
@@ -1131,9 +1084,10 @@ def render_product_skeleton() -> str:
         "to be resident). The driver does not write a PASS row unless `judge_row` accepts it:",
         "",
         "1. `mortredctl prepare --id <id>`",
-        "2. One-id pack. If `conf/packs/<id>.toml` exists and lists only that id, it is",
-        "   the temp pack seed (per-id packs from the pack work). Otherwise the driver",
-        "   writes `[pack.<id>] worker_nums = 1`. Git packs are not modified.",
+        "2. One-id pack. If `conf/packs/<id>.toml` exists and lists only that id, the",
+        "   driver copies it to a temp pack (those seeds include `model_config`;",
+        "   `calibrate --write-pack` refuses `conf/packs/`). Otherwise the driver writes",
+        "   `[pack.<id>] worker_nums = 1`. Git packs are not modified.",
         "3. `mortredctl calibrate --pack <temp> --write-pack --duration 60s`",
         "   (the calibrator posts with `http_infer_rps.py --raw`).",
         "4. Deploy that pack alone (`MORTRED_PACK` is the temp pack).",
@@ -1150,9 +1104,10 @@ def render_product_skeleton() -> str:
         "python3 scripts/coverage_http_report.py --catalog product_static --check",
         "```",
         "",
-        "A PASS row also writes `docs/perf/baselines/<id>.json` (`schema` `pf5-baseline-v1`)",
-        "the first time, and keeps that file when the hardware string matches. No baseline",
-        "file is written for a blocked section.",
+        "A PASS row calls `pf5_retest.record_baseline`, which writes",
+        "`docs/perf/baselines/<id>.json` (`schema` `pf5-baseline-v1`) the first time and",
+        "keeps that file when the hardware string matches. A different hardware string",
+        "refuses to rewrite it. No baseline file is written for a blocked section.",
         "",
         "Seed p99 caps for every product id live in `scripts/calibrate_pack.py` `P99_CAP_MS`.",
         "A missing cap aborts calibrate with a table. The latency gate is not skipped.",
@@ -1294,6 +1249,12 @@ def run_self_test() -> int:
         if item:
             return _fail("self-test: %s\n" % item)
 
+    pack_text = solo_pack_text("yolov8n")
+    if "[pack.yolov8n]" not in pack_text or "model_config" not in pack_text:
+        return _fail("self-test: per-id pack was not used for yolov8n\n")
+    if solo_pack_text("yolov8n").count("[pack.") != 1:
+        return _fail("self-test: yolov8n pack is not solo\n")
+
     product_specs = product_static_specs()
     if len(product_specs) != 39:
         return _fail("self-test: product catalog length %s\n" % len(product_specs))
@@ -1342,39 +1303,36 @@ def run_self_test() -> int:
     if coverage_code != 0:
         return _fail("self-test: coverage --check failed\n")
 
-    with tempfile.TemporaryDirectory(prefix="mortred-pf5-") as tmp:
+    with tempfile.TemporaryDirectory() as tmp:
         dest = Path(tmp)
-        status = record_pf5_baseline(synthetic, "docs/perf/product_static_http_rps.md", dest)
-        if status != "created":
+        sample = _sample_row("mobilenetv2")
+        if record_baseline(sample, dest) != "created":
             return _fail("self-test: pf5 baseline was not created\n")
-        written = json.loads((dest / "yolov8n.json").read_text(encoding="utf-8"))
-        if written.get("schema") != "pf5-baseline-v1" or written.get("success_rps") != synthetic["success_rps"]:
-            return _fail("self-test: pf5 baseline shape\n")
-        if written.get("concurrency") != synthetic["worker_nums"] * 2:
-            return _fail("self-test: pf5 baseline concurrency\n")
-        changed = dict(synthetic)
-        changed["success_rps"] = 1.0
-        changed["ratio"] = 1.0 / float(changed["throughput_qps"])
-        if record_pf5_baseline(changed, "docs/perf/product_static_http_rps.md", dest) != "kept":
+        created = (dest / "mobilenetv2.json").read_bytes()
+        if record_baseline(dict(sample, success_rps=1.0), dest) != "kept":
             return _fail("self-test: pf5 baseline was not kept\n")
-        again = json.loads((dest / "yolov8n.json").read_text(encoding="utf-8"))
-        if again.get("success_rps") != synthetic["success_rps"]:
+        if (dest / "mobilenetv2.json").read_bytes() != created:
             return _fail("self-test: pf5 baseline numbers were rewritten\n")
         try:
-            record_pf5_baseline(
-                dict(synthetic, hardware="Different GPU, 1 MiB"),
-                "docs/perf/product_static_http_rps.md",
-                dest,
-            )
-        except RuntimeError as exc:
-            if "hardware mismatch" not in str(exc):
+            record_baseline(dict(sample, hardware="Different GPU, 1 MiB"), dest)
+        except Pf5Error as exc:
+            if "refusing to rewrite" not in str(exc):
                 return _fail("self-test: pf5 hardware mismatch message: %s\n" % exc)
         else:
             return _fail("self-test: pf5 hardware mismatch must refuse\n")
-        after_hw = json.loads((dest / "yolov8n.json").read_text(encoding="utf-8"))
-        if after_hw.get("hardware") != synthetic["hardware"]:
+        if (dest / "mobilenetv2.json").read_bytes() != created:
             return _fail("self-test: pf5 hardware mismatch rewrote the baseline\n")
-
+        if record_baseline(synthetic, dest) != "created":
+            return _fail("self-test: product pf5 baseline was not created\n")
+        written = json.loads((dest / "yolov8n.json").read_text(encoding="utf-8"))
+        if written.get("schema") != "pf5-baseline-v1" or written.get("success_rps") != synthetic["success_rps"]:
+            return _fail("self-test: product pf5 baseline shape\n")
+        if written.get("concurrency") != synthetic["worker_nums"] * 2:
+            return _fail("self-test: product pf5 baseline concurrency\n")
+        if record_baseline(dict(synthetic, success_rps=1.0), dest) != "kept":
+            return _fail("self-test: product pf5 baseline was not kept\n")
+        if json.loads((dest / "yolov8n.json").read_text(encoding="utf-8")).get("success_rps") != synthetic["success_rps"]:
+            return _fail("self-test: product pf5 baseline numbers were rewritten\n")
     after_bytes = REPORT.read_bytes() if REPORT.is_file() else None
     if before != after_bytes:
         return _fail("self-test: wrote the coverage checklist\n")
@@ -1663,7 +1621,6 @@ def run_id(
     hardware: str,
     today: str,
     ctl: Path,
-    baseline_source: str,
 ):
     model_id = spec["id"]
     ports = [8080, 8787, spec["port"]]
@@ -1695,8 +1652,7 @@ def run_id(
         return "fail", str(exc)
     if str(ROOT.resolve()) in str(pack.resolve()):
         return "fail", "temporary pack path"
-    if "model_config" in pack_text:
-        return "fail", "solo pack must not set model_config"
+    seed_has_model_config = "model_config" in pack_text
     pack.write_text(pack_text, encoding="utf-8")
     calibrate = "mortredctl calibrate --pack %s --write-pack --duration 60s" % pack
     sys.stderr.write("== %s calibrate ==\n" % model_id)
@@ -1717,7 +1673,7 @@ def run_id(
     decode_auto = section.get("decode_auto")
     if not isinstance(workers, int) or isinstance(workers, bool) or decode_auto not in ("cpu", "gpu"):
         return "no-rps", "pack did not write worker_nums and decode_auto (%s)" % section
-    if "model_config" in section:
+    if "model_config" in section and not seed_has_model_config:
         return "fail", "pack wrote model_config"
 
     load_cmd = [
@@ -1932,9 +1888,10 @@ def run_id(
         if auth in rendered:
             return "fail", "refusing to write a token"
         try:
-            record_pf5_baseline(row, baseline_source)
-        except RuntimeError as exc:
+            baseline_status = record_baseline(row, BASELINE_DIR)
+        except Pf5Error as exc:
             return "fail", str(exc)
+        sys.stderr.write("%s PF5 baseline %s\n" % (model_id, baseline_status))
         return "row", rendered
     finally:
         stop_supervisor(proc)
@@ -2035,10 +1992,9 @@ def append_runs(
     today: str,
     ctl: Path,
     report: Path = REPORT,
-    baseline_source: str = "docs/perf/coverage_set_http_rps.md",
 ) -> int:
     for spec in specs:
-        kind, payload = run_id(spec, tokens, hardware, today, ctl, baseline_source)
+        kind, payload = run_id(spec, tokens, hardware, today, ctl)
         if kind == "row":
             append_text(payload if isinstance(payload, str) else "", report)
             sys.stderr.write("== %s wrote ==\n" % spec["id"])
@@ -2073,14 +2029,7 @@ def run_live(catalog: str = "coverage_set") -> int:
         ctx["today"],
         ctx["ctl"],
         report,
-        "docs/perf/coverage_set_http_rps.md",
     )
-
-
-def _source_for(catalog: str) -> str:
-    if catalog == "product_static":
-        return "docs/perf/product_static_http_rps.md"
-    return "docs/perf/coverage_set_http_rps.md"
 
 
 def run_from(start_id: str, catalog: str = "coverage_set") -> int:
@@ -2121,11 +2070,10 @@ def run_from(start_id: str, catalog: str = "coverage_set") -> int:
             ctx["today"],
             ctx["ctl"],
             report,
-            _source_for(catalog),
         )
     for spec in specs:
         kind, payload = run_id(
-            spec, ctx["tokens"], ctx["hardware"], ctx["today"], ctx["ctl"], _source_for(catalog)
+            spec, ctx["tokens"], ctx["hardware"], ctx["today"], ctx["ctl"]
         )
         if kind != "row" or not isinstance(payload, str):
             sys.stderr.write("%s failed: %s\n" % (spec["id"], payload))
@@ -2156,9 +2104,7 @@ def run_one(model_id: str, catalog: str) -> int:
         return code
     if report.read_bytes() != original:
         return _fail("refusing to alter rows already written\n")
-    kind, payload = run_id(
-        spec, ctx["tokens"], ctx["hardware"], ctx["today"], ctx["ctl"], _source_for(catalog)
-    )
+    kind, payload = run_id(spec, ctx["tokens"], ctx["hardware"], ctx["today"], ctx["ctl"])
     if report.read_bytes() != original:
         return _fail("refusing to alter rows already written\n")
     if kind != "row" or not isinstance(payload, str):

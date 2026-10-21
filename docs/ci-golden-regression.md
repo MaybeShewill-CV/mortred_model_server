@@ -64,11 +64,22 @@ baseline cannot hide behind a green consistency job).
    tests) and the hosted gtest filter from `--print-gtest-filter`.
 5. `scripts/ci_assert_gtest_xml.py` rejects zero tests or any skip.
 
-The earlier `cmake --build --target check` step still allows skip-as-pass for
-the rest of the zoo (local-style). Only the explicit hosted step is
-fail-closed.
+Default `cmake --build <dir> --target check` excludes ctest label
+`heavy-golden` and does not run `model_golden_test` (aliases
+`Yolov8TrtDetection` and `yolov8_detection` are the same exclusion).
+The name list, the reason (the full golden zoo OOMs on about 20GB hosts),
+and the alternate gates are `test/CHECK_SSOT.md`. `MORTRED_CHECK_HEAVY=1`
+opts those three ctests back in (`RUN_SERIAL`, and `SKIP_RETURN_CODE 77`
+when weights are missing). A green default `check` is not a numerical
+golden proof. Label `valgrind` stays excluded either way.
 
-Local developers without weights: 单条缺权重仍可以跳过 (case skips); when every selected case is missing weights, `model_golden_test` exits 77 and prints `NUMERICAL_NOT_RUN`.
+The fail-closed numerical gate is the explicit hosted step:
+`MORTRED_CI_REQUIRE_WEIGHTS=1` on `model_golden_test` plus
+`scripts/ci_assert_gtest_xml.py` (zero tests or any skip fails the job).
+GPU smoke and `gpu-nightly-full` call the same binary directly. Default
+`check` does not run `model_golden_test`.
+
+Local developers without weights: 单条缺权重仍可以跳过 (case skips); when every selected case is missing weights, `model_golden_test` exits 77 and prints `NUMERICAL_NOT_RUN`. That applies to a direct binary run or `MORTRED_CHECK_HEAVY=1`. Default `check` does not run `model_golden_test`.
 
 YOLOv8 HTTP serving still uses `conf/model/object_detection/yolov8/yolov8s.toml`
 (TensorRT). Fork-hosted detection coverage is **NanoDet MNN** plus the

@@ -3,9 +3,10 @@
 - 基线分支: sub-agent-co-work
 - 轮次上限: 20
 - 当前轮次: 15（在 round-14 状态之上叠加的修复轮）
-- 当前步骤: 7（收口完成，A4 未做）
-- 当前问题: **P1-9 的 A4 未做**——全量 101 项 `check` 未跑到完成（`model_golden_test` 在本机 20 GB 内存下会 OOM，被排除）；其余 P1 已关闭
-- 阻塞: 无（A4 是"未跑"，不是环境阻塞；需要串行/分片或更大内存）
+- 当前步骤: 7（默认 check 排除 heavy-golden，名单在 test/CHECK_SSOT.md）
+- 当前问题: **P1-FC-3（原 P1-9 A4）** — 默认 `check` 排除 label `heavy-golden`（`model_golden_test`、`Yolov8TrtDetection`、`yolov8_detection`）和 `valgrind`。名字、原因、替代门禁见 `test/CHECK_SSOT.md`。替代门禁是 hosted golden / GPU smoke：`MORTRED_CI_REQUIRE_WEIGHTS=1` 直接跑 `model_golden_test`，再用 `scripts/ci_assert_gtest_xml.py` 拒绝 skip。内存允许时 `MORTRED_CHECK_HEAVY=1 cmake --build <dir> --target check` 才跑 heavy-golden（`RUN_SERIAL`）。这不是整套数值全绿，也不再把未执行的全量 golden 写成默认 check 已通过。
+- 阻塞: 无（全量 golden 不进默认 check；约 20GB 上的 OOM 由 `heavy-golden` 排除名单承接）
+- 本机证据（2026-10-21，tests-only，无 GPU）: 默认 check 走 `ctest -LE valgrind|heavy-golden`，`ctest -L heavy-golden` 为 0，`model_golden_test` 未注册。带 workflow 库的一次 check 是 68 项里 67 通过；`supervisor_multiinstance_test` 在套件中 abort，单独重跑通过。该测试只在 workflow 可用时注册，CI 的 tests-only 不跑它。全量 golden 没有在这台机器上执行。
 - 已关闭: P0-2…P1-8（第 13 轮 **11/11**）；**P1-5…P1-8**（本轮补记，merge `636a3990`）；合入后复核的 D1/D2/D3（`82e70987`）
 - 记录目录: cowork/ledger/round-011/（本轮修复记录：`05`…`08`）
 - 运行环境: 本机 WSL Ubuntu（/mnt/g/Codex/mortred_model_server）

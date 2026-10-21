@@ -20,9 +20,10 @@ Operator procedure on a GPU host (solo residency; do not require the other ids
 to be resident). The driver does not write a PASS row unless `judge_row` accepts it:
 
 1. `mortredctl prepare --id <id>`
-2. One-id pack. If `conf/packs/<id>.toml` exists and lists only that id, it is
-   the temp pack seed (per-id packs from the pack work). Otherwise the driver
-   writes `[pack.<id>] worker_nums = 1`. Git packs are not modified.
+2. One-id pack. If `conf/packs/<id>.toml` exists and lists only that id, the
+   driver copies it to a temp pack (those seeds include `model_config`;
+   `calibrate --write-pack` refuses `conf/packs/`). Otherwise the driver writes
+   `[pack.<id>] worker_nums = 1`. Git packs are not modified.
 3. `mortredctl calibrate --pack <temp> --write-pack --duration 60s`
    (the calibrator posts with `http_infer_rps.py --raw`).
 4. Deploy that pack alone (`MORTRED_PACK` is the temp pack).
@@ -39,9 +40,10 @@ python3 scripts/coverage_http_report.py --catalog product_static --check-skeleto
 python3 scripts/coverage_http_report.py --catalog product_static --check
 ```
 
-A PASS row also writes `docs/perf/baselines/<id>.json` (`schema` `pf5-baseline-v1`)
-the first time, and keeps that file when the hardware string matches. No baseline
-file is written for a blocked section.
+A PASS row calls `pf5_retest.record_baseline`, which writes
+`docs/perf/baselines/<id>.json` (`schema` `pf5-baseline-v1`) the first time and
+keeps that file when the hardware string matches. A different hardware string
+refuses to rewrite it. No baseline file is written for a blocked section.
 
 Seed p99 caps for every product id live in `scripts/calibrate_pack.py` `P99_CAP_MS`.
 A missing cap aborts calibrate with a table. The latency gate is not skipped.

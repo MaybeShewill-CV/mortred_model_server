@@ -504,8 +504,10 @@ mortredctl doctor
 # then start the supervisor / compose stack with that MORTRED_PACK
 ```
 
-Git TensorRT packs (`yolov8.toml`, `metric3d.toml`, `gpu_yolo_metric3d.toml`)
-ship **seed** occupancy (`gpu_mem_source="seed"`). Seed MiB is a reusable
+Git TensorRT packs ship **seed** occupancy (`gpu_mem_source="seed"`).
+Per-id files `conf/packs/<id>.toml` cover all 39 product ids; `yolov8.toml`,
+`metric3d.toml`, and `gpu_yolo_metric3d.toml` remain short multi-id examples.
+Seed MiB is a reusable
 starting sample only — it **must** be overwritten on each host by
 `calibrate --write-pack`. Do not commit calibrated `worker_nums`, non-seed
 `gpu_mem_mib`, or `[pack]` `gpu_name` / `gpu_memory_total_mib`. The demo pack
@@ -513,6 +515,49 @@ is the seeded TensorRT MobilenetV2 product: recalibrate it on every host like
 any TRT pack, and on cpu-only machines it autostarts nothing (§10.7).
 `--write-pack` refuses to write `conf/packs/`
 directly; always copy first.
+
+### Per-id product packs
+
+`conf/product_static_bs1.json` lists one catalog id per static batch=1
+TensorRT engine (39 ids). Each id has a generated seed pack at
+`conf/packs/<id>.toml`: exactly one `[pack.<id>]` section with
+`worker_nums = 1`, `gpu_mem_mib = 1800`, `gpu_mem_at_workers = 1`,
+`gpu_mem_source = "seed"`, and that id's `model_config`. Regenerate after
+the product table changes:
+
+```bash
+python3 scripts/product_static_bs1.py --emit-packs conf/packs
+python3 scripts/product_static_bs1.py --check
+```
+
+`--check` fails when an id has no pack, the file drifted from the generator,
+the section id does not match the filename, or a `conf/packs/*.toml` file is
+neither `<id>.toml` for a product id nor one of the legacy multi-id examples
+`demo.toml`, `yolov8.toml`, `metric3d.toml`, and `gpu_yolo_metric3d.toml`.
+Those four stay as short examples. Product coverage is the per-id set.
+
+`mortredctl prepare`, `scripts/prepare_pack.sh`, `scripts/pack_trt.py`, and
+`MORTRED_PACK` each take **one** pack file. To co-start several ids, merge
+the per-id files into a machine-local pack, then use that path for the rest
+of the chain. `scripts/compose_packs.py` copies each `[pack.<id>]` in
+argument order, merges a `[pack]` table when the assignment text matches,
+and rejects a repeated id. It refuses to write `conf/packs/` or
+`conf/server/`.
+
+```bash
+python3 scripts/compose_packs.py \
+  conf/packs/yolov8s.toml conf/packs/libface.toml \
+  -o /tmp/yolov8s-libface.toml
+mortredctl prepare --pack /tmp/yolov8s-libface.toml
+mortredctl calibrate --pack /tmp/yolov8s-libface.toml --write-pack
+export MORTRED_PACK=/tmp/yolov8s-libface.toml
+mortredctl doctor
+```
+
+A single id uses the same chain with `cp conf/packs/<id>.toml /tmp/<id>.toml`
+(or compose of that one file). Prepare converts only the ids listed in the
+pack. One id's pack does not build the other engines. Co-starting every id
+at once is a host-memory choice; compose the subset that should be resident.
 
 ### 10.1 Pack file
 
@@ -702,9 +747,12 @@ python3 scripts/coverage_http_report.py --catalog product_static --id yolov8n
 ```
 
 `prepare` is `mortredctl prepare --id <id>`. If `conf/packs/<id>.toml` exists
-and lists only that id, the driver uses it as the temp pack seed. Otherwise it
-writes a one-id `[pack.<id>] worker_nums = 1` pack under `/tmp`. Git packs are
-not modified, and the run never requires the other ids to be resident.
+and lists only that id, the driver copies that seed (including its
+`model_config`) to a temp pack, because `calibrate --write-pack` refuses
+`conf/packs/`. Otherwise it writes a one-id `[pack.<id>] worker_nums = 1` pack
+under `/tmp`. Git packs are not modified, and the run never requires the other
+ids to be resident. A PASS row is recorded with `pf5_retest.record_baseline`
+(`docs/perf/baselines/<id>.json`, create-once on the same hardware).
 
 ## 11. Authentication & Security
 
@@ -755,6 +803,27 @@ curl -X POST -H "Authorization: Bearer $MORTRED_API_TOKEN" \
 ```
 
 See [api-keys.md](api-keys.md) for the full guide incl. zero-downtime rotation.
+
+### 11.2.1 Gateway rate-limit order (ST2)
+
+Model routes are gated in this order:
+
+`OPTIONS` → `/healthz` → `/metrics` → route → optional pre-auth abuse limit → authentication → authorized per-source GCRA → per-key queue / inflight → forward.
+
+`[gateway.rate_limit]` is the authorized infer budget (response layer `gateway-gcra`). It runs only after Bearer authentication succeeds. A missing or invalid token is **401** and does not admit that bucket, so an unauthenticated burst does not reduce the remaining budget a later valid client from the same address would use. The gateway does not admit that bucket and then release it on 401.
+
+`[gateway.abuse_limit]` is optional and off unless the section is present and enabled (or `shadow = true`). It is a separate limiter (layer `gateway-abuse`) for shedding abuse before authentication. It does not share the authorized infer bucket. `MORTRED_RATE_LIMIT=off|shadow|enforce` selects only `[gateway.rate_limit]`.
+
+Per-key `rate_limit_qps` (layer `api-key-gcra`) is charged only after that key is recognized and allowed to infer. An unknown, disabled, or non-infer key does not take a per-key slot.
+
+```toml
+# optional; omit the section to leave pre-auth shedding off
+[gateway.abuse_limit]
+enabled = true
+rate_per_sec = 20
+burst = 40
+trusted_proxies = "127.0.0.1,::1"
+```
 
 ### 11.3 Pre-launch security checklist
 

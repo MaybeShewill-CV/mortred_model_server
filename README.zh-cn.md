@@ -183,6 +183,14 @@ cmake --build --preset tests-only
 # 该 buildPreset 默认 target 为 check（编译 EXCLUDE_FROM_ALL 测试并跑 ctest）
 ```
 
+默认 `check` 排除 ctest 标签 `valgrind` 与 `heavy-golden`。
+被排除的名字是 `model_golden_test`、`Yolov8TrtDetection`、`yolov8_detection`，
+以及少量 `*-memory-check`。原因和替代门禁在 `test/CHECK_SSOT.md`。
+绿色的默认 `check` 不包含这些名字，也不是整套数值证明。
+`MORTRED_CHECK_HEAVY=1` 才会跑 `heavy-golden`，并且仍然排除 `valgrind`。
+数值证明仍走 hosted / GPU：`MORTRED_CI_REQUIRE_WEIGHTS=1` 与
+`scripts/ci_assert_gtest_xml.py`，见 `docs/ci-golden-regression.md`。
+
 仓库目录规范与源码/配置/可执行文件映射见 [docs/repository-layout.md](docs/repository-layout.md)。
 
 **Step 3:** 下载项目提供的一些预训练模型 :tea::tea::tea:
