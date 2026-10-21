@@ -356,8 +356,14 @@ void GatewayApp::forward_to_model(WFHttpTask* task, const ResolvedRoute& route,
     const std::string internal_token = internal_token_;
     const auto t0 = std::chrono::steady_clock::now();
 
+    // retry_max=1: Workflow re-issues the request on transport-level errors
+    // (connect refused/timeout - nothing reached the upstream, so re-sending
+    // is side-effect-free for inference) and still calls this callback once.
+    // A circuit breaker is deliberately absent: upstreams are loopback, where
+    // a dead process fails connect in microseconds, so a breaker adds state
+    // without adding availability.
     auto* client = WFTaskFactory::create_http_task(
-        url, 0, 0,
+        url, 0, 1,
         [this, task, model_id, method, t0, rewrite_job_urls, stage_trace, timing, inflight_key](WFHttpTask* t) {
             struct TenantQuotaGuard {
                 std::shared_ptr<const ApiKey> key;
