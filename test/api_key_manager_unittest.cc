@@ -5,16 +5,13 @@
 * Date: 26-8-23
 ************************************************/
 
-// Unit + concurrency tests for the PRODUCTION ApiKeyManager.
+// Unit tests for the PRODUCTION ApiKeyManager.
 //
-// P0-2 regression: authenticate() previously returned a raw pointer into the
-// key map while reload()/load() cleared and repopulated it - a concurrent
-// reload during the caller's scope/name reads was a use-after-free.
-// authenticate() now returns shared_ptr<const ApiKey> so the caller owns the
-// key for as long as it reads it. The stress test at the bottom drives
-// authenticate against a continuous reload loop: with the old signature it
-// crashes under ASan and reports under TSAN; with the new one it is clean.
-// Registered with the "sanitizer" ctest label (CI TSAN gate).
+// History note: authenticate() used to return a raw pointer into the key map
+// while load() cleared and repopulated it, and a now-removed reload() API was
+// stress-tested with a concurrent loop (the "sanitizer" ctest label came from
+// there). authenticate() returns shared_ptr<const ApiKey> so a caller owns the
+// key for as long as it reads it.
 
 #include <gtest/gtest.h>
 
@@ -176,28 +173,6 @@ TEST(api_key_manager, rate_limited_valid_key_is_never_unknown) {
     EXPECT_EQ(mgr.authenticate("Bearer wrong-secret").reason, AuthReason::UNKNOWN);
 }
 
-TEST(api_key_manager, reload_swaps_active_keys) {
-    const auto path = write_config(key_entry("alpha", "secret-alpha", "inference", true, 0));
-    ApiKeyManager mgr;
-    ASSERT_TRUE(mgr.load(path));
-    EXPECT_EQ(mgr.authenticate("Bearer secret-alpha").reason, AuthReason::OK);
-
-    // rewrite the same file with a different key set, then hot-reload
-    {
-        std::ofstream out(path);
-        out << key_entry("beta", "secret-beta", "inference", true, 0);
-    }
-    ASSERT_TRUE(mgr.reload());
-
-    // old key gone
-    EXPECT_EQ(mgr.authenticate("Bearer secret-alpha").reason, AuthReason::UNKNOWN);
-    const auto beta = mgr.authenticate("Bearer secret-beta");
-    ASSERT_EQ(beta.reason, AuthReason::OK);
-    ASSERT_NE(beta.key, nullptr);
-    EXPECT_EQ(beta.key->name, "beta");
-    EXPECT_EQ(mgr.key_count(), 1u);
-}
-
 TEST(api_key_manager, list_keys_reports_counters_without_hash) {
     const auto path = write_config(key_entry("alpha", "secret-alpha", "inference", true, 0));
     ApiKeyManager mgr;
@@ -243,74 +218,6 @@ TEST(api_key_manager, quota_fields_default_zero_when_absent) {
     EXPECT_EQ(auth.key->worker_budget, 0);
     EXPECT_EQ(auth.key->max_inflight, 0);
 }
-
-TEST(api_key_manager, concurrent_reload_never_dangles_authenticate) {
-    // THE P0-2 regression test: authenticate() readers race a reload() loop
-    // that keeps swapping the whole key set. Every successful authenticate
-    // result is fully read (the exact fields the gateway touches) while the
-    // reloader runs - with the old raw-pointer return this is the UAF window.
-    const auto path = write_config(key_entry("stable", "secret-stable", "inference", true, 0));
-    ApiKeyManager mgr;
-    ASSERT_TRUE(mgr.load(path));
-
-    // variant B additionally carries a bulk of filler keys: each reload then
-    // allocates and frees many ApiKey objects, maximizing heap churn around
-    // the readers
-    std::string variant_b = key_entry("stable", "secret-stable", "inference", true, 0);
-    for (int i = 0; i < 64; ++i) {
-        variant_b += key_entry("filler" + std::to_string(i),
-                               "filler-secret-" + std::to_string(i), "inference", true, 0);
-    }
-    const std::string variant_a =
-        key_entry("stable", "secret-stable", "inference", true, 0);
-
-    std::atomic<bool> stop{false};
-    std::atomic<uint64_t> auth_ok{0};
-
-    std::vector<std::thread> readers;
-    for (int t = 0; t < 4; ++t) {
-        readers.emplace_back([&]() {
-            while (!stop.load(std::memory_order_relaxed)) {
-                const auto auth = mgr.authenticate("Bearer secret-stable");
-                if (auth.reason == AuthReason::OK) {
-                    // the gateway reads exactly these fields after auth
-                    EXPECT_EQ(auth.key->name, "stable");
-                    EXPECT_EQ(auth.key->scope, "inference");
-                    auth_ok.fetch_add(1, std::memory_order_relaxed);
-                }
-            }
-        });
-    }
-
-    std::thread reloader([&]() {
-        bool flip = false;
-        while (!stop.load(std::memory_order_relaxed)) {
-            {
-                std::ofstream out(path);
-                out << (flip ? variant_a : variant_b);
-            }
-            // a reload that reads a half-written file simply fails and keeps
-            // the previous set - both outcomes are valid hot-reload states
-            (void)mgr.reload();
-            flip = !flip;
-        }
-    });
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-    stop.store(true);
-    reloader.join();
-    for (auto& th : readers) {
-        th.join();
-    }
-
-    EXPECT_GT(auth_ok.load(), 0u);
-    // final state remains usable regardless of which variant was last loaded
-    const auto key = mgr.authenticate("Bearer secret-stable");
-    ASSERT_EQ(key.reason, AuthReason::OK);
-    ASSERT_NE(key.key, nullptr);
-    EXPECT_EQ(key.key->name, "stable");
-}
-
 
 TEST(api_key_manager, kdf_salt_authenticates_salted_and_legacy_entries) {
     // [kdf] salt makes the stored hash sha256(salt + key); legacy unsalted

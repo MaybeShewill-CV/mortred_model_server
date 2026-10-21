@@ -80,7 +80,6 @@ set(TEST_LIST
     simple_tokenizer_unittest
     request_size_limit_unittest
     ready_probe_unittest
-    rate_limiter_unittest
     cv_image_input_unittest
     worker_nums_unittest
     request_admission_unittest

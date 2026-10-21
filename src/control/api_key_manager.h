@@ -62,15 +62,13 @@ struct ApiKey {
 
 /***
  * Manages API keys from conf/api_keys.toml. Keys are stored as SHA-256
- * hashes (never plaintext); the config file is hot-reloadable via
- * reload(). Thread-safe.
+ * hashes (never plaintext); the config loads once at gateway startup
+ * (editing the file requires restarting the gateway child). Thread-safe.
  *
- * Concurrency contract (P0-2): reload()/load() may replace the whole key
- * set at any time, so authenticate() returns a shared_ptr granting the
- * CALLER ownership for as long as it reads the key (name/scope/counters).
- * Callers must never store the raw pointer beyond the shared_ptr's
- * lifetime - the old raw-pointer return was a use-after-free under
- * concurrent reload.
+ * Concurrency contract: load() replaces the whole key set, and
+ * authenticate()/identify() hand out shared_ptr ownership so a caller
+ * reading name/scope/counters can never dangle against a future key-set
+ * replacement (the old raw-pointer return was a use-after-free class).
  */
 /*** Why an authenticate() call failed. UNKNOWN and DISABLED fall through to
  * the caller's legacy-token path (401 when nothing else matches);
@@ -108,9 +106,6 @@ class ApiKeyManager {
      *   enabled = true
      */
     bool load(const std::string& path);
-
-    /*** reload from the same path (hot reload) */
-    bool reload();
 
     /***
      * Authenticate a request: extract Bearer token, hash it, look up,
@@ -232,13 +227,6 @@ inline bool ApiKeyManager::load(const std::string& path) {
         }
     }
     return true;
-}
-
-inline bool ApiKeyManager::reload() {
-    if (config_path_.empty()) {
-        return false;
-    }
-    return load(config_path_);
 }
 
 inline AuthResult ApiKeyManager::identify(const std::string& authorization_header) {

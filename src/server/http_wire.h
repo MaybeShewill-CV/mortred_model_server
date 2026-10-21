@@ -34,7 +34,6 @@
 #include "common/response_envelope.h"
 #include "common/status_code.h"
 #include "server/http_status.h"
-#include "server/rate_limiter.h"
 #include "control/rate_limit/headers.h"
 #include "server/request_admission.h"
 
@@ -147,19 +146,6 @@ inline void reply_status(WFHttpTask* task, StatusCode status, const std::string&
 inline void reply_unauthorized(WFHttpTask* task, const std::string& model_name) {
     task->get_resp()->add_header_pair("WWW-Authenticate", "Bearer realm=\"Mortred\"");
     reply_unified_json(task, status_envelope("", StatusCode::UNAUTHORIZED, {}, model_name));
-}
-
-inline void reply_rate_limited(WFHttpTask* task, const std::string& model_name,
-                               int limit_qps = 0,
-                               const char* layer = "gateway-gcra",
-                               int32_t retry_after_ms = -1) {
-    auto* resp = task->get_resp();
-    if (retry_after_ms < 0) {
-        retry_after_ms = 1000;
-    }
-    mortred::control::ratelimit::apply_rate_limit_headers(
-        resp, retry_after_ms, limit_qps, layer, 0);
-    reply_unified_json(task, status_envelope("", StatusCode::RATE_LIMITED, {}, model_name));
 }
 
 }  // namespace server

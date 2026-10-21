@@ -106,92 +106,18 @@ class GpuSampler {
             .count();
     }
 
-    // Probe nvidia-smi with a hard deadline (poll-based, non-blocking read).
-    // Returns the raw CSV stdout line, or "" on failure/timeout.
+    // Probe nvidia-smi with a hard deadline. Delegates to the shared runner
+    // in occupancy_gate.h (one fork/exec/poll implementation for both call
+    // sites) and extracts the GPU name from the first CSV field.
     static std::string probe_nvidia_smi(int timeout_ms, std::string* gpu_name_out) {
-        std::string smi_path;
-        if (!resolve_nvidia_smi_path(&smi_path)) return "";
-        char* smi_file = smi_path.data();
-        int fds[2];
-        if (::pipe(fds) != 0) return "";
-        const pid_t pid = ::fork();
-        if (pid < 0) { ::close(fds[0]); ::close(fds[1]); return ""; }
-        if (pid == 0) {
-            ::close(fds[0]);
-            if (::dup2(fds[1], STDOUT_FILENO) < 0) ::_exit(127);
-            ::close(fds[1]);
-            const int devnull = ::open("/dev/null", O_WRONLY);
-            if (devnull >= 0) { ::dup2(devnull, STDERR_FILENO); ::close(devnull); }
-            char a1[] = "--query-gpu=name,utilization.gpu,memory.used,memory.total,"
-                        "temperature.gpu,power.draw,clocks.sm,clocks.mem,fan.speed,"
-                        "pcie.link.gen.current,pcie.link.width.current";
-            char a2[] = "--format=csv,noheader,nounits";
-            char* argv[] = {smi_file, a1, a2, nullptr};
-            ::execve(smi_file, argv, ::environ);
-            ::_exit(127);
-        }
-        ::close(fds[1]);
-        const int flags = ::fcntl(fds[0], F_GETFL, 0);
-        if (flags >= 0) ::fcntl(fds[0], F_SETFL, flags | O_NONBLOCK);
-        std::string out;
-        char buf[512];
-        const auto deadline = std::chrono::steady_clock::now() +
-                              std::chrono::milliseconds(timeout_ms);
-        bool timed_out = false;
-        bool eof = false;
-        while (!eof && out.size() <= 8192) {
-            const auto now = std::chrono::steady_clock::now();
-            if (now >= deadline) { timed_out = true; break; }
-            pollfd pfd{};
-            pfd.fd = fds[0]; pfd.events = POLLIN;
-            const auto remain = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                    deadline - now).count();
-            const int pr = ::poll(&pfd, 1, static_cast<int>(remain));
-            if (pr < 0) { if (errno == EINTR) continue; timed_out = true; break; }
-            if (pr == 0) { timed_out = true; break; }
-            const ssize_t n = ::read(fds[0], buf, sizeof(buf));
-            if (n > 0) { out.append(buf, static_cast<size_t>(n)); continue; }
-            if (n == 0) { eof = true; break; }
-            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) continue;
-            timed_out = true;
-            break;
-        }
-        ::close(fds[0]);
-        int status = 0;
-        auto reap = [&]() -> bool {
-            for (int i = 0; i < 50; ++i) {
-                const pid_t r = ::waitpid(pid, &status, WNOHANG);
-                if (r == pid) return true;
-                if (r < 0 && errno != EINTR) return false;  // ECHILD: stolen
-                std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            }
-            return false;
-        };
-        // Signal only a child that still belongs to this process and is RUNNING
-        // (waitid WNOWAIT peek). Never kill a stolen/recycled pid.
-        const auto signal_if_running = [&pid]() {
-            siginfo_t live{};
-            if (::waitid(P_PID, static_cast<id_t>(pid), &live, WEXITED | WNOHANG | WNOWAIT) != 0) {
-                return;  // ECHILD
-            }
-            if (live.si_pid != 0) {
-                return;  // exited, unreaped
-            }
-            ::kill(pid, SIGKILL);
-        };
-        if (timed_out || !eof) {
-            signal_if_running();
-        }
-        if (!reap()) {
-            // Stolen by process-wide reaper: trust fully-read EOF output only;
-            // otherwise fail closed (empty -> sampler offline path).
-            if (timed_out || !eof || out.empty() || out.size() > 8192) {
-                return "";
-            }
-        } else if (timed_out || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        std::string out = run_nvidia_smi_csv(
+            "name,utilization.gpu,memory.used,memory.total,"
+            "temperature.gpu,power.draw,clocks.sm,clocks.mem,fan.speed,"
+            "pcie.link.gen.current,pcie.link.width.current",
+            timeout_ms, 8192);
+        if (out.empty()) {
             return "";
         }
-        if (out.size() > 8192 || out.empty()) return "";
         if (gpu_name_out != nullptr) {
             const auto comma = out.find(',');
             if (comma != std::string::npos) {

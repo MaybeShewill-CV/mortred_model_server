@@ -260,60 +260,37 @@ inline bool resolve_nvidia_smi_path(std::string* out) {
     return false;
 }
 
-// Strict parse of the first nvidia-smi CSV line ("name, total MiB, free
-// MiB"). Returns the snapshot with available=true only when every field is
-// present and sane; anything else keeps available=false.
-inline LiveGpuSnapshot parse_smi_snapshot(const std::string& out, LiveGpuSnapshot snap) {
-    const auto nl = out.find(static_cast<char>(10));
-    std::string line = occupancy_detail::trim_copy(nl == std::string::npos ? out : out.substr(0, nl));
-    const auto last = line.rfind(',');
-    if (last == std::string::npos) {
-        return snap;
-    }
-    const std::string free_s = occupancy_detail::trim_copy(line.substr(last + 1));
-    line = line.substr(0, last);
-    const auto mid = line.rfind(',');
-    if (mid == std::string::npos) {
-        return snap;
-    }
-    const std::string total_s = occupancy_detail::trim_copy(line.substr(mid + 1));
-    const std::string name = occupancy_detail::trim_copy(line.substr(0, mid));
-    try {
-        snap.total_mib = std::stoi(total_s);
-        snap.free_mib = std::stoi(free_s);
-    } catch (...) {
-        return snap;
-    }
-    if (name.empty() || snap.total_mib <= 0) {
-        return snap;
-    }
-    snap.name = name;
-    snap.available = true;
-    return snap;
-}
-// Probe nvidia-smi with a hard deadline. A hung driver/tool must not block
-// supervisor spawn forever; on timeout/failure returns available=false so
-// fingerprint/free-VRAM checks are skipped (stamp budget still applies).
-inline LiveGpuSnapshot query_nvidia_smi(int timeout_ms = 3000) {
-    LiveGpuSnapshot snap;
+// Run nvidia-smi with the given --query-gpu field list under a hard deadline.
+// Shared by the occupancy snapshot and the HUD sampler (one fork/exec/poll
+// implementation). Returns the raw CSV stdout, or "" when nvidia-smi cannot
+// be resolved/started, the probe times out, or the child exits non-zero. A
+// child stolen by a process-wide reaper still trusts fully-read (EOF) output.
+inline std::string run_nvidia_smi_csv(const std::string& query_fields, int timeout_ms,
+                                      size_t max_bytes) {
     if (timeout_ms <= 0) {
         timeout_ms = 3000;
     }
     std::string smi_path;
     if (!resolve_nvidia_smi_path(&smi_path)) {
-        return snap;
+        return "";
     }
     int fds[2];
     if (::pipe(fds) != 0) {
-        return snap;
+        return "";
     }
     char* smi_file = smi_path.data();
     const pid_t pid = ::fork();
     if (pid < 0) {
         ::close(fds[0]);
         ::close(fds[1]);
-        return snap;
+        return "";
     }
+    // The query buffer is filled BEFORE fork and only read in the child:
+    // allocating in the fork child (between fork and exec) can deadlock on a
+    // heap lock another parent thread was holding at fork time.
+    static thread_local std::string query_buf;
+    query_buf = query_fields;
+    char* query_ptr = query_buf.data();
     if (pid == 0) {
         ::close(fds[0]);
         if (::dup2(fds[1], STDOUT_FILENO) < 0) {
@@ -325,9 +302,9 @@ inline LiveGpuSnapshot query_nvidia_smi(int timeout_ms = 3000) {
             ::dup2(devnull, STDERR_FILENO);
             ::close(devnull);
         }
-        char arg1[] = "--query-gpu=name,memory.total,memory.free";
+        char arg1[] = "--query-gpu=";
         char arg2[] = "--format=csv,noheader,nounits";
-        char* argv[] = {smi_file, arg1, arg2, nullptr};
+        char* argv[] = {smi_file, arg1, query_ptr, arg2, nullptr};
         ::execve(smi_file, argv, ::environ);
         ::_exit(127);
     }
@@ -337,12 +314,12 @@ inline LiveGpuSnapshot query_nvidia_smi(int timeout_ms = 3000) {
         ::fcntl(fds[0], F_SETFL, flags | O_NONBLOCK);
     }
     std::string out;
-    char buf[256];
+    char buf[512];
     const auto deadline =
         std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
     bool timed_out = false;
     bool eof = false;
-    while (!eof && out.size() <= 4096) {
+    while (!eof && out.size() <= max_bytes) {
         const auto now = std::chrono::steady_clock::now();
         if (now >= deadline) {
             timed_out = true;
@@ -408,22 +385,61 @@ inline LiveGpuSnapshot query_nvidia_smi(int timeout_ms = 3000) {
         }
         ::kill(pid, SIGKILL);
     };
-    // Always reap; kill if the probe hung, hit the read cap with the child
-    // still alive, or waitpid would otherwise block past the deadline.
     if (timed_out || !eof) {
         signal_if_running();
     }
     if (!reap()) {
-        // The child was reaped out from under us by a process-wide reaper.
-        // Its exit status is unknowable, but a fully read (EOF) output is
-        // still trustworthy evidence: hand it to the strict parser instead
-        // of failing open to the no-nvidia-smi path.
-        if (timed_out || !eof) {
-            return snap;
+        // Stolen by the process-wide reaper: a fully read (EOF) output is
+        // still trustworthy evidence, anything else fails closed.
+        if (timed_out || !eof || out.empty() || out.size() > max_bytes) {
+            return "";
         }
-        return parse_smi_snapshot(out, snap);
+        return out;
     }
     if (timed_out || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        return "";
+    }
+    return out;
+}
+
+// Strict parse of the first nvidia-smi CSV line ("name, total MiB, free
+// MiB"). Returns the snapshot with available=true only when every field is
+// present and sane; anything else keeps available=false.
+inline LiveGpuSnapshot parse_smi_snapshot(const std::string& out, LiveGpuSnapshot snap) {
+    const auto nl = out.find(static_cast<char>(10));
+    std::string line = occupancy_detail::trim_copy(nl == std::string::npos ? out : out.substr(0, nl));
+    const auto last = line.rfind(',');
+    if (last == std::string::npos) {
+        return snap;
+    }
+    const std::string free_s = occupancy_detail::trim_copy(line.substr(last + 1));
+    line = line.substr(0, last);
+    const auto mid = line.rfind(',');
+    if (mid == std::string::npos) {
+        return snap;
+    }
+    const std::string total_s = occupancy_detail::trim_copy(line.substr(mid + 1));
+    const std::string name = occupancy_detail::trim_copy(line.substr(0, mid));
+    try {
+        snap.total_mib = std::stoi(total_s);
+        snap.free_mib = std::stoi(free_s);
+    } catch (...) {
+        return snap;
+    }
+    if (name.empty() || snap.total_mib <= 0) {
+        return snap;
+    }
+    snap.name = name;
+    snap.available = true;
+    return snap;
+}
+// Probe nvidia-smi with a hard deadline. A hung driver/tool must not block
+// supervisor spawn forever; on timeout/failure returns available=false so
+// fingerprint/free-VRAM checks are skipped (stamp budget still applies).
+inline LiveGpuSnapshot query_nvidia_smi(int timeout_ms = 3000) {
+    LiveGpuSnapshot snap;
+    const std::string out = run_nvidia_smi_csv("name,memory.total,memory.free", timeout_ms, 4096);
+    if (out.empty()) {
         return snap;
     }
     return parse_smi_snapshot(out, snap);

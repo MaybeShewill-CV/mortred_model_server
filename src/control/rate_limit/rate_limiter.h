@@ -5,10 +5,9 @@
 * Date: 26-10-16
 ************************************************/
 
-// Rate-limit authority (Round 6 P1-1):
+// Rate-limit authority:
 // Gateway is the sole public limiter. Product-path metering is GCRA via this
-// RateLimiter abstraction. FixedWindowRateLimiter in src/server/rate_limiter.h
-// remains for unit tests only and is not wired on the model-server product path.
+// RateLimiter abstraction; nothing on the model-server product path meters QPS.
 
 #ifndef MORTRED_CONTROL_RATE_LIMIT_RATE_LIMITER_H
 #define MORTRED_CONTROL_RATE_LIMIT_RATE_LIMITER_H
