@@ -16,10 +16,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <fstream>
 #include <map>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace mortred {
 namespace control {
@@ -47,7 +49,7 @@ inline std::string unquote(const std::string& s) {
     return s;
 }
 
-inline Doc parse(const std::string& content) {
+inline Doc parse(const std::string& content, std::vector<std::string>* problems = nullptr) {
     Doc doc;
     std::string section;
     std::istringstream ss(content);
@@ -63,6 +65,13 @@ inline Doc parse(const std::string& content) {
         }
         const auto eq = t.find('=');
         if (eq == std::string::npos || section.empty()) {
+            // A config line the parser will drop. Never silent: a typo'd key
+            // used to vanish and the caller's defaults silently took over.
+            if (problems != nullptr) {
+                problems->push_back(section.empty()
+                    ? "key-value line outside any [section] dropped: '" + t + "'"
+                    : "line without '=' inside [" + section + "] dropped: '" + t + "'");
+            }
             continue;
         }
         std::string value = trim(t.substr(eq + 1));
@@ -82,7 +91,11 @@ inline bool load(const std::string& path, Doc* out) {
     }
     std::stringstream ss;
     ss << in.rdbuf();
-    *out = parse(ss.str());
+    std::vector<std::string> problems;
+    *out = parse(ss.str(), &problems);
+    for (const auto& problem : problems) {
+        std::fprintf(stderr, "[mini_toml] %s: %s\n", path.c_str(), problem.c_str());
+    }
     return true;
 }
 
