@@ -54,6 +54,21 @@
 - P1-2 ✅ 死代码三处（f1b8bfbc）
 - P1-3 ✅ 调查结案，不改代码：非批路径"整请求持一个 worker、item 串行"是单 session 模型的固有约束——worker 是独占的模型实例，item 级交错物理不可能；worker_nums>1 时其他请求本就检出其他 worker 并行。真正的杠杆：worker_nums / max_request_items 配置、batch 战役的合批摊销。与阶段 4/5 同属"测量/分析后判定非代码缺陷"。
 - P1-4 ✅ max_connections 默认 200→1024（LB 长连接 + 样例配置已是 500；保护模型的是 admission control 不是 socket 上限）
+- P1-5 ✅ jinq→mortred 全库改名（294 文件含 .inl 与 C++ 生成器脚本；改名后全量 check 96/97，唯一失败为已知环境项 p0_1）
+- P1-6 ✅ mini_toml 丢弃行 stderr 告警（466dba9d）
+- P1-7 ✅ gateway 传输层重试 ×1 + breaker/180s 定性（afee5a7c）
+- P1-8/9 ✅ 检测阈值单源 + status 8 英文文案（7d030fe1）
+
+## P1 战役进行中（2026-10-22）
+
+- P1-1 ✅ [kdf] salt（01372fe4）
+- P1-2 ✅ 死代码三处（f1b8bfbc）
+- P1-3 ✅ 调查结案，不改代码：非批路径"整请求持一个 worker、item 串行"是单 session 模型的固有约束——worker 是独占的模型实例，item 级交错物理不可能；worker_nums>1 时其他请求本就检出其他 worker 并行。真正的杠杆：worker_nums / max_request_items 配置、batch 战役的合批摊销。与阶段 4/5 同属"测量/分析后判定非代码缺陷"。
+- P1-4 ✅ max_connections 默认 200→1024（LB 长连接 + 样例配置已是 500；保护模型的是 admission control 不是 socket 上限）
+- P1-5 ✅ jinq→mortred 全库改名（294 文件含 .inl 与 C++ 生成器脚本；改名后全量 check 96/97，唯一失败为已知环境项 p0_1）
+- P1-6 ✅ mini_toml 丢弃行 stderr 告警（466dba9d）
+- P1-7 ✅ gateway 传输层重试 ×1 + breaker/180s 定性（afee5a7c）
+- P1-8/9 ✅ 检测阈值单源 + status 8 英文文案（7d030fe1）
 
 ## 下一战役（按用户计划）
 
@@ -70,3 +85,4 @@ batch infer 优化 + P0-4 第 3 步（4 个 sampler 收敛迁移到 BackendCvMod
 - 2026-10-21 17:0x 收尾：CHANGELOG [Unreleased] 条目（912d6c9f）；最终 HEAD 全量 check 97/98；合并分支清理；本地 main 领先 origin/main 15 个提交（未推送，等用户指示）。
 - 2026-10-21 23:5x 用户决策 1-3 执行完毕：main 推送 origin（9b930bc6..eb246207）；契约管线修复（797e37e8）；CLI 大小写容错（f42b6ba1）。batch 战役、enlightengan/p0_1 追查、P1 排期、旧 stash 处置按用户指示暂缓。
 - 2026-10-21 23:59x 用户决策批次二：enlightengan 间歇 segfault 根因修复（1fedfdea，preprocess 无 init 时 dtype 尾部解引用空 session，0/20→20/20）；旧 stash 已删；三件套微基准入库 scripts/microbench（run.sh 复现基线数字）。batch infer 按指示继续押后。
+- 2026-10-22 P1 战役九项全部完成（01372fe4..7d030fe1）：加盐、死代码三处、队头阻塞定性、连接数默认、改名、mini_toml、gateway 重试、阈值单源、英文文案。单测/契约族全绿，改名后全量 check 96/97（唯一失败为 p0_1 环境项）。
