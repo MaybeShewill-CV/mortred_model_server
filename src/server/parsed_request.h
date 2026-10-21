@@ -185,8 +185,10 @@ inline ParsedRequest parse_request_envelope(const std::string &body, const std::
 /*** Raw-body encoding of the SAME envelope: Content-Type image-anything (or
  * application/octet-stream) carries exactly one image as the request body
  * (images[0]); params/options ride the X-Mortred-Params / X-Mortred-Options
- * headers as compact JSON; the optional trace id rides X-Request-ID. */
-inline ParsedRequest parse_raw_request(const std::string &body, const std::string &req_id_header,
+ * headers as compact JSON; the optional trace id rides X-Request-ID. Takes
+ * the body by value and moves it into the item: the transport copy from
+ * decode_chunked_body becomes the only full-body copy on this path. */
+inline ParsedRequest parse_raw_request(std::string body, const std::string &req_id_header,
                                        const std::string &params_header, const std::string &options_header,
                                        const std::vector<ParamSpec> &specs) {
     ParsedRequest request;
@@ -200,7 +202,7 @@ inline ParsedRequest parse_raw_request(const std::string &body, const std::strin
 
     byte_source item;
     item.origin = byte_source::origin_kind::raw_bytes;
-    item.data = body;
+    item.data = std::move(body);
     request.items.push_back(std::move(item));
 
     detail::apply_raw_headers(params_header, options_header, specs, &request);
