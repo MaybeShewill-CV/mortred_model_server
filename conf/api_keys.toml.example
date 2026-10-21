@@ -18,6 +18,16 @@
 # scripts/check_api_keys_hashing.sh rejects a config that still carries the hash
 # of the documented example secret, and `mortredctl doctor` runs that check.
 
+# Optional per-file KDF salt: when the [kdf] section is present, every hash in
+# this file is sha256(salt + key) instead of the bare sha256(key). A stolen
+# config then resists offline brute force per deployment (the attacker cannot
+# precompute against other deployments). Legacy unsalted entries keep working:
+# the gateway tries the salted hash first, the bare hash second. Minted keys
+# pick the salt up automatically from the --append target.
+#
+# [kdf]
+# salt = "any non-secret per-deployment string"
+#
 # [keys.client-a]
 # hash = "<sha256 hex of the Bearer secret>"
 # scope = "inference"

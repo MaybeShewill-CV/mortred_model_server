@@ -93,8 +93,13 @@ class ApiKeyManager {
      * parsed. A readable file with zero [keys.*] entries returns true and
      * key_count()==0 (empty is not a parse error).
      * Format:
+     *   [kdf]
+     *   salt = "..."            # optional per-file salt; when set, every
+     *                           # hash = sha256hex(salt + key). Legacy entries
+     *                           # hashed without the salt keep working (the
+     *                           # unsalted hash is tried second).
      *   [keys.<name>]
-     *   hash = "sha256hex..."   # SHA-256 of the API key string
+     *   hash = "sha256hex..."   # SHA-256 of the API key string (see [kdf])
      *   scope = "inference"
      *   rate_limit_qps = 100   # GCRA at gateway (Round 6)
      *   max_inflight = 8   # optional per-tenant concurrency budget
@@ -170,6 +175,8 @@ class ApiKeyManager {
   private:
     mutable std::mutex mu_;
     std::string config_path_;
+    // per-file KDF salt from [kdf]; empty = legacy unsalted-only file
+    std::string kdf_salt_;
     std::unordered_map<std::string, std::shared_ptr<ApiKey>> keys_;  // hash -> key
     std::atomic<uint64_t> consume_calls_{0};
 
@@ -184,6 +191,13 @@ inline bool ApiKeyManager::load(const std::string& path) {
     std::lock_guard<std::mutex> lock(mu_);
     config_path_ = path;
     keys_.clear();
+    kdf_salt_.clear();
+    if (doc.count("kdf") != 0) {
+        const auto& kdf = doc.at("kdf");
+        if (kdf.count("salt") != 0) {
+            kdf_salt_ = kdf.at("salt");
+        }
+    }
 
     for (const auto& [section, table] : doc) {
         // expect [keys.<name>]
@@ -252,22 +266,38 @@ inline AuthResult ApiKeyManager::identify(const std::string& authorization_heade
     }
 
     // hash and look up; the map holds shared_ptr so the returned key stays
-    // alive through the caller's reads even if reload() swaps the set now
-    const std::string hash = sha256_hex(token);
+    // alive through the caller's reads even if reload() swaps the set now.
+    // A file-level [kdf] salt makes a stolen config resistant to offline
+    // per-deployment brute force; legacy unsalted entries keep working (the
+    // salted hash is tried first, the bare hash second).
     std::shared_ptr<const ApiKey> key;
     {
         std::lock_guard<std::mutex> lock(mu_);
-        const auto it = keys_.find(hash);
-        if (it == keys_.end()) {
+        // returns the entry matching the hash, or null; a matched-but-disabled
+        // entry is returned non-null and reported DISABLED after the lock
+        const auto find_by_hash = [&](const std::string& hash) {
+            const auto it = keys_.find(hash);
+            return it == keys_.end() ? std::shared_ptr<const ApiKey>{} : it->second;
+        };
+        if (!kdf_salt_.empty()) {
+            key = find_by_hash(sha256_hex(kdf_salt_ + token));
+        }
+        if (key == nullptr) {
+            key = find_by_hash(sha256_hex(token));
+        }
+        if (key == nullptr) {
             out.reason = AuthReason::UNKNOWN;
             return out;
         }
-        if (!it->second->enabled) {
-            out.reason = AuthReason::DISABLED;
-            return out;
-        }
-        key = it->second;
     }
+    if (!key->enabled) {
+        out.reason = AuthReason::DISABLED;
+        return out;
+    }
+    key->total_requests.fetch_add(1);
+    out.reason = AuthReason::OK;
+    out.key = std::move(key);
+    return out;
 
     key->total_requests.fetch_add(1);
     out.reason = AuthReason::OK;

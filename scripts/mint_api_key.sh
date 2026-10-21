@@ -52,6 +52,18 @@ hash_of() {
     printf '%s' "$1" | sha256sum | cut -d' ' -f1
 }
 
+# hash over an optional per-file [kdf] salt: sha256(salt + key). Detect the
+# salt from the --append target so minted keys always match the file's mode.
+salt_for() {  # file (may not exist) -> salt or ""
+    local f="$1"
+    [ -n "$f" ] && [ -f "$f" ] || return 0
+    awk '
+        on && /^\[/ { on = 0 }
+        /^\[kdf\]/ { on = 1 }
+        on && /^salt *=/ { sub(/^salt *= */, ""); gsub(/"/, ""); print; exit }
+    ' "$f"
+}
+
 key_block() {  # name hash scope
     printf '[keys.%s]\nhash = "%s"\nscope = "%s"\nenabled = true\n' "$1" "$2" "$3"
 }
@@ -84,8 +96,17 @@ if [ "$SELF_TEST" -eq 1 ]; then
     exit $?
 fi
 
+KDF_SALT="${KDF_SALT:-}"
+if [ "$APPEND" -eq 1 ]; then
+    KDF_SALT="$(salt_for "$OUT")"
+fi
+
 KEY="$(mint_key)"
-HASH="$(hash_of "$KEY")"
+if [ -n "$KDF_SALT" ]; then
+    HASH="$(hash_of "$KDF_SALT$KEY")"
+else
+    HASH="$(hash_of "$KEY")"
+fi
 BLOCK="$(key_block "$NAME" "$HASH" "$SCOPE")"
 
 if [ "$APPEND" -eq 1 ]; then
@@ -101,8 +122,15 @@ else
 fi
 printf '  %s\n' "$KEY"
 echo
-echo "note: verification is unsalted SHA-256 by design, so never reuse a"
-echo "memorable phrase as the key; rotate by minting a new one and removing the old"
-echo "block. There is NO hot reload: restart the gateway child after editing"
+if [ -n "$KDF_SALT" ]; then
+    echo "note: the target file declares a [kdf] salt, so the stored hash is"
+    echo "sha256(salt + key) - the salt must stay in the file or the key stops matching."
+else
+    echo "note: verification is unsalted SHA-256 by design, so never reuse a"
+    echo "memorable phrase as the key (add a [kdf] salt to the config to harden"
+    echo "against offline brute force of a stolen file)."
+fi
+echo "rotate by minting a new one and removing the old block. There is NO hot"
+echo "reload: restart the gateway child after editing"
 echo "conf/api_keys.toml (POST /api/v1/servers/__gateway/restart), otherwise the"
 echo "new key keeps returning 401."

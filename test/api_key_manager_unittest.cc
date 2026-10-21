@@ -311,6 +311,68 @@ TEST(api_key_manager, concurrent_reload_never_dangles_authenticate) {
     EXPECT_EQ(key.key->name, "stable");
 }
 
+
+TEST(api_key_manager, kdf_salt_authenticates_salted_and_legacy_entries) {
+    // [kdf] salt makes the stored hash sha256(salt + key); legacy unsalted
+    // entries in the same file must keep authenticating (tried second).
+    const std::string salt = "deploy-42";
+    const std::string path = "/tmp/mortred_api_key_kdf_test.toml";
+    {
+        std::ofstream out(path);
+        out << "[kdf]\nsalt = \"" << salt << "\"\n";
+        out << "[keys.salted]\nhash = \"" << ApiKeyManager::sha256_hex(salt + "salted-secret") << "\"\nenabled = true\n";
+        out << "[keys.legacy]\nhash = \"" << ApiKeyManager::sha256_hex("legacy-secret") << "\"\nenabled = true\n";
+    }
+    ApiKeyManager mgr;
+    ASSERT_TRUE(mgr.load(path));
+
+    auto salted = mgr.identify("Bearer salted-secret");
+    ASSERT_EQ(salted.reason, AuthReason::OK) << "salted entry failed to authenticate";
+    ASSERT_EQ(salted.key->name, "salted");
+
+    auto legacy = mgr.identify("Bearer legacy-secret");
+    ASSERT_EQ(legacy.reason, AuthReason::OK) << "legacy unsalted entry failed to authenticate";
+    ASSERT_EQ(legacy.key->name, "legacy");
+
+    // the bare hash of the salted secret must NOT match anything
+    auto bare = mgr.identify("no-salt-prefix");
+    ASSERT_NE(bare.reason, AuthReason::OK);
+    std::remove(path.c_str());
+}
+
+TEST(api_key_manager, kdf_salt_wrong_salt_is_unknown) {
+    // an entry minted under salt B must not authenticate in a file whose
+    // [kdf] salt is A: the gateway computes sha256(A + key), the stored hash
+    // is sha256(B + key), and the bare sha256(key) is only a legacy fallback
+    const std::string path = "/tmp/mortred_api_key_kdf_wrong_test.toml";
+    {
+        std::ofstream out(path);
+        out << "[kdf]\nsalt = \"saltA\"\n";
+        out << "[keys.a]\nhash = \"" << ApiKeyManager::sha256_hex("saltB" + std::string("secret")) << "\"\nenabled = true\n";
+    }
+    ApiKeyManager mgr;
+    ASSERT_TRUE(mgr.load(path));
+    auto wrong = mgr.identify("Bearer secret");
+    EXPECT_EQ(wrong.reason, AuthReason::UNKNOWN);
+    std::remove(path.c_str());
+}
+
+TEST(api_key_manager, kdf_salt_disabled_entry_reports_disabled) {
+    const std::string salt = "s";
+    const std::string path = "/tmp/mortred_api_key_kdf_disabled_test.toml";
+    {
+        std::ofstream out(path);
+        out << "[kdf]\nsalt = \"" << salt << "\"\n";
+        out << "[keys.off]\nhash = \"" << ApiKeyManager::sha256_hex(salt + "secret") << "\"\nenabled = false\n";
+    }
+    ApiKeyManager mgr;
+    ASSERT_TRUE(mgr.load(path));
+    auto res = mgr.identify("Bearer secret");
+    EXPECT_EQ(res.reason, AuthReason::DISABLED);
+    std::remove(path.c_str());
+}
+
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
