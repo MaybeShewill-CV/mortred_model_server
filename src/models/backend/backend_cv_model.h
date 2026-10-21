@@ -295,6 +295,11 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
     /*** the primary inference session created from [SECTION.backend] */
     backend::InferenceSession &session() { return *_m_session; }
 
+    /*** false before init(): preprocess/postprocess unit callers (contract
+     * tests) drive the math without a session and must skip the
+     * session-derived adaptation tails */
+    bool has_session() const noexcept { return _m_session != nullptr; }
+
     /*** config-aware image loader shared by standard and custom input paths */
     cv::Mat load_model_image(const INPUT &input, StatusCode *status = nullptr, std::string *error = nullptr) {
         return cv_input::load_image(input, _m_image_limits, status, error);

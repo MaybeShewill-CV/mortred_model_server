@@ -160,11 +160,16 @@ template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> EnlightenGan
     }
     jinq::models::backend::DType src_dtype = jinq::models::backend::DType::F32;
     jinq::models::backend::DType gray_dtype = jinq::models::backend::DType::F32;
-    for (const auto &info : this->session().inputs()) {
-        if (info.name == "input_src") {
-            src_dtype = info.dtype;
-        } else if (info.name == "input_gray") {
-            gray_dtype = info.dtype;
+    // dtype adaptation reads the engine's expected input dtypes; before init()
+    // there is no engine and F32 is the correct default (contract tests drive
+    // preprocess on a default-constructed model)
+    if (this->has_session()) {
+        for (const auto &info : this->session().inputs()) {
+            if (info.name == "input_src") {
+                src_dtype = info.dtype;
+            } else if (info.name == "input_gray") {
+                gray_dtype = info.dtype;
+            }
         }
     }
     auto src_cast = jinq::models::backend::named_tensor_as(std::move(input_src), src_dtype);
