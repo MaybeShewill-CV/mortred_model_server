@@ -104,7 +104,9 @@ class ProcessSupervisor {
     bool has_server(const std::string& id) const;
     Status status(const std::string& id) const;
     std::vector<std::pair<std::string, Status>> statuses() const;
-    LogBuffer* logs(const std::string& id);
+    /*** shared_ptr so a caller reading lines outlives a concurrent respawn's
+     * buffer swap (the raw-pointer form was a use-after-free window) */
+    std::shared_ptr<LogBuffer> logs(const std::string& id);
     AutostartGate autostart_gate() const;
 
     /*** gateway first (wait for /healthz), then autostart-eligible models.
@@ -151,16 +153,18 @@ class ProcessSupervisor {
         int64_t backoff_due_ms = 0;   // monotonic ms deadline, 0 = none
         int64_t last_probe_ms = 0;
         // Log-pipe ownership: spawn_locked creates the pipes and reader
-        // threads, then sets readers_live. handle_exit closes fds and detaches
-        // a joiner thread (sole join site — never join on the reaper) that
-        // clears readers_live and notifies _cv. spawn_locked must wait for
-        // !readers_live (never join) so restart cannot double-join.
+        // threads, then moves the fresh LogBuffer (shared) into child->log.
+        // handle_exit closes fds and moves both reader threads into a detached
+        // joiner that also holds the ended run's buffer (sole join site —
+        // never join on the reaper; a stalled filesystem must not stop
+        // reaping). spawn_locked never waits for old readers: it archives the
+        // old file and swaps in a brand-new LogBuffer, so a straggler reader
+        // can only ever append into the archived inode.
         int out_fd = -1;
         int err_fd = -1;
         std::thread reader_out;
         std::thread reader_err;
-        std::atomic<bool> readers_live{false};
-        std::unique_ptr<LogBuffer> log;
+        std::shared_ptr<LogBuffer> log;
         std::string error;
     };
 

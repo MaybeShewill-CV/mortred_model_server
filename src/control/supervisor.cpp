@@ -371,15 +371,11 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
         return false;
     }
 
-    // handle_exit exclusively joins prior readers; wait here (never join) so
-    // restart cannot double-join the same std::thread.
-    if (! _cv.wait_for(lock, std::chrono::seconds(10),
-                       [child]() { return !child->readers_live.load(); })) {
-        if (err != nullptr) {
-            *err = "timed out waiting for previous log pipe readers";
-        }
-        return false;
-    }
+    // No wait for previous readers: handle_exit moved them into a detached
+    // joiner that holds the ended run's buffer, and the swap below hands this
+    // spawn a brand-new LogBuffer over an archived file. Old and new readers
+    // can therefore never touch the same buffer, so spawn never stalls on a
+    // straggler draining a pipe over a stalled filesystem.
 
     int out_pipe[2];
     int err_pipe[2];
@@ -613,12 +609,13 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
         (std::filesystem::path(_project_root) / _cfg.supervisor.log_dir /
          (child->id + ".log"))
             .string();
-    if (child->log == nullptr) {
-        child->log = std::make_unique<LogBuffer>(
-            log_path, static_cast<size_t>(_cfg.supervisor.log_rotate_mb) * 1024 * 1024);
-    } else {
-        child->log->reset();
+    if (child->log != nullptr) {
+        // archive the ended run (rename + retention sweep); a reader straggler
+        // still holding the old buffer appends into the archived inode only
+        child->log->rollover(static_cast<uint64_t>(unix_ms()));
     }
+    child->log = std::make_shared<LogBuffer>(
+        log_path, static_cast<size_t>(_cfg.supervisor.log_rotate_mb) * 1024 * 1024);
     child->log->append("[supervisor] spawn pid " + std::to_string(pid));
     child->pid = pid;
     child->pgid = child_pgid;
@@ -628,13 +625,13 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err,
     child->error.clear();
     child->engine.note_started(monotonic_ms());
 
-    // Readers + fds are owned until handle_exit joins/closes them.
+    // Readers + fds are owned until handle_exit joins/closes them. The reader
+    // threads hold this run's buffer by value: they outlive any later swap.
     child->out_fd = out_pipe[0];
     child->err_fd = err_pipe[0];
-    LogBuffer* buffer = child->log.get();
-    child->readers_live.store(true);
-    child->reader_out = std::thread([fd = child->out_fd, buffer]() { read_pipe_loop(fd, buffer); });
-    child->reader_err = std::thread([fd = child->err_fd, buffer]() { read_pipe_loop(fd, buffer); });
+    std::shared_ptr<LogBuffer> buffer = child->log;
+    child->reader_out = std::thread([fd = child->out_fd, buffer]() { read_pipe_loop(fd, buffer.get()); });
+    child->reader_err = std::thread([fd = child->err_fd, buffer]() { read_pipe_loop(fd, buffer.get()); });
     return true;
 }
 
@@ -815,10 +812,10 @@ std::vector<std::pair<std::string, ProcessSupervisor::Status>> ProcessSupervisor
     return out;
 }
 
-LogBuffer* ProcessSupervisor::logs(const std::string& id) {
+std::shared_ptr<LogBuffer> ProcessSupervisor::logs(const std::string& id) {
     std::lock_guard<std::mutex> lock(_mu);
     Child* child = find_locked(id);
-    return child == nullptr ? nullptr : child->log.get();
+    return child == nullptr ? nullptr : child->log;
 }
 
 ProcessSupervisor::AutostartGate ProcessSupervisor::autostart_gate() const {
@@ -962,11 +959,20 @@ void ProcessSupervisor::handle_exit(pid_t pid, int wait_status) {
         child->out_fd = -1;
         child->err_fd = -1;
     }
+    // wake wait_child_exit() and every other _cv predicate that polls the
+    // child state updated above. This notify used to come indirectly from the
+    // log-reader joiner (reader EOF -> join -> notify), which made a prompt
+    // stop depend on pipe EOF timing; a stalled reader would have burned the
+    // whole stop grace budget.
+    _cv.notify_all();
 
     // Close pipe fds first so readers blocked in read() wake up. Never join
     // readers on the reaper thread: a stalled LogBuffer write must not stop
     // SIGCHLD reaping for other children. Detach a joiner that is the sole
-    // join site; spawn_locked still waits on !readers_live.
+    // join site; it also holds the ended run's buffer, keeping it alive until
+    // both readers finish. spawn_locked does not wait for this joiner: it
+    // archives the old file and swaps in a new LogBuffer, so a straggler can
+    // only append into the archived inode.
     if (out_fd >= 0) {
         ::close(out_fd);
     }
@@ -975,17 +981,15 @@ void ProcessSupervisor::handle_exit(pid_t pid, int wait_status) {
     }
     std::thread out = std::move(child->reader_out);
     std::thread err = std::move(child->reader_err);
-    std::atomic<bool>* live = &child->readers_live;
-    std::condition_variable* cv = &_cv;
-    std::thread([out = std::move(out), err = std::move(err), live, cv]() mutable {
+    std::shared_ptr<LogBuffer> ended_run = child->log;
+    std::thread([out = std::move(out), err = std::move(err),
+                 ended_run = std::move(ended_run)]() mutable {
         if (out.joinable()) {
             out.join();
         }
         if (err.joinable()) {
             err.join();
         }
-        live->store(false);
-        cv->notify_all();
     }).detach();
 }
 
