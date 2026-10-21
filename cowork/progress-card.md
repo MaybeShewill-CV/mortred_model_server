@@ -35,10 +35,7 @@
 
 ## 门禁结果
 
-- 全量 `check`：**95/98**。3 个失败全部与本轮改动无关：
-  1. `gateway_e2e_test.StageMetricsVisibleWithoutFlag`——由阶段 0 基线遗留的 `/tmp/mortred_stage_timing` 污染（复跑已绿，49/49）。
-  2. `p0_1_engine_fail_closed` AC3——TRT doctor 环境依赖（脚本型用例，改动文件与其零交集）。
-  3. `enlightengan_output_contract_unittest` SEGFAULT——崩在 `EnlightenGan::preprocess`；`git diff 9b930bc6..HEAD` 证明 enhancement/测试/common 零改动，main 既有问题。
+- 全量 `check`（最终 HEAD=9772b067 重跑）：**97/98（98%）**。唯一失败 `p0_1_engine_fail_closed` AC3（TRT doctor 环境依赖，脚本型用例，与改动文件零交集，main 既有）。早前中段运行中的 gateway_e2e（/tmp 污染，已清）与 enlightengan segfault（本轮通过，确证环境 flake）均不再复现。
 - `tests-only-werror`：**绿**（顺带修复 main 上 3 处既有违例：死函数 drop_env_entry、spawn_locked 失参、gpu_sampler name_len 残迹）。
 - check_consistency / check_tsan_targets / check_version_single_source：全过。
 - TSan：与 main 基线对比（42 vs 44 警告，同类既有误报；main 挂 2、分支挂 1）；本机 TSan 需 `setarch -R`（内核 6.18 ASLR 兼容性）。
@@ -63,3 +60,4 @@ batch infer 优化 + P0-4 第 3 步（4 个 sampler 收敛迁移到 BackendCvMod
 - 2026-10-21 15:5x 阶段 2 完成（be67c034）。
 - 2026-10-21 16:1x 阶段 3 完成（084f101b，附带 notify 潜伏 bug）；阶段 6 完成（40c59824，insitu 降级）；阶段 7 完成（ed317978）。
 - 2026-10-21 16:3x 阶段 8 完成：5 分支合并（000f232b→05fed40f）、全量门禁、WERROR 清零（5d45c4ee）、活体验证、移交清单落卡。
+- 2026-10-21 17:0x 收尾：CHANGELOG [Unreleased] 条目（912d6c9f）；最终 HEAD 全量 check 97/98；合并分支清理；本地 main 领先 origin/main 14 个提交（未推送，等用户指示）。
