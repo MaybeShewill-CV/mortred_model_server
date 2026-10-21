@@ -11,6 +11,6 @@ use_fixed_noise_for_psample = true
 [DDPM_UNET]
 [DDPM_UNET.backend]
 type = "onnx"
-model_file_path = "../weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.onnx"
+model_file_path = "../weights/diffusion/ddpm/ddpm_unet_celeba-hq-128x128.static_bs1.onnx"
 device = "cpu"
 threads = 4

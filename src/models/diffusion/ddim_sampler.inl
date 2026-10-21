@@ -15,7 +15,6 @@
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
-#include "indicators/indicators.hpp"
 
 #include "common/base64.h"
 #include "common/cv_utils.h"
@@ -177,7 +176,6 @@ class DDIMSampler<INPUT, OUTPUT>::Impl {
 
     // denoise schedule
     std::shared_ptr<DenoiseModel> _m_denoise_net;
-    StatusCode _m_sample_status = StatusCode::OK;
 
     // init flag
     bool _m_successfully_initialized = false;
@@ -279,7 +277,8 @@ class DDIMSampler<INPUT, OUTPUT>::Impl {
      * @return
      */
     std::vector<std::tuple<std::vector<float>, std::vector<float> > > p_sample(
-        std::vector<float>& xt, int total_steps, int sample_steps, float eta=0.0f, bool save_all_mid_results=false);
+        std::vector<float>& xt, int total_steps, int sample_steps, float eta=0.0f, bool save_all_mid_results=false,
+        StatusCode* sample_status=nullptr);
 
     /***
      *
@@ -288,7 +287,8 @@ class DDIMSampler<INPUT, OUTPUT>::Impl {
      * @param t_next
      * @return
      */
-    std::tuple<std::vector<float>, std::vector<float> > p_sample_once(std::vector<float>& xt, int t, int t_next, float eta=0.0f);
+    std::tuple<std::vector<float>, std::vector<float> > p_sample_once(std::vector<float>& xt, int t, int t_next, float eta=0.0f,
+                                                                      StatusCode* sample_status=nullptr);
 };
 
 /***
@@ -375,18 +375,20 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
-    // p-sample loop
-    _m_sample_status = StatusCode::OK;
+    // p-sample loop; the sampling status travels as a local so concurrent
+    // run_impl calls on one instance can never observe each other's failures
+    StatusCode sample_status = StatusCode::OK;
     std::vector<float> xt;
     if (xt_data == nullptr) {
         xt = ddim_sampler_impl::generate_random_norm_vector(sample_size.area() * sample_channels, 0.0, 1.0);
     } else {
         xt = std::vector<float>(xt_data, xt_data + sample_size.area() * sample_channels);
     }
-    auto mid_sample_results = p_sample(xt, total_steps, sample_steps, eta, save_all_mid_results);
-    if (_m_sample_status != StatusCode::OK) {
-        LOG(ERROR) << "ddim sampling failed, status code: " << _m_sample_status;
-        return _m_sample_status;
+    auto mid_sample_results = p_sample(xt, total_steps, sample_steps, eta, save_all_mid_results,
+                                        &sample_status);
+    if (sample_status != StatusCode::OK) {
+        LOG(ERROR) << "ddim sampling failed, status code: " << sample_status;
+        return sample_status;
     }
 
     // transform sampled results into cv::Mat
@@ -442,7 +444,8 @@ StatusCode DDIMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
  */
 template <typename INPUT, typename OUTPUT>
 std::vector<std::tuple<std::vector<float>, std::vector<float> > > DDIMSampler<INPUT, OUTPUT>::Impl::p_sample(
-    std::vector<float>& xt, int total_steps, int sample_steps, float eta, bool save_all_mid_results) {
+    std::vector<float>& xt, int total_steps, int sample_steps, float eta, bool save_all_mid_results,
+    StatusCode* sample_status) {
     // loop sample
     std::vector<std::tuple<std::vector<float>, std::vector<float> > > mid_sample_results;
     std::vector<double> steps = ddim_sampler_impl::linspace(0.0, static_cast<double>(total_steps) - 1.0, sample_steps);
@@ -451,8 +454,8 @@ std::vector<std::tuple<std::vector<float>, std::vector<float> > > DDIMSampler<IN
         auto t = steps[idx];
         bool is_last = t == 0;
         auto t_next = is_last ? t : steps[idx + 1];
-        auto sample_result = p_sample_once(xt, t, t_next, eta);
-        if (_m_sample_status != StatusCode::OK) {
+        auto sample_result = p_sample_once(xt, t, t_next, eta, sample_status);
+        if (*sample_status != StatusCode::OK) {
             break;
         }
         xt = std::get<1>(sample_result);
@@ -479,7 +482,7 @@ std::vector<std::tuple<std::vector<float>, std::vector<float> > > DDIMSampler<IN
  */
 template <typename INPUT, typename OUTPUT>
 std::tuple<std::vector<float>, std::vector<float> > DDIMSampler<INPUT, OUTPUT>::Impl::p_sample_once(
-    std::vector<float>& xt, int t, int t_next, float eta) {
+    std::vector<float>& xt, int t, int t_next, float eta, StatusCode* sample_status) {
     // compute predict noise
     std_ddpm_unet_input denoise_in;
     denoise_in.xt = xt;
@@ -488,7 +491,7 @@ std::tuple<std::vector<float>, std::vector<float> > DDIMSampler<INPUT, OUTPUT>::
     auto status = _m_denoise_net->run(denoise_in, denoise_out);
     if (status != StatusCode::OK) {
         LOG(ERROR) << "denoise model run session failed, status code: " << status;
-        _m_sample_status = status;
+        *sample_status = status;
         auto result = std::make_tuple(std::vector<float>(xt.size()), std::vector<float>(xt.size()));
         return result;
     }

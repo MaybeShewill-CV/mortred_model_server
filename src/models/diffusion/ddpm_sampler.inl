@@ -15,7 +15,6 @@
 
 #include <opencv2/opencv.hpp>
 #include "glog/logging.h"
-#include "indicators/indicators.hpp"
 
 #include "common/base64.h"
 #include "common/cv_utils.h"
@@ -174,12 +173,10 @@ class DDPMSampler<INPUT, OUTPUT>::Impl {
     int64_t _m_timesteps = 1000;
     double _m_beta_start = 0.0;
     double _m_beta_end = 0.0;
-    std::unique_ptr<indicators::BlockProgressBar> _m_p_sample_bar;
     std::vector<float> _m_fixed_noise_for_psample;
 
     // denoise schedule
     std::shared_ptr<DenoiseModel> _m_denoise_net;
-    StatusCode _m_sample_status = StatusCode::OK;
 
     // init flag
     bool _m_successfully_initialized = false;
@@ -290,7 +287,8 @@ class DDPMSampler<INPUT, OUTPUT>::Impl {
      * @param use_fixed_noise
      * @return
      */
-    std::vector<float> p_sample_once(const std::vector<float>& xt, int64_t t, bool is_last_step=false, bool use_fixed_noise=false);
+    std::vector<float> p_sample_once(const std::vector<float>& xt, int64_t t, bool is_last_step=false,
+                                     bool use_fixed_noise=false, StatusCode* sample_status=nullptr);
 
     /***
      *
@@ -303,7 +301,7 @@ class DDPMSampler<INPUT, OUTPUT>::Impl {
      */
     std::vector<std::vector<float> > p_sample(
         const cv::Size& size, int timesteps, int channels=3,
-        bool save_all_mid_results=false, bool use_fixed_noise=false);
+        bool save_all_mid_results=false, bool use_fixed_noise=false, StatusCode* sample_status=nullptr);
 };
 
 /***
@@ -346,17 +344,6 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
         return init_status;
     }
 
-    // init p-sample progress bar
-    _m_p_sample_bar = std::make_unique<indicators::BlockProgressBar>();
-    _m_p_sample_bar->set_option(indicators::option::BarWidth{80});
-    _m_p_sample_bar->set_option(indicators::option::Start{"["});
-    _m_p_sample_bar->set_option(indicators::option::End{"]"});
-    _m_p_sample_bar->set_option(indicators::option::ForegroundColor{indicators::Color::white});
-    _m_p_sample_bar->set_option(indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}});
-    _m_p_sample_bar->set_option(indicators::option::ShowElapsedTime{true});
-    _m_p_sample_bar->set_option(indicators::option::ShowPercentage{true});
-    _m_p_sample_bar->set_option(indicators::option::ShowRemainingTime(true));
-
     if (init_status == StatusCode::OK) {
         _m_successfully_initialized = true;
         LOG(INFO) << "Successfully load ddpm sampler";
@@ -389,12 +376,15 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
     }
 
-    // p-sample loop
-    _m_sample_status = StatusCode::OK;
-    auto mid_sample_results = p_sample(sample_size, sample_timestep, sample_channels, save_all_mid_results, use_fixed_noise_for_psample);
-    if (_m_sample_status != StatusCode::OK) {
-        LOG(ERROR) << "ddpm sampling failed, status code: " << _m_sample_status;
-        return _m_sample_status;
+    // p-sample loop; the sampling status travels as a local so concurrent
+    // run_impl calls on one instance can never observe each other's failures
+    StatusCode sample_status = StatusCode::OK;
+    auto mid_sample_results = p_sample(sample_size, sample_timestep, sample_channels,
+                                       save_all_mid_results, use_fixed_noise_for_psample,
+                                       &sample_status);
+    if (sample_status != StatusCode::OK) {
+        LOG(ERROR) << "ddpm sampling failed, status code: " << sample_status;
+        return sample_status;
     }
 
     // transform sampled results into cv::Mat
@@ -461,7 +451,8 @@ std::vector<float> DDPMSampler<INPUT, OUTPUT>::Impl::compute_predict_mean(
  */
 template <typename INPUT, typename OUTPUT>
 std::vector<float> DDPMSampler<INPUT, OUTPUT>::Impl::p_sample_once(
-    const std::vector<float>& xt, int64_t t, bool is_last_step, bool use_fixed_noise) {
+    const std::vector<float>& xt, int64_t t, bool is_last_step, bool use_fixed_noise,
+    StatusCode* sample_status) {
     // compute predict noise
     std_ddpm_unet_input denoise_in;
     denoise_in.xt = xt;
@@ -470,7 +461,7 @@ std::vector<float> DDPMSampler<INPUT, OUTPUT>::Impl::p_sample_once(
     auto status = _m_denoise_net->run(denoise_in, denoise_out);
     if (status != StatusCode::OK) {
         LOG(ERROR) << "denoise model run session failed, status code: " << status;
-        _m_sample_status = status;
+        *sample_status = status;
         std::vector<float> result(xt.size());
         return result;
     }
@@ -517,7 +508,8 @@ std::vector<float> DDPMSampler<INPUT, OUTPUT>::Impl::p_sample_once(
  */
 template <typename INPUT, typename OUTPUT>
 std::vector<std::vector<float> > DDPMSampler<INPUT, OUTPUT>::Impl::p_sample(
-    const cv::Size &size, int timesteps, int channels, bool save_all_mid_results, bool use_fixed_noise_for_psample) {
+    const cv::Size &size, int timesteps, int channels, bool save_all_mid_results, bool use_fixed_noise_for_psample,
+    StatusCode* sample_status) {
     // construct xt random noise
     std::vector<float> xt = ddpm_sampler_impl::generate_random_norm_vector(size.area() * channels);
     std::vector<std::vector<float> > mid_sample_results;
@@ -531,8 +523,8 @@ std::vector<std::vector<float> > DDPMSampler<INPUT, OUTPUT>::Impl::p_sample(
     for (size_t idx = 0; idx < steps.size(); ++idx) {
         auto t_step = static_cast<int64_t >(steps[idx]);
         bool is_last = t_step == 0;
-        xt = p_sample_once(xt, t_step, is_last, use_fixed_noise_for_psample);
-        if (_m_sample_status != StatusCode::OK) {
+        xt = p_sample_once(xt, t_step, is_last, use_fixed_noise_for_psample, sample_status);
+        if (*sample_status != StatusCode::OK) {
             break;
         }
         if (save_all_mid_results) {
@@ -542,9 +534,7 @@ std::vector<std::vector<float> > DDPMSampler<INPUT, OUTPUT>::Impl::p_sample(
                 mid_sample_results.push_back(xt);
             }
         }
-        _m_p_sample_bar->set_progress((static_cast<float>(idx + 1) / static_cast<float>(steps.size())) * 100.0f);
     }
-    _m_p_sample_bar->mark_as_completed();
 
     return mid_sample_results;
 }
