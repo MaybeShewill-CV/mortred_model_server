@@ -116,7 +116,10 @@ public:
     }
 
 public:
-    int _m_max_connection_nums = 200;
+    // 1024: enterprise LBs hold long-lived keep-alive connections, and the
+    // shipped server tomls already run 500. Admission control (queue depth,
+    // worker checkout timeout) is what protects the model, not the socket cap.
+    int _m_max_connection_nums = 1024;
     int _m_peer_resp_timeout = 15 * 1000;
     int _m_receive_timeout = 60 * 1000;
     int _m_compute_threads = -1;

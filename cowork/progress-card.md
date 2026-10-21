@@ -48,6 +48,13 @@
 4. 仓库里有一个**旧 stash**（`stash@{0}: On sub-agent-co-work: r4-wip-param-occupancy-async-before-designs`），非本轮产生，原样保留；本轮曾误弹导致半应用、已 `reset --hard` 恢复，stash 本体无损。
 5. P1 清单（前次评审）：死代码清理、API key 加盐、非批路径队头阻塞、jinq→mortred 改名、mini_toml 静默吞错、gateway 重试/熔断等。
 
+## P1 战役进行中（2026-10-22）
+
+- P1-1 ✅ [kdf] salt（01372fe4）
+- P1-2 ✅ 死代码三处（f1b8bfbc）
+- P1-3 ✅ 调查结案，不改代码：非批路径"整请求持一个 worker、item 串行"是单 session 模型的固有约束——worker 是独占的模型实例，item 级交错物理不可能；worker_nums>1 时其他请求本就检出其他 worker 并行。真正的杠杆：worker_nums / max_request_items 配置、batch 战役的合批摊销。与阶段 4/5 同属"测量/分析后判定非代码缺陷"。
+- P1-4 ✅ max_connections 默认 200→1024（LB 长连接 + 样例配置已是 500；保护模型的是 admission control 不是 socket 上限）
+
 ## 下一战役（按用户计划）
 
 batch infer 优化 + P0-4 第 3 步（4 个 sampler 收敛迁移到 BackendCvModel）+ 翻默认值的基准门禁（batch 实测反超 bs1 ≥10% 才翻）。
