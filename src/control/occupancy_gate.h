@@ -7,7 +7,7 @@
 
 // Fail-closed spawn check: TensorRT ids in an active pack need a calibrated
 // gpu_mem_mib stamp. Joint budget and GPU fingerprint apply when those pack
-// fields are present. Round 7 P1-1: prefer shared_gpu_probe (NVML→smi).
+// fields are present. Prefers shared_gpu_probe (NVML, nvidia-smi fallback).
 // query_nvidia_smi remains the SmiGpuProbe backend; callers should use
 // query_live_gpu_via_shared_probe() for a single metrics source.
 // or an injected snapshot. occupancy_policy=off / MORTRED_OCCUPANCY_ENFORCE=0
@@ -70,7 +70,7 @@ struct OccupancyCheckInput {
     // not sample this; production wiring is pack_occupancy.py --measured-json.
     bool has_measured_gpu_mem_mib = false;
     int measured_gpu_mem_mib = 0;
-    // Host RAM dimension (Round 14).
+    // Host RAM dimension.
     bool has_rss_mib = false;
     int rss_mib = 0;
     int host_memory_total_mib = 0;
@@ -101,7 +101,7 @@ inline std::string trim_copy(std::string s) {
 }  // namespace occupancy_detail
 
 inline bool occupancy_enforcement_disabled(const std::string& policy) {
-    // P0-3: soft off alone must not skip the gate. Also require
+    // A soft off alone must not skip the gate. Also require
     // MORTRED_OCCUPANCY_ALLOW_DISABLE=1|true|yes so production spawn cannot
     // silently overcommit when only occupancy_policy=off / ENFORCE=0 is set.
     bool soft_off = false;

@@ -71,7 +71,7 @@ struct PackOccupancy {
     int gpu_reserve_pct = 15;
     std::string gpu_name;
     int gpu_memory_total_mib = 0;  // 0 = unset; skip joint budget
-    // Host RAM dimension (Round 14): when host_memory_total_mib > 0, spawn
+    // Host RAM dimension: when host_memory_total_mib > 0, spawn
     // sums per-id rss_mib floors against total*(1-ram_reserve_pct/100).
     int host_memory_total_mib = 0;
     int ram_reserve_pct = 15;
@@ -95,7 +95,7 @@ struct ServerPolicy {
     int gpu_mem_at_workers = 0;  // 0 = unset
     std::string gpu_mem_source;
     std::string decode_auto;  // empty | cpu | gpu; pack vote for image_decode_backend=auto
-    // Host-process floors from calibrate (Round 14).
+    // Host-process floors from calibrate.
     bool has_rss_mib = false;
     int rss_mib = 0;
     int thread_count = 0;  // 0 = unset

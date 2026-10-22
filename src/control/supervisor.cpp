@@ -427,7 +427,7 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
         }
     }
 
-    // Allowlist child environ (Round 14): never copy the supervisor's full
+    // Allowlist child environ : never copy the supervisor's full
     // environ. Only pass a fixed set of process/runtime keys, then inject
     // the role-specific MORTRED_* credentials below. A drop-list cannot
     // keep up with new secret names; an allowlist can.
@@ -887,7 +887,7 @@ bool ProcessSupervisor::probe_path_of(const Child& child, std::string* path) con
 }
 
 void ProcessSupervisor::probe_readiness(Child* child, int64_t now_ms) {
-    // Empty server_uri cannot form a /ready probe: fail immediately (P1-2).
+    // Empty server_uri cannot form a /ready probe: fail immediately.
     // Hot path: no HTTP round-trip, no image/preprocess work — config gate only.
     if (!child->is_gateway && child->entry.uri.empty()) {
         std::lock_guard<std::mutex> lock(_mu);

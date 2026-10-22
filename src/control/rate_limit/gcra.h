@@ -46,7 +46,7 @@
 #ifndef MORTRED_CONTROL_RATE_LIMIT_GCRA_H
 #define MORTRED_CONTROL_RATE_LIMIT_GCRA_H
 
-// Operator note (Round 7): gateway GCRA is the sole public limiter.
+// Operator note: gateway GCRA is the sole public limiter.
 // API-key QPS uses GCRA (GcraFlowLimiter) at the gateway. Model-server
 // FixedWindow product path is removed. Tune [gateway.rate_limit] and
 // per-key rate_limit_qps; see control/rate_limit/rate_limiter.h.

@@ -740,7 +740,7 @@ template <typename INPUT, typename OUTPUT> class BackendCvModel : public BaseAiM
                         } else {
                             // the shared builder carries the request-scoped
                             // params view together with the decode geometry
-                            // into postprocess (P0-2: this hand-built context
+                            // into postprocess (this hand-built context
                             // used to drop input.params, silently ignoring
                             // every per-request override on the GPU path)
                             const auto ctx = backend::image_postprocess_context(

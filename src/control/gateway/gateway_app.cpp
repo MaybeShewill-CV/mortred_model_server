@@ -731,10 +731,10 @@ void GatewayApp::process(WFHttpTask* task) {
     std::string key_name;
     std::shared_ptr<const ApiKey> api_key_held;
 
-    // try multi-key auth first (P0-4)
+    // try multi-key auth first
     if (api_keys_.key_count() > 0) {
         // shared_ptr ownership: safe across a concurrent reload() that swaps
-        // the whole key set (P0-2). consume_rate_limit runs only after
+        // the whole key set. consume_rate_limit runs only after
         // key_may_infer is already true, so an unknown, disabled, or
         // non-infer key keeps the 401 and does not take a per-key slot.
         const auto auth = api_keys_.identify(auth_header);
@@ -823,7 +823,7 @@ void GatewayApp::process(WFHttpTask* task) {
             return;
         }
         // Inflight + worker_budget enforced atomically in try_acquire_inflight CAS
-        // (Round 9: no check-then-act on inflight — avoids TOCTOU under concurrency).
+        // (no check-then-act on inflight: avoids TOCTOU under concurrency).
         if (!ApiKeyManager::try_acquire_inflight(api_key_held.get())) {
             ApiKeyManager::release_queue(api_key_held.get());
             metrics_.inc_http_requests(method, "429");
@@ -890,7 +890,7 @@ bool GatewayApp::init(const GatewayInitOptions& options) {
     // Count only when enabled or shadow is on, including after
     // MORTRED_RATE_LIMIT=off has cleared both flags. rate_per_sec and burst
     // stay on the config and are not applied while the limiter is unset.
-// P0-2: public/non-loopback listen must not run with rate limiting fully off
+// A public/non-loopback listen must not run with rate limiting fully off
 // (neither enforce nor shadow). Operators who truly need that set
 // MORTRED_RATE_LIMIT_ALLOW_DISABLE=1.
 if (!rate_limit_enabled_) {

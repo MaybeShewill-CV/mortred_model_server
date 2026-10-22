@@ -4,7 +4,7 @@
 * Date: 26-10-16
 ************************************************/
 
-// Round 6 P1-3: pluggable GpuProbe. NVML primary, nvidia-smi fallback.
+// Pluggable GpuProbe. NVML primary, nvidia-smi fallback.
 // Probes never use waitpid(-1). Fail-closed on incomplete/stolen children.
 // occupancy_gate and gpu_sampler share this metrics source.
 
@@ -80,7 +80,7 @@ class SmiGpuProbe final : public GpuProbe {
 };
 
 /*** NVML probe via dlopen("libnvidia-ml.so.1"). No hard link required.
- * Round 8 P1-4: process-lifetime dlopen handle. Init/device query failure → available=false (honest fail-closed) so
+ * The dlopen handle lives for the whole process. Init/device query failure → available=false (honest fail-closed) so
  * ChainGpuProbe can fall back to SmiGpuProbe. */
 class NvmlGpuProbe final : public GpuProbe {
   public:
