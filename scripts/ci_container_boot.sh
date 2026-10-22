@@ -2,7 +2,7 @@
 # ci_container_boot.sh - hosted-CI / local acceptance for the cpu runtime image.
 #
 # Builds compose --profile cpu, waits for supervisor health + gateway /healthz,
-# waits until pack model MOBILENETV2 is ready, posts one gateway infer, then
+# waits until pack model mobilenetv2 is ready, posts one gateway infer, then
 # checks mortred-supervisor.out and mortred-gateway.out are still in the
 # container's process table.
 #
@@ -13,7 +13,7 @@
 #   WEIGHTS_DIR           host weights mount (default ./weights)
 #   BOOT_TIMEOUT_S        per-wait timeout (default 180)
 #
-# Autostart uses a CI-injected pack id MOBILENETV2 plus a device=cpu model
+# Autostart uses a CI-injected pack id mobilenetv2 plus a device=cpu model
 # toml and a profile="cpu" server entry, all generated per boot (the repo
 # ships no default cpu product configs). This is not a GPU / TensorRT gate.
 set -euo pipefail
@@ -59,7 +59,9 @@ python3 "$ROOT/scripts/fetch_weights.py" --check --only mobilenetv2_ilsvrc2012.m
 # The repo ships no default cpu product configs (docs/deployment.md teaches
 # cpu usage). CI injects its own overlay: a device=cpu model toml from
 # conf/ci/ plus a profile="cpu" server entry, both mounted read-only into the
-# image so the MORTRED_PROFILE=cpu catalog contains MOBILENETV2.
+# image so the MORTRED_PROFILE=cpu catalog contains mobilenetv2.
+# Catalog id is the server toml model= value, not the *_SERVER section name.
+# /api/v1/status and /v1/models/{id} are exact-case (no fold to MOBILENETV2).
 CI_BOOT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mortred-ci-boot.XXXXXX")"
 COMPOSE=()
 booted=0
@@ -174,7 +176,7 @@ until curl -fsS --max-time 5 http://127.0.0.1:8080/healthz >/dev/null; do
 done
 echo "[ok] gateway /healthz"
 
-echo "== wait MOBILENETV2 ready =="
+echo "== wait mobilenetv2 ready =="
 BOOT_TIMEOUT_S="$BOOT_TIMEOUT_S" python3 - <<'PY'
 import json, os, time, urllib.error, urllib.request
 
@@ -182,6 +184,8 @@ token = os.environ["MORTRED_API_TOKEN"]
 timeout_s = int(os.environ["BOOT_TIMEOUT_S"])
 deadline = time.time() + timeout_s
 last = None
+# Same string as ci_server.toml model="mobilenetv2" / [pack.mobilenetv2].
+catalog_id = "mobilenetv2"
 while time.time() < deadline:
     req = urllib.request.Request(
         "http://127.0.0.1:8787/api/v1/status",
@@ -196,17 +200,17 @@ while time.time() < deadline:
         continue
     gateway = last.get("gateway") or {}
     servers = last.get("servers") or []
-    mv = next((s for s in servers if s.get("id") == "MOBILENETV2"), None)
+    mv = next((s for s in servers if s.get("id") == catalog_id), None)
     if gateway.get("ready") and mv and mv.get("ready") and mv.get("state") == "running":
-        print("[ok] gateway + MOBILENETV2 ready")
+        print("[ok] gateway + %s ready" % catalog_id)
         raise SystemExit(0)
     time.sleep(2)
-print("[FAIL] timed out waiting for MOBILENETV2 ready", file=__import__("sys").stderr)
+print("[FAIL] timed out waiting for %s ready" % catalog_id, file=__import__("sys").stderr)
 print(json.dumps(last, indent=2)[:4000], file=__import__("sys").stderr)
 raise SystemExit(1)
 PY
 
-echo "== one gateway infer (MOBILENETV2) =="
+echo "== one gateway infer (mobilenetv2) =="
 python3 - "$IMAGE_JPEG" <<'PY'
 import base64, json, os, pathlib, sys, urllib.error, urllib.request
 
@@ -217,7 +221,7 @@ body = json.dumps({
 }).encode()
 token = os.environ["MORTRED_GATEWAY_AUTH_TOKEN"]
 req = urllib.request.Request(
-    "http://127.0.0.1:8080/v1/models/MOBILENETV2/infer",
+    "http://127.0.0.1:8080/v1/models/mobilenetv2/infer",
     data=body,
     method="POST",
     headers={
