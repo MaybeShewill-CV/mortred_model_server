@@ -84,6 +84,10 @@ jobs:
       # ccache only: tests-only deps (opencv/glog/eigen3/gtest) come straight
       # from apt - the Linux-only project no longer needs vcpkg for them, which
       # removes the recurring clone/bootstrap/port-build flakiness in CI.
+      # workflow stays the one vendored source build: model_factory_unittest
+      # instantiates BaseAiServer (workflow server wrapper), so the workflow
+      # headers and lib must exist even in tests-only configure. Same dep pair
+      # the sanitizers job installs.
       # gcc and quality-gates share the same key to avoid rebuilding the same dependency set.
       - name: Cache ccache
         id: cache-deps
@@ -94,8 +98,10 @@ jobs:
           restore-keys: |
             ccache-${{ matrix.compiler }}-
 
-      - name: Install vendored header-only deps (3rd_party is generated, not tracked)
-        run: ./scripts/install_deps.sh --headers
+      - name: Install vendored deps (workflow + header-only set; 3rd_party is generated, not tracked)
+        run: |
+          ./scripts/install_deps.sh --workflow
+          ./scripts/install_deps.sh --headers
 
       - name: Configure (tests-only, apt deps)
         run: >
@@ -179,8 +185,11 @@ jobs:
           restore-keys: |
             ccache-gcc-
 
-      - name: Install vendored header-only deps (3rd_party is generated, not tracked)
-        run: ./scripts/install_deps.sh --headers
+      - name: Install vendored deps (workflow + header-only set; 3rd_party is generated, not tracked)
+        run: |
+          # see tests job: model_factory_unittest needs the vendored workflow
+          ./scripts/install_deps.sh --workflow
+          ./scripts/install_deps.sh --headers
 
       - name: Configure (tests-only, warnings as errors)
         run: >
@@ -517,6 +526,13 @@ jobs:
           key: ccache-clang-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'src/**', 'test/**') }}
           restore-keys: |
             ccache-clang-
+
+      - name: Install vendored deps (workflow + header-only set; 3rd_party is generated, not tracked)
+        run: |
+          # see tests job: this step was missing entirely, so the compile_commands
+          # build could not even find the vendored header-only deps
+          ./scripts/install_deps.sh --workflow
+          ./scripts/install_deps.sh --headers
 
       - name: Configure (tests-only, export compile commands)
         run: >
