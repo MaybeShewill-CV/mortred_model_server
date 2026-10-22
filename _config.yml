@@ -1,0 +1,7 @@
+# GitHub Pages builds the whole repo as site source (actions/jekyll-build-pages).
+# The cowork ledger stays out of the site: its committed shell/Prometheus
+# snippets contain literal {{...}} sequences that Liquid rejects as variables,
+# and every new ledger entry would reintroduce the same red pages build.
+# The ledger remains readable directly in the repository.
+exclude:
+  - cowork
