@@ -28,6 +28,12 @@ using mortred::common::StatusCode;
 using ClassificationOutput = mortred::models::io_define::classification::std_classification_output;
 using mortred::models::backend::NamedTensor;
 
+// ImageNet preprocessing recipe: resize the short side to this, then
+// center-crop to the configured input size (224 by convention). It is a
+// recipe constant, not the configured tensor size - decode hint, pre-crop
+// and CPU pipeline must move together.
+constexpr int k_resize_short_side = 256;
+
 template <typename INPUT, typename OUTPUT> StatusCode ResNet<INPUT, OUTPUT>::on_init(const toml::table &params) {
     const auto input_info =
         mortred::models::backend::SessionIoValidator(this->session()).input().f32().allow_fp16().rank(4).nhwc().channels(3).static_shape().validate();
@@ -66,10 +72,6 @@ template <typename INPUT, typename OUTPUT> StatusCode ResNet<INPUT, OUTPUT>::on_
             }
         }
     }
-    // ImageNet recipe: resize the short side to 256, then center-crop to the
-    // configured input size (224 by convention). 256 is a recipe constant, not
-    // the configured tensor size - the three sites below must move together.
-    constexpr int k_resize_short_side = 256;
     this->set_image_decode_hint(cv::Size(k_resize_short_side, k_resize_short_side), mortred::models::cv_input::parse_image_decode_upscale(params, "resnet"));
     this->set_gpu_preprocess({
         .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::CENTER_CROP,
