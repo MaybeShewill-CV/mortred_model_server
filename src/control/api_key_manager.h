@@ -41,7 +41,7 @@ struct ApiKey {
     // Complements rate_limit_qps (GCRA). Callers acquire before work and
     // release in all exit paths; gateway wiring is the admission point.
     int max_inflight = 0;
-    // Round 6 P1-2 tenant quota object (enforced once at gateway).
+    // Tenant quota object (enforced once, at the gateway).
     int max_queue = 0;
     int worker_budget = 0;
     mutable std::atomic<int> inflight{0};
@@ -56,7 +56,7 @@ struct ApiKey {
     // state, never identity/config
     mutable std::atomic<uint64_t> total_requests{0};
     mutable std::atomic<uint64_t> total_rejected{0};
-    // Round 6 P1-1: per-key GCRA TAT (gateway sole public QPS meter).
+    // Per-key GCRA TAT (the gateway is the sole public QPS meter).
     mutable std::atomic<int64_t> rate_tat_ms{0};
 };
 
@@ -99,7 +99,7 @@ class ApiKeyManager {
      *   [keys.<name>]
      *   hash = "sha256hex..."   # SHA-256 of the API key string (see [kdf])
      *   scope = "inference"
-     *   rate_limit_qps = 100   # GCRA at gateway (Round 6)
+     *   rate_limit_qps = 100   # GCRA at gateway
      *   max_inflight = 8   # optional per-tenant concurrency budget
      *   max_queue = 32     # optional per-tenant queue residency budget
      *   worker_budget = 4  # optional per-tenant hard worker budget
@@ -115,7 +115,7 @@ class ApiKeyManager {
      * RATE_LIMITED, not a null-key failure — conflating the two makes the
      * gateway answer 401 for "sent too fast", which no client can act on.
      * The returned shared_ptr keeps the key alive across a concurrent
-     * reload() that swaps the whole set (P0-2).
+     * any future key-set replacement.
      * rate_window_count increments only for scopes key_may_infer accepts
      * (inference, admin, all). Other scopes do not take a slot.
      */
@@ -134,7 +134,7 @@ class ApiKeyManager {
      */
     AuthResult consume_rate_limit(const std::shared_ptr<const ApiKey>& key);
 
-    /*** P1-4 first slice: per-tenant in-flight budget helpers. */
+    /*** Per-tenant in-flight/queue/worker budget helpers. */
     static bool try_acquire_inflight(const ApiKey* key);
     static void release_inflight(const ApiKey* key);
     static bool try_acquire_queue(const ApiKey* key);
@@ -348,9 +348,9 @@ inline bool ApiKeyManager::has_scope(const std::shared_ptr<const ApiKey>& key,
 
 
 inline bool ApiKeyManager::try_acquire_inflight(const ApiKey* key) {
-    // Round 8 P1-1: track when worker_budget>0 even if max_inflight<=0.
-    // Round 9: enforce worker_budget inside this CAS (same loop as max_inflight)
-    // so gateway no longer check-then-act on inflight (TOCTOU-safe).
+    // Track worker_budget>0 even when max_inflight<=0, and enforce both
+    // inside this single CAS (same loop) so the gateway never check-then-acts
+    // on inflight (TOCTOU-safe).
     if (key == nullptr) {
         return true;
     }
@@ -386,6 +386,11 @@ inline void ApiKeyManager::release_inflight(const ApiKey* key) {
 }
 
 inline bool ApiKeyManager::try_acquire_queue(const ApiKey* key) {
+    // max_queue and max_inflight look interchangeable but gate different
+    // phases: inflight counts requests HOLDING a worker, queue counts
+    // requests WAITING for one (residency until the upstream callback).
+    // Both exist because a tenant can starve the pool with queued work long
+    // before it exceeds the concurrent-execution budget. Do not merge them.
     if (key == nullptr || key->max_queue <= 0) {
         return true;
     }
