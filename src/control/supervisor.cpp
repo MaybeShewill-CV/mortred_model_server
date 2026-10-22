@@ -64,6 +64,16 @@ void override_env_entry(std::vector<std::string>& block, const char* key,
     block.emplace_back(prefix + value);
 }
 
+// Copy one non-secret supervisor env var into the child block. Empty and
+// unset values stay absent so the child keeps its own default.
+void forward_supervisor_env(std::vector<std::string>& block, const char* key) {
+    const char* value = std::getenv(key);
+    if (value == nullptr || *value == '\0') {
+        return;
+    }
+    override_env_entry(block, key, value);
+}
+
 // Remove every entry whose name matches key exactly. Exact match matters: a
 // prefix test would also drop unrelated keys such as MORTRED_API_TOKEN_FILE.
 // Deliver sig to a managed child's whole process group so that a grandchild
@@ -476,6 +486,16 @@ bool ProcessSupervisor::spawn_locked(Child* child, std::string* err) {
         if (!gateway_admin_token.empty()) {
             override_env_entry(env_storage, "MORTRED_API_TOKEN", gateway_admin_token);
         }
+        // Compose and docker_entrypoint set these on the supervisor process.
+        // The allowlist above does not copy them, and the gateway does not
+        // inherit the supervisor environ. Without MORTRED_EXPOSE the injected
+        // MORTRED_GATEWAY_HOST (0.0.0.0 in containers) fails listen_host_permitted
+        // and mortred-gateway.out exits 1 before listen(). Without
+        // MORTRED_PROFILE the gateway catalog defaults to gpu and drops
+        // profile=cpu routes (the CI pack). Model children stay off this path:
+        // they are forced onto 127.0.0.1 and must not inherit a docker expose.
+        forward_supervisor_env(env_storage, "MORTRED_EXPOSE");
+        forward_supervisor_env(env_storage, "MORTRED_PROFILE");
     } else {
         // managed children are loopback-only and protected by the internal
         // token regardless of what their TOML declares
@@ -939,6 +959,23 @@ void ProcessSupervisor::handle_exit(pid_t pid, int wait_status) {
         child->has_last_exit = true;
         expected = child->stopping;
         child->stopping = false;
+        // Child stderr is still in the log pipe at reap time, so a refuse-to-start
+        // message is not visible yet. Record the wait status before the next
+        // spawn clears error; a crash-loop give-up overwrites this below.
+        if (!expected && child->error.empty()) {
+            std::string reason;
+            if (WIFEXITED(wait_status) && WEXITSTATUS(wait_status) != 0) {
+                reason = "exited " + std::to_string(WEXITSTATUS(wait_status));
+            } else if (WIFSIGNALED(wait_status)) {
+                reason = "killed by signal " + std::to_string(WTERMSIG(wait_status));
+            }
+            if (!reason.empty()) {
+                child->error = reason;
+                if (child->log != nullptr) {
+                    child->log->append("[supervisor] " + child->error);
+                }
+            }
+        }
         const bool clean = WIFEXITED(wait_status) && WEXITSTATUS(wait_status) == 0;
         const auto decision = child->engine.note_exit(monotonic_ms(), clean, expected);
         apply_exit_decision(child, decision, expected);

@@ -120,6 +120,8 @@ class SupervisorTest : public ::testing::Test {
 
     void TearDown() override {
         ::unsetenv("MORTRED_ARGV_FILE");
+        ::unsetenv("MORTRED_EXPOSE");
+        ::unsetenv("MORTRED_PROFILE");
         fs::remove_all(root_, ec_);
     }
 
@@ -1055,6 +1057,85 @@ TEST_F(SupervisorTest, managed_children_do_not_inherit_management_credentials) {
     ::unsetenv("MORTRED_METRICS_TOKEN");
     ::unsetenv("MORTRED_GATEWAY_AUTH_TOKEN");
     ::unsetenv("MORTRED_INTERNAL_TOKEN");
+}
+
+// Container boot sets MORTRED_EXPOSE=docker and MORTRED_PROFILE=cpu on the
+// supervisor process, then the supervisor injects MORTRED_GATEWAY_HOST=0.0.0.0.
+// Those two policy vars must reach the gateway child. They must not reach a
+// model child: models are forced to 127.0.0.1 and a forwarded docker expose
+// would widen their bind if that override ever failed.
+TEST_F(SupervisorTest, gateway_child_receives_expose_and_profile) {
+    write_fake_config("ready", 60000);
+    ::setenv("MORTRED_EXPOSE", "docker", 1);
+    ::setenv("MORTRED_PROFILE", "cpu", 1);
+
+    auto sup = make_supervisor();
+    sup->set_gateway_trust("scrape-token", "infer-token", "admin-token");
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    std::string err;
+    ASSERT_TRUE(sup->start_server("fake_model_server", &err)) << err;
+    ASSERT_TRUE(wait_for([&sup]() {
+        const auto s = sup->status("fake_model_server");
+        return s.state == "running" && s.ready;
+    }, 10000)) << "fake server did not become ready";
+
+    const auto model_status = sup->status("fake_model_server");
+    ASSERT_GT(model_status.pid, 0);
+    const std::string model_env = read_child_environ(model_status.pid);
+    ASSERT_FALSE(model_env.empty());
+    EXPECT_EQ(count_env_key(model_env, "MORTRED_EXPOSE"), 0);
+    EXPECT_EQ(count_env_key(model_env, "MORTRED_PROFILE"), 0);
+
+    install_gateway_stub("ready");
+    ASSERT_TRUE(sup->start_server(kGatewayId, &err)) << err;
+    ASSERT_TRUE(wait_for([&sup]() {
+        const auto s = sup->status(kGatewayId);
+        return s.state == "running" && s.pid > 0;
+    }, 10000)) << "gateway child did not start: state=" << sup->status(kGatewayId).state
+                << " error=" << sup->status(kGatewayId).error;
+
+    const auto gw_status = sup->status(kGatewayId);
+    ASSERT_GT(gw_status.pid, 0);
+    const std::string gw_env = read_child_environ(gw_status.pid);
+    ASSERT_FALSE(gw_env.empty()) << "/proc/<pid>/environ unreadable for gateway child";
+    EXPECT_EQ(count_env_key(gw_env, "MORTRED_EXPOSE"), 1);
+    EXPECT_NE(gw_env.find("MORTRED_EXPOSE=docker"), std::string::npos) << gw_env;
+    EXPECT_EQ(count_env_key(gw_env, "MORTRED_PROFILE"), 1);
+    EXPECT_NE(gw_env.find("MORTRED_PROFILE=cpu"), std::string::npos) << gw_env;
+
+    ::unsetenv("MORTRED_EXPOSE");
+    ::unsetenv("MORTRED_PROFILE");
+}
+
+// A child that refuses to start exits before its stderr is in the supervisor
+// log. The reap path must still put the wait status on child->error so an
+// autostart deadline line is not "error=" with nothing after it.
+TEST_F(SupervisorTest, unexpected_nonzero_exit_is_recorded_on_child_error) {
+    write_fake_config("exit-now", 0, 7);
+    write_catalog();
+
+    ControlConfig cfg = base_cfg();
+    cfg.servers["fake_model_server"].enabled = true;
+    cfg.servers["fake_model_server"].has_restart_policy = true;
+    cfg.servers["fake_model_server"].restart_policy = "no";
+    auto sup = std::make_unique<ProcessSupervisor>(
+        root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    std::string err;
+    ASSERT_TRUE(sup->start_server("fake_model_server", &err)) << err;
+    ASSERT_TRUE(wait_for([&sup]() {
+        const auto s = sup->status("fake_model_server");
+        return s.state == "stopped" && s.has_last_exit;
+    }, 10000)) << "child did not settle after exit";
+
+    const auto s = sup->status("fake_model_server");
+    EXPECT_EQ(s.last_exit_status, 7);
+    EXPECT_LT(s.pid, 0);
+    EXPECT_NE(s.error.find("exited 7"), std::string::npos) << s.error;
 }
 
 
