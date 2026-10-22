@@ -228,6 +228,9 @@ struct Tensor {
     TensorLayout layout = TensorLayout::Unknown;
     // GPU zero-copy: if non-null, data lives in GPU memory at this address
     // and `buffer` is empty. Sessions skip H2D and use this pointer directly.
+    // Copying a Tensor shallow-copies these raw pointers: two Tensors then
+    // claim one device allocation. Host-only Tensors are safe to copy; on the
+    // GPU zero-copy path ownership stays with the producing code (move only).
     void* device_data = nullptr;
     // cudaEvent_t recorded on the producing stream after the last write to
     // device_data; consumer sessions MUST cudaStreamWaitEvent on it before

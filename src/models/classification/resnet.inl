@@ -66,7 +66,11 @@ template <typename INPUT, typename OUTPUT> StatusCode ResNet<INPUT, OUTPUT>::on_
             }
         }
     }
-    this->set_image_decode_hint(cv::Size(256, 256), mortred::models::cv_input::parse_image_decode_upscale(params, "resnet"));
+    // ImageNet recipe: resize the short side to 256, then center-crop to the
+    // configured input size (224 by convention). 256 is a recipe constant, not
+    // the configured tensor size - the three sites below must move together.
+    constexpr int k_resize_short_side = 256;
+    this->set_image_decode_hint(cv::Size(k_resize_short_side, k_resize_short_side), mortred::models::cv_input::parse_image_decode_upscale(params, "resnet"));
     this->set_gpu_preprocess({
         .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::CENTER_CROP,
         // CPU path subtracts caffe-style 0-255 means after to_float, no /255:
@@ -77,7 +81,7 @@ template <typename INPUT, typename OUTPUT> StatusCode ResNet<INPUT, OUTPUT>::on_
         .pad_value = 114,
         .output_dtype = input_info.value.dtype,
         .output_nhwc = true,
-        .pre_crop_size = cv::Size(256, 256),
+        .pre_crop_size = cv::Size(k_resize_short_side, k_resize_short_side),
     });
 
     return StatusCode::OK;
@@ -86,7 +90,7 @@ template <typename INPUT, typename OUTPUT> StatusCode ResNet<INPUT, OUTPUT>::on_
 template <typename INPUT, typename OUTPUT> cv::Mat ResNet<INPUT, OUTPUT>::preprocess_mat(const cv::Mat &input_image) {
     // resize -> center crop -> rgb -> per channel normalize (f32 nhwc)
     auto result = mortred::models::backend::ImagePipeline(input_image)
-                      .resize({256, 256})
+                      .resize({k_resize_short_side, k_resize_short_side})
                       .center_crop(_m_input_tensor_size)
                       .bgr_to_rgb()
                       .to_float()

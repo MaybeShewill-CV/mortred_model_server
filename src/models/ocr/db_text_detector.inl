@@ -48,10 +48,17 @@ template <typename INPUT, typename OUTPUT> StatusCode DBTextDetector<INPUT, OUTP
         return StatusCode::MODEL_INIT_FAILED;
     }
 
-    const auto output_iter = std::find_if(outputs.begin(), outputs.end(), [](const auto &item) { return item.name == "sigmoid_0.tmp_0"; });
+    // PaddleOCR's export names the probability map "sigmoid_0.tmp_0"; accept a
+    // single-output graph under whatever name it was exported with, so a
+    // renamed export does not require a code change.
+    auto output_iter = std::find_if(outputs.begin(), outputs.end(), [](const auto &item) { return item.name == "sigmoid_0.tmp_0"; });
     if (output_iter == outputs.end()) {
-        LOG(ERROR) << "db text output tensor 'sigmoid_0.tmp_0' is missing";
-        return StatusCode::MODEL_INIT_FAILED;
+        if (outputs.size() != 1) {
+            LOG(ERROR) << "db text output tensor 'sigmoid_0.tmp_0' is missing and the graph does not have exactly one output";
+            return StatusCode::MODEL_INIT_FAILED;
+        }
+        LOG(WARNING) << "db text output tensor 'sigmoid_0.tmp_0' not found; using the single declared output '" << outputs.front().name << "'";
+        output_iter = outputs.begin();
     }
     _m_output_name = output_iter->name;
 
