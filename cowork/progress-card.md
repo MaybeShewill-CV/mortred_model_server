@@ -60,6 +60,14 @@
 - P1-8/9 ✅ 检测阈值单源 + status 8 英文文案（7d030fe1）
 - 最终 HEAD 全量 check：**96/97（99%）**，唯一失败 p0_1_engine_fail_closed（TRT doctor 环境项，已定性）。rate_limiter 测试随死代码移除，用例总数 98→97。enlightengan 修复在全量套件稳定通过。
 
+## 小项清理批次（2026-10-22，v1.1.0 发布后）
+
+- ✅ v1.1.0 发布：版本单源 1.1.0、CHANGELOG 定版、tag v1.1.0 已推送（release 流水线自动构建镜像/tarball/SBOM）
+- ✅ 测试盲区四个补齐（ff59defa）：mini_toml 4、sync_request_graph 2、gpu_sampler 4（parse_sample 转 public）、http_wire 5（纯函数 + 真实 Workflow task 的状态行/header）；mortredctl 延后有理由（薄 REST 客户端，服务端已全测）
+- ✅ models 小项（7cf6dccf）：resnet 256 配方常量单源（三处联动）、DBNet 单输出回退、Tensor GPU 指针浅拷贝警告
+- ✅ 卫生（449579bb）：23 处 Round-N/P1-x 账本注释改白话、models/catalog 并入 factory::catalog
+- ✅ 记录性决策：max_queue 与 max_inflight 不合并（门控阶段不同，注释已写明）；environ token 可见性接受（同 uid 攻击者已有 ptrace/配置读取等更强原语）；factory create_xxx 样板保留（C++17 取函数指针惯用法）
+
 ## 下一战役（按用户计划）
 
 batch infer 优化 + P0-4 第 3 步（4 个 sampler 收敛迁移到 BackendCvModel）+ 翻默认值的基准门禁（batch 实测反超 bs1 ≥10% 才翻）。
@@ -77,3 +85,4 @@ batch infer 优化 + P0-4 第 3 步（4 个 sampler 收敛迁移到 BackendCvMod
 - 2026-10-21 23:59x 用户决策批次二：enlightengan 间歇 segfault 根因修复（1fedfdea，preprocess 无 init 时 dtype 尾部解引用空 session，0/20→20/20）；旧 stash 已删；三件套微基准入库 scripts/microbench（run.sh 复现基线数字）。batch infer 按指示继续押后。
 - 2026-10-22 P1 战役九项全部完成（01372fe4..7d030fe1）：加盐、死代码三处、队头阻塞定性、连接数默认、改名、mini_toml、gateway 重试、阈值单源、英文文案。单测/契约族全绿，改名后全量 check 96/97（唯一失败为 p0_1 环境项）。
 - 2026-10-22 P1 完成验证：最终全量 check 96/97（99%）。
+- 2026-10-22 小项清理批次完成（7cf6dccf/449579bb/ff59defa），v1.1.0 已发布（3a15802e + tag）。
