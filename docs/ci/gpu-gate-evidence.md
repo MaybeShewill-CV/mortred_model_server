@@ -19,7 +19,7 @@ python3 scripts/verify_gpu_gate_evidence.py \
 ## Emit after a real GPU smoke
 
 ```bash
-python3 scripts/emit_gpu_gate_evidence.py --version 1.0.0 \
+python3 scripts/emit_gpu_gate_evidence.py --version 1.1.0 \
   --artifact name=gpu-smoke,path=path/to/gpu-smoke.xml \
   --out evidence/gpu_gate_evidence.json
 ```

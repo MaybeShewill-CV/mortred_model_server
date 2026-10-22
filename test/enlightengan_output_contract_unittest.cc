@@ -64,7 +64,7 @@ TEST(EnlightenGanPreprocess, ResizePathKeepsRgbChannelOrder) {
     // put the red value into plane 2 instead)
     const auto *src = tensors[0].tensor.data<float>();
     const size_t plane = 304u * 400u;
-    for (const auto [row, col] : {std::pair<int, int>{0, 0}, {128, 128}, {303, 399}}) {
+    for (const auto &[row, col] : {std::pair<int, int>{0, 0}, {128, 128}, {303, 399}}) {
         const size_t idx = static_cast<size_t>(row) * 400 + col;
         EXPECT_NEAR(src[idx], normalized(255), 1e-4f) << "R plane at " << row << "," << col;
         EXPECT_NEAR(src[plane + idx], normalized(0), 1e-4f) << "G plane at " << row << "," << col;
