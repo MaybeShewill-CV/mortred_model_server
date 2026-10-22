@@ -23,16 +23,15 @@
 #include "factory/ocr_task.h"
 #include "factory/sam_task.h"
 #include "factory/scene_segmentation_task.h"
-#include "models/catalog/model_entry.h"
 #include "server/generic_cv_server.h"
 
 namespace {
 
 namespace fs = std::filesystem;
 
-using ServerEntry = mortred::models::catalog::ServedModelEntry;
-using mortred::models::catalog::model_entry_valid;
-using mortred::models::catalog::served_model_entry_valid;
+using ServerEntry = mortred::factory::catalog::ServedModelEntry;
+using mortred::factory::catalog::model_entry_valid;
+using mortred::factory::catalog::served_model_entry_valid;
 
 std::vector<fs::path> collect_toml_files(const fs::path &root) {
     std::vector<fs::path> files;

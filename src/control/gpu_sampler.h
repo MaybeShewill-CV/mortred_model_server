@@ -6,7 +6,7 @@
 ************************************************/
 
 // Background GPU sampler for the supervisor HUD.
-// Round 7 P1-1: shared_gpu_probe() is the primary metrics source
+// shared_gpu_probe() is the primary metrics source
 // (NVML dlopen → smi chain). Local smi fork is fallback-only; never waitpid(-1).
 // dedicated thread (never on the HTTP handler path) at a configurable
 // interval, stores a bounded ring buffer of full-field samples, and serves
@@ -70,6 +70,39 @@ inline double parse_f64_or(const std::string& s, double fallback) {
 
 class GpuSampler {
   public:
+
+    static GpuSample parse_sample(const std::string& csv, int name_len,
+                                   std::string* util_col = nullptr) {
+        (void)name_len;  // fields[0] (the name) is skipped unconditionally below
+        GpuSample s;
+        s.t_unix_ms = unix_ms();
+        std::vector<std::string> fields;
+        size_t start = 0;
+        for (size_t i = 0; i <= csv.size(); ++i) {
+            if (i == csv.size() || csv[i] == ',') {
+                auto f = csv.substr(start, i - start);
+                auto b = f.find_first_not_of(" \t");
+                auto e = f.find_last_not_of(" \t\r\n");
+                fields.push_back(b != std::string::npos ? f.substr(b, e - b + 1) : "");
+                start = i + 1;
+            }
+        }
+        // fields[0] = name (skipped), then the 10 queried metrics
+        if (fields.size() >= 11) {
+            if (util_col != nullptr) *util_col = fields[1];
+            s.util = parse_i32_or(fields[1], -1);
+            s.mem_used_mib = parse_i32_or(fields[2], -1);
+            s.mem_total_mib = parse_i32_or(fields[3], -1);
+            s.temp_c = parse_i32_or(fields[4], -1);
+            s.power_w = parse_f64_or(fields[5], -1.0);
+            s.clocks_sm_mhz = parse_i32_or(fields[6], -1);
+            s.clocks_mem_mhz = parse_i32_or(fields[7], -1);
+            s.fan_pct = parse_i32_or(fields[8], -1);
+            s.pcie_gen = parse_i32_or(fields[9], -1);
+            s.pcie_width = parse_i32_or(fields[10], -1);
+        }
+        return s;
+    }
     GpuSampler(int interval_ms = 2000, size_t ring_capacity = 300)
         : interval_ms_(interval_ms), capacity_(ring_capacity) {}
 
@@ -130,38 +163,6 @@ class GpuSampler {
         return out;
     }
 
-    static GpuSample parse_sample(const std::string& csv, int name_len,
-                                   std::string* util_col = nullptr) {
-        (void)name_len;  // fields[0] (the name) is skipped unconditionally below
-        GpuSample s;
-        s.t_unix_ms = unix_ms();
-        std::vector<std::string> fields;
-        size_t start = 0;
-        for (size_t i = 0; i <= csv.size(); ++i) {
-            if (i == csv.size() || csv[i] == ',') {
-                auto f = csv.substr(start, i - start);
-                auto b = f.find_first_not_of(" \t");
-                auto e = f.find_last_not_of(" \t\r\n");
-                fields.push_back(b != std::string::npos ? f.substr(b, e - b + 1) : "");
-                start = i + 1;
-            }
-        }
-        // fields[0] = name (skipped), then the 10 queried metrics
-        if (fields.size() >= 11) {
-            if (util_col != nullptr) *util_col = fields[1];
-            s.util = parse_i32_or(fields[1], -1);
-            s.mem_used_mib = parse_i32_or(fields[2], -1);
-            s.mem_total_mib = parse_i32_or(fields[3], -1);
-            s.temp_c = parse_i32_or(fields[4], -1);
-            s.power_w = parse_f64_or(fields[5], -1.0);
-            s.clocks_sm_mhz = parse_i32_or(fields[6], -1);
-            s.clocks_mem_mhz = parse_i32_or(fields[7], -1);
-            s.fan_pct = parse_i32_or(fields[8], -1);
-            s.pcie_gen = parse_i32_or(fields[9], -1);
-            s.pcie_width = parse_i32_or(fields[10], -1);
-        }
-        return s;
-    }
 
     void loop() {
         bool first = true;

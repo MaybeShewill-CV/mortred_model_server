@@ -10,15 +10,15 @@
 #include "glog/logging.h"
 #include "models/backend/param_spec.h"
 #include "models/base_model.h"
-#include "models/catalog/model_entry.h"
 #include "server/generic_cv_server.h"
 #include "server/response_serializers.h"
+#include "factory/model_catalog.h"
 
 namespace mortred {
 namespace factory {
 namespace cv_catalog {
 
-template <typename OUTPUT> struct CvModelEntry : public mortred::models::catalog::ServedModelEntry {
+template <typename OUTPUT> struct CvModelEntry : public mortred::factory::catalog::ServedModelEntry {
     mortred::server::CvWorkerFactory<OUTPUT> make_worker;
     mortred::server::CvResponseFiller<OUTPUT> fill_response = nullptr;
     std::vector<mortred::models::backend::ParamSpec> param_specs;

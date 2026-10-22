@@ -9,19 +9,54 @@
 
 #include "glog/logging.h"
 #include "models/base_model.h"
-#include "models/catalog/model_entry.h"
 
 namespace mortred {
 namespace factory {
+
+/***
+ * Catalog entry identity shared by every catalog entry: the TOML section that
+ * owns the model configuration plus a human readable name for logs and the
+ * web console. Typed task catalogs derive from this struct.
+ */
+namespace catalog {
+
+/***
+ * Task-agnostic identity shared by every catalog entry: the TOML section that
+ * owns the model configuration plus a human readable name for logs and the
+ * web console. Typed task catalogs derive from this struct.
+ */
+struct ModelEntry {
+    std::string model_section;
+    std::string display_name;
+};
+
+inline bool model_entry_valid(const ModelEntry &entry) {
+    return !entry.model_section.empty() && !entry.display_name.empty();
+}
+
+/***
+ * Identity of a model that is mounted on the generic CV server. The extra
+ * section points at the server side TOML configuration.
+ */
+struct ServedModelEntry : public ModelEntry {
+    std::string server_section;
+};
+
+inline bool served_model_entry_valid(const ServedModelEntry &entry) {
+    return model_entry_valid(entry) && !entry.server_section.empty();
+}
+
+}  // namespace catalog
+
 namespace model_catalog {
 
 /***
  * Catalog entry for model families that are consumed directly by benchmarks
- * and in-process callers instead of being mounted on the generic CV server. Keeping it
- * separate from CvModelEntry avoids forcing a server section onto models that
- * have no HTTP surface yet.
+ * and in-process callers instead of being mounted on the generic CV server.
+ * Keeping it separate from CvModelEntry avoids forcing a server section onto
+ * models that have no HTTP surface yet.
  */
-template <typename INPUT, typename OUTPUT> struct ModelCatalogEntry : public mortred::models::catalog::ModelEntry {
+template <typename INPUT, typename OUTPUT> struct ModelCatalogEntry : public catalog::ModelEntry {
     std::function<std::unique_ptr<mortred::models::BaseAiModel<INPUT, OUTPUT>>()> make_model;
 };
 
