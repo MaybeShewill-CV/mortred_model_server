@@ -66,8 +66,8 @@ void override_env_entry(std::vector<std::string>& block, const char* key,
 
 // Copy one non-secret supervisor env var into the child block. Empty and
 // unset values stay absent so the child keeps its own default.
-void forward_supervisor_env(std::vector<std::string>& block, const char* key) {
-    const char* value = std::getenv(key);
+void forward_supervisor_env(std::vector<std::string> &block, const char *key) {
+    const char *value = std::getenv(key);
     if (value == nullptr || *value == '\0') {
         return;
     }

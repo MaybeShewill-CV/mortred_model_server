@@ -81,8 +81,9 @@ inline const std::vector<FastSamEntry> &fast_sam_catalog() {
 
 inline const std::vector<AmgEntry> &amg_catalog() {
     static const std::vector<AmgEntry> entries = {
+        // Empty family keeps the benchmark weight name as the model section.
         AmgEntry{"SAM_AMG", "SAM automatic mask generator", "SAM_AMG_SERVER", &create_sam_auto_mask_generator<ImageInput, AmgOutput>,
-                 &mortred::server::response::fill_sam_amg, sam_amg_param_specs()},
+                 &mortred::server::response::fill_sam_amg, sam_amg_param_specs(), ""},
     };
     return entries;
 }

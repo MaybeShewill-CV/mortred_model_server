@@ -1076,10 +1076,13 @@ TEST_F(SupervisorTest, gateway_child_receives_expose_and_profile) {
 
     std::string err;
     ASSERT_TRUE(sup->start_server("fake_model_server", &err)) << err;
-    ASSERT_TRUE(wait_for([&sup]() {
-        const auto s = sup->status("fake_model_server");
-        return s.state == "running" && s.ready;
-    }, 10000)) << "fake server did not become ready";
+    ASSERT_TRUE(wait_for(
+        [&sup]() {
+            const auto s = sup->status("fake_model_server");
+            return s.state == "running" && s.ready;
+        },
+        10000))
+        << "fake server did not become ready";
 
     const auto model_status = sup->status("fake_model_server");
     ASSERT_GT(model_status.pid, 0);
@@ -1090,11 +1093,13 @@ TEST_F(SupervisorTest, gateway_child_receives_expose_and_profile) {
 
     install_gateway_stub("ready");
     ASSERT_TRUE(sup->start_server(kGatewayId, &err)) << err;
-    ASSERT_TRUE(wait_for([&sup]() {
-        const auto s = sup->status(kGatewayId);
-        return s.state == "running" && s.pid > 0;
-    }, 10000)) << "gateway child did not start: state=" << sup->status(kGatewayId).state
-                << " error=" << sup->status(kGatewayId).error;
+    ASSERT_TRUE(wait_for(
+        [&sup]() {
+            const auto s = sup->status(kGatewayId);
+            return s.state == "running" && s.pid > 0;
+        },
+        10000))
+        << "gateway child did not start: state=" << sup->status(kGatewayId).state << " error=" << sup->status(kGatewayId).error;
 
     const auto gw_status = sup->status(kGatewayId);
     ASSERT_GT(gw_status.pid, 0);
@@ -1120,24 +1125,25 @@ TEST_F(SupervisorTest, unexpected_nonzero_exit_is_recorded_on_child_error) {
     cfg.servers["fake_model_server"].enabled = true;
     cfg.servers["fake_model_server"].has_restart_policy = true;
     cfg.servers["fake_model_server"].restart_policy = "no";
-    auto sup = std::make_unique<ProcessSupervisor>(
-        root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
+    auto sup = std::make_unique<ProcessSupervisor>(root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
     sup->set_catalog(catalog_);
     ASSERT_TRUE(sup->start_threads());
 
     std::string err;
     ASSERT_TRUE(sup->start_server("fake_model_server", &err)) << err;
-    ASSERT_TRUE(wait_for([&sup]() {
-        const auto s = sup->status("fake_model_server");
-        return s.state == "stopped" && s.has_last_exit;
-    }, 10000)) << "child did not settle after exit";
+    ASSERT_TRUE(wait_for(
+        [&sup]() {
+            const auto s = sup->status("fake_model_server");
+            return s.state == "stopped" && s.has_last_exit;
+        },
+        10000))
+        << "child did not settle after exit";
 
     const auto s = sup->status("fake_model_server");
     EXPECT_EQ(s.last_exit_status, 7);
     EXPECT_LT(s.pid, 0);
     EXPECT_NE(s.error.find("exited 7"), std::string::npos) << s.error;
 }
-
 
 TEST_F(SupervisorTest, respawn_archives_ended_run_and_keeps_current_log_clean) {
     // P0-3a: respawn used to truncate the child log in place, destroying the

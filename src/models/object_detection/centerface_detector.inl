@@ -50,15 +50,16 @@ template <typename INPUT, typename OUTPUT> StatusCode CenterFaceDetector<INPUT, 
     }
     // output H/W is ceil(src/32)*32; empty decode hint keeps JPEG reduce off
     this->set_image_decode_hint(cv::Size(), 1.0f);
-    this->set_gpu_preprocess({
-        .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE,
-        .color = mortred::models::backend::GpuPreprocessDescriptor::Color::RGB,
-        .pad_value = 114,
-        .output_dtype = input_info.dtype,
-        .output_nhwc = false,
-        .align_multiple = 32,
-        .dynamic_size = true
-    });
+    // CPU preprocess is bgr_to_rgb + resize + to_float + nchw, with no mean/std.
+    // Identity norm (scale 1, mean 0, std 1) keeps the GPU path on that math.
+    this->set_gpu_preprocess({.resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::ALIGN_TO_MULTIPLE,
+                              .norm = {.scale = 1.0f, .mean = {0.0f, 0.0f, 0.0f}, .std = {1.0f, 1.0f, 1.0f}},
+                              .color = mortred::models::backend::GpuPreprocessDescriptor::Color::RGB,
+                              .pad_value = 114,
+                              .output_dtype = input_info.dtype,
+                              .output_nhwc = false,
+                              .align_multiple = 32,
+                              .dynamic_size = true});
 
     return StatusCode::OK;
 }

@@ -84,16 +84,18 @@ inline const std::vector<Entry> &catalog() {
     using DDPM = DDPMSampler<std_ddpm_input, std_ddpm_output>;
     using LDM = LDMSampler<std_ldm_input, std_ldm_output>;
 
+    // Empty family is the static_bs1 sentinel. product_index labels these rows
+    // "diffusion" itself and does not read CvModelEntry::family.
     static const std::vector<Entry> entries = {
         Entry{"DDPM", "DDPM diffusion sampler", "DDPM_SERVER", &make_server_worker<DDPM, std_ddpm_input, std_ddpm_output>,
-              &mortred::server::response::fill_base64_image, ddpm_param_specs()},
+              &mortred::server::response::fill_base64_image, ddpm_param_specs(), ""},
         Entry{"DDIM", "DDIM diffusion sampler", "DDIM_SERVER", &make_server_worker<DDIM, std_ddim_input, std_ddim_output>,
-              &mortred::server::response::fill_base64_image, ddim_param_specs()},
+              &mortred::server::response::fill_base64_image, ddim_param_specs(), ""},
         Entry{"CLS_COND_DDIM", "class conditional DDIM sampler", "CLS_COND_DDIM_SERVER",
               &make_server_worker<ClsCondDDIM, std_cls_cond_ddim_input, std_cls_cond_ddim_output>,
-              &mortred::server::response::fill_base64_image, cls_cond_ddim_param_specs()},
+              &mortred::server::response::fill_base64_image, cls_cond_ddim_param_specs(), ""},
         Entry{"LDM", "latent diffusion sampler", "LDM_SERVER", &make_server_worker<LDM, std_ldm_input, std_ldm_output>,
-              &mortred::server::response::fill_base64_image, ldm_param_specs()},
+              &mortred::server::response::fill_base64_image, ldm_param_specs(), ""},
     };
     return entries;
 }
