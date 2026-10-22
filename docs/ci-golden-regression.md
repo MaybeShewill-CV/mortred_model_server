@@ -21,7 +21,7 @@ contribution path.” Use the table.
 The required GitHub check should be **`inference paths`** (job `inference-paths`),
 not `gpu golden smoke` by itself. GPU jobs skip when the repository variable
 `MORTRED_HAS_GPU_RUNNER` is unset (no self-hosted runner registered) and on
-fork PRs. When MORTRED_HAS_GPU_RUNNER is unset, the wrapper exits 2 and prints NOT_A_TRT_PROOF. When gpu-pr-gate succeeds but the PR smoke filter only ran type=onnx goldens (the current four-case MORTRED_GPU_SMOKE_FILTER), inference-paths prints TRT_PROOF=no and exits 0 — not TRT_PROOF=yes. TRT_PROOF=yes requires an explicit --product-trt yes and a --gtest-xml from the same gpu-pr-gate run that shows at least one non-skipped product type=tensorrt case (gtest suites Yolov8TrtDetection or TrtProductGolden). This result is not a TensorRT or CUDA proof. Do not set `inference paths` required while GPU jobs are still
+fork PRs. When MORTRED_HAS_GPU_RUNNER is unset, `scripts/ci_eval_inference_paths.py` exits 2 and prints NOT_A_TRT_PROOF. The `inference-paths` step accepts that exit code so a hosted run with no GPU runner is not red, and it does not print TRT_PROOF=yes. When gpu-pr-gate succeeds but the PR smoke filter only ran type=onnx goldens (the current four-case MORTRED_GPU_SMOKE_FILTER), inference-paths prints TRT_PROOF=no and exits 0 — not TRT_PROOF=yes. TRT_PROOF=yes requires an explicit --product-trt yes and a --gtest-xml from the same gpu-pr-gate run that shows at least one non-skipped product type=tensorrt case (gtest suites Yolov8TrtDetection or TrtProductGolden). This result is not a TensorRT or CUDA proof. Do not set `inference paths` required while GPU jobs are still
 *queued* waiting for a missing runner.
 
 `container boot (cpu compose)` is a **separate** Docker-runtime check. It is
@@ -265,8 +265,10 @@ ctest --test-dir build/tests-only -L valgrind --output-on-failure
 ```
 
 Memcheck uses `test/valgrind.supp` (wired into the `*-memory-check` command) to
-ignore known third-party `Memcheck:Param` noise from libglog/libunwind during
-`.init` / `_Unwind_Backtrace`. Do not add suppressions for definite leaks in
-mortred code.
+ignore known third-party noise: `Memcheck:Param` from libglog/libunwind during
+`.init` / `_Unwind_Backtrace`, and `Memcheck:Addr8` invalid reads in
+libunwind `_Ux86_64_setcontext` on `EXPECT_THROW` paths (stack reads below
+the stack pointer; the test itself passes and definite leaks stay at 0).
+Do not add suppressions for definite leaks in mortred code.
 
 

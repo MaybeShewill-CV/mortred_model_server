@@ -1067,10 +1067,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Evaluator exit codes (scripts/ci_eval_inference_paths.py):
+      #   0  cpu-profile and gpu-pr-gate both succeeded. With --product-trt no
+      #      the script prints TRT_PROOF=no. This step does not claim a
+      #      TensorRT proof.
+      #   1  cpu-profile failed, or the GPU smoke failed or was cancelled.
+      #      This step fails.
+      #   2  NOT_A_TRT_PROOF: cpu-profile succeeded and gpu-pr-gate was skipped
+      #      (no self-hosted GPU). Designed signal, not a TensorRT or CUDA
+      #      proof. Hosted CI accepts only this code so a GPU skip does not
+      #      redden the check. Any other non-zero code still fails the step.
       - name: Evaluate hosted vs maintainer GPU results
         run: |
           set -euo pipefail
+          set +e
           python3 scripts/ci_eval_inference_paths.py \
             --cpu '${{ needs.cpu-profile.result }}' \
             --gpu '${{ needs.gpu-pr-gate.result }}' \
             --product-trt no
+          code=$?
+          set -e
+          if [ "$code" -eq 2 ]; then
+            echo "::notice title=NOT_A_TRT_PROOF::gpu-pr-gate skipped (evaluator exit 2). This is not a TensorRT or CUDA proof."
+            exit 0
+          fi
+          exit "$code"

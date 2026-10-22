@@ -36,14 +36,34 @@ PROFILE="$(cat "$SRC/opt/mortred/PROFILE" 2>/dev/null || echo gpu)"
 echo "== [1/4] runtime deps (profile: $PROFILE) =="
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-PKGS="ca-certificates curl libssl3 libgoogle-glog0v6 \
-      libopencv-core4.5d libopencv-imgproc4.5d libopencv-imgcodecs4.5d"
-# ubuntu 20.04 ships opencv 4.2 / libssl1.1; 22.04 ships 4.5d / libssl3
-if ! apt-get install -y --no-install-recommends $PKGS >/dev/null 2>&1; then
-    PKGS="ca-certificates curl libssl1.1 libgoogle-glog0v5 \
-          libopencv-core4.2 libopencv-imgproc4.2 libopencv-imgcodecs4.2"
-    apt-get install -y --no-install-recommends $PKGS
+# Pins follow the Ubuntu release. Both 20.04 and 22.04 ship glog as
+# libgoogle-glog0v5 (libglog.so.0). libgoogle-glog0v6 is Ubuntu 24.04 and is
+# not in jammy; a failed apt line must stay visible (no fallback that swallows it).
+if [ ! -r /etc/os-release ]; then
+    echo "[ERROR] /etc/os-release missing; runtime packages are pinned per Ubuntu release" >&2
+    exit 1
 fi
+# shellcheck disable=SC1091
+. /etc/os-release
+case "${VERSION_ID:-}" in
+    20.04)
+        PKGS=(
+            ca-certificates curl libssl1.1 libgoogle-glog0v5
+            libopencv-core4.2 libopencv-imgproc4.2 libopencv-imgcodecs4.2
+        )
+        ;;
+    22.04)
+        PKGS=(
+            ca-certificates curl libssl3 libgoogle-glog0v5
+            libopencv-core4.5d libopencv-imgproc4.5d libopencv-imgcodecs4.5d
+        )
+        ;;
+    *)
+        echo "[ERROR] unsupported Ubuntu VERSION_ID=${VERSION_ID:-unknown}; runtime pins exist for 20.04 and 22.04" >&2
+        exit 1
+        ;;
+esac
+apt-get install -y --no-install-recommends "${PKGS[@]}"
 if [ "$PROFILE" = "gpu" ]; then
     # NVIDIA runtime stack (TensorRT/cuDNN): install via the NVIDIA apt repo
     # when absent; the gpu tarball's bundled 3rd_party libs need them at dlopen

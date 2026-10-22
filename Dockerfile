@@ -42,9 +42,13 @@ FROM nvidia/cuda:12.6.2-devel-ubuntu22.04@sha256:1c253f721b28b27c924677493c8ed45
 ARG EXTRA_CMAKE_FLAGS=""
 
 ENV DEBIAN_FRONTEND=noninteractive
+# python3: default `check` runs scripts that are stdlib-only
+# (test_p0_1_engine_fail_closed.sh, resident_pair_record.py --check,
+# stop_order_record.py --check, ctest_summary.py --self-test).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential git cmake libssl-dev ca-certificates curl \
         libeigen3-dev libopencv-dev libgoogle-glog-dev libgtest-dev \
+        python3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -71,10 +75,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     MORTRED_AUTOSTART=true
 
 # TensorRT 10.3 / cuDNN 9 / OpenCL / glog / OpenCV / ORT CUDA EP (cublas+nvrtc)
+# Ubuntu 22.04 (jammy) ships libgoogle-glog0v5 (libglog.so.0). libgoogle-glog0v6
+# is Ubuntu 24.04 and is not in this image's apt archive.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl \
         ocl-icd-libopencl1 libssl3 \
-        libgoogle-glog0v6 libopencv-core4.5d libopencv-imgproc4.5d libopencv-imgcodecs4.5d \
+        libgoogle-glog0v5 libopencv-core4.5d libopencv-imgproc4.5d libopencv-imgcodecs4.5d \
     && curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb \
     && dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb \
     && apt-get update \
@@ -129,9 +135,11 @@ FROM ubuntu:22.04@sha256:829f6df217bcbae2b371026e81711d1a787c61b2967ad09d0150636
 ARG SKIP_DOCKER_CHECK=0
 
 ENV DEBIAN_FRONTEND=noninteractive
+# python3: same stdlib-only check scripts as the GPU build stage.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake git libssl-dev \
         libgoogle-glog-dev libeigen3-dev libopencv-dev libgtest-dev \
+        python3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -161,9 +169,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     MORTRED_GATEWAY_PORT=8080 \
     MORTRED_AUTOSTART=true
 
+# jammy runtime soname is libgoogle-glog0v5 (libglog.so.0), matching
+# libgoogle-glog-dev in the build-cpu stage. libgoogle-glog0v6 is not in jammy.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl libssl3 \
-        libgoogle-glog0v6 libopencv-core4.5d libopencv-imgproc4.5d libopencv-imgcodecs4.5d \
+        libgoogle-glog0v5 libopencv-core4.5d libopencv-imgproc4.5d libopencv-imgcodecs4.5d \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build-cpu /opt/mortred /opt/mortred

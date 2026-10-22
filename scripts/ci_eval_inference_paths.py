@@ -2,13 +2,15 @@
 """Decide the inference-paths check from cpu-profile and gpu-pr-gate results.
 
 Exit 2 means cpu-profile succeeded and gpu-pr-gate was skipped: there is no
-TensorRT or CUDA proof. Exit 0 means cpu-profile succeeded and gpu-pr-gate
-succeeded; TRT_PROOF=yes only when --product-trt yes AND --gtest-xml proves
-at least one product type=tensorrt case ran without skip (suites
-Yolov8TrtDetection / TrtProductGolden). Otherwise print TRT_PROOF=no.
+TensorRT or CUDA proof. The ci.yml step accepts that exit code so hosted CI
+without a GPU runner is not red; it still prints NOT_A_TRT_PROOF and does
+not claim a TensorRT proof. Exit 0 means cpu-profile succeeded and
+gpu-pr-gate succeeded; TRT_PROOF=yes only when --product-trt yes AND
+--gtest-xml proves at least one product type=tensorrt case ran without skip
+(suites Yolov8TrtDetection / TrtProductGolden). Otherwise print TRT_PROOF=no.
 Exit 1 means cpu-profile did not succeed, or the GPU smoke actually failed
 or was cancelled, or the GPU result is anything else. cpu-profile is judged
-before the skipped case.
+before the skipped case. The workflow step re-raises every code other than 2.
 """
 from __future__ import annotations
 
@@ -34,9 +36,6 @@ NOT_A_TRT_PROOF = "NOT_A_TRT_PROOF"
 TRT_PROOF_YES = "TRT_PROOF=yes"
 TRT_PROOF_NO = "TRT_PROOF=no"
 NOT_A_PROOF_SENTENCE = "This result is not a TensorRT or CUDA proof."
-INLINE_SKIP_AS_SUCCESS = re.compile(
-    r"success[\s\S]*skipped[\s\S]*exit 0|skipped[\s\S]*success[\s\S]*exit 0"
-)
 
 # Product type=tensorrt gtest suites from test/model_golden_test.cc.
 PRODUCT_TRT_SUITES = frozenset({"Yolov8TrtDetection", "TrtProductGolden"})
@@ -168,10 +167,20 @@ def check_workflow(workflow_path: Path | None = None) -> int:
             errors.append(f"inference-paths is missing {gpu_arg}")
         if "if: ${{ always()" not in inference:
             errors.append("inference-paths if does not contain always()")
+        # A job-level continue-on-error would also swallow exit 1 (cpu or GPU
+        # failure). Only evaluator exit 2 (NOT_A_TRT_PROOF) may be non-blocking.
         if "continue-on-error" in inference:
             errors.append("inference-paths must not set continue-on-error")
-        if INLINE_SKIP_AS_SUCCESS.search(inference):
-            errors.append("inference-paths still treats skipped and success as exit 0")
+        if 'if [ "$code" -eq 2 ]' not in inference:
+            errors.append(
+                "inference-paths must accept only evaluator exit 2 (NOT_A_TRT_PROOF)"
+            )
+        if "NOT_A_TRT_PROOF" not in inference:
+            errors.append("inference-paths must document the NOT_A_TRT_PROOF signal")
+        if 'exit "$code"' not in inference:
+            errors.append("inference-paths must fail on evaluator codes other than 2")
+        if "TRT_PROOF=yes" in inference:
+            errors.append("inference-paths step must not claim TRT_PROOF=yes")
     if not gpu_job:
         errors.append("gpu-pr-gate job not found")
     else:

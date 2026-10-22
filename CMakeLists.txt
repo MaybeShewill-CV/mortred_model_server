@@ -86,10 +86,21 @@ if(MORTRED_WORKFLOW_AVAILABLE)
     mortred_import_crypto()
 endif()
 
-# CI quality gate: treat compiler warnings as errors (enabled in tests-only builds)
+# CI quality gate: treat compiler warnings as errors (enabled in tests-only builds
+# and the Docker full-build gate). nvcc has its own -Werror=<kind> and treats the
+# next token as that kind, so a global -Werror becomes:
+#   nvcc fatal : Value '-std=c++17' is not defined for option 'Werror'
+# on gpu_preprocess.cu. Keep the gate on C/CXX; do not pass it to CUDA.
 option(MORTRED_ENABLE_WERROR "Treat compiler warnings as errors (used by CI quality gate)" OFF)
 if(MORTRED_ENABLE_WERROR)
-    add_compile_options(-Wall -Wextra -Werror)
+    add_compile_options(
+        $<$<COMPILE_LANGUAGE:C>:-Wall>
+        $<$<COMPILE_LANGUAGE:C>:-Wextra>
+        $<$<COMPILE_LANGUAGE:C>:-Werror>
+        $<$<COMPILE_LANGUAGE:CXX>:-Wall>
+        $<$<COMPILE_LANGUAGE:CXX>:-Wextra>
+        $<$<COMPILE_LANGUAGE:CXX>:-Werror>
+    )
 endif()
 
 # find package
