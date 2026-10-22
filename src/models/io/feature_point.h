@@ -25,7 +25,9 @@ namespace feature_point {
 struct fp {
     cv::Point2f location;
     std::vector<float> descriptor;
-    float score;
+    // LightGlue copies a matched point before it has a detector score.
+    // Zero keeps that copy defined; SuperPoint overwrites this field.
+    float score = 0.0f;
 };
 using std_feature_point_output = std::vector<fp>;
 
