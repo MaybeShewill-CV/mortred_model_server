@@ -5,7 +5,7 @@
 * Date: 26-8-31
 ************************************************/
 
-// P1-3: stop embedding the full OpenAPI document in the binary/header.
+// The full OpenAPI document is not embedded in the binary/header.
 // docs/openapi.json remains the single generated artifact (scripts/gen_openapi.py).
 // This header loads that file once at first use (path from MORTRED_OPENAPI_JSON
 // or relative docs/openapi.json from the process CWD / known install layouts).
