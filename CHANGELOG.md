@@ -7,6 +7,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-22
+
 ### Fixed
 - **Graceful draining (P0-5):** model servers and the gateway gain `begin_drain()`; `/ready` flips to 503 and new admissions are rejected before `stop()` while in-flight work finishes in the existing drain. The gateway also gains a `/ready` endpoint (the LB pull-out point); compose `stop_grace_period` now covers drain + stop grace. e2e: 20-iteration ready-503/new-503/in-flight-200 contract on both sides.
 - **Supervisor revive race (P0-3b):** the monitor re-checks `wanted`/`stopping` under the spawn lock before respawning, so a REST stop landing between candidate collection and spawn can no longer revive a stopped process.
