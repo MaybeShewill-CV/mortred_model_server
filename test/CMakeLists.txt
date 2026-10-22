@@ -57,6 +57,9 @@ endif ()
 
 set(TEST_LIST
     base64_unittest
+    mini_toml_unittest
+    sync_request_graph_unittest
+    gpu_sampler_unittest
     file_path_util_unittest
     request_envelope_unittest
     envelope_codec_unittest
@@ -119,6 +122,7 @@ if(MORTRED_WORKFLOW_AVAILABLE)
     # exists under the same condition)
     list(APPEND TEST_LIST gateway_multiinstance_test)
     list(APPEND TEST_LIST supervisor_multiinstance_test)
+    list(APPEND TEST_LIST http_reply_unittest)
 endif()
 
 # ApiKeyManager::authenticate needs OpenSSL SHA-256; the header is otherwise
@@ -324,11 +328,15 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS control_workflow pthread)
     elseif(${src} STREQUAL "response_schema_test")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
+    elseif(${src} STREQUAL "gpu_sampler_unittest")
+        set(EXTRA_LIBS control pthread)
     elseif(${src} STREQUAL "openapi_consistency_test")
         set(EXTRA_LIBS glog::glog)
     elseif(${src} STREQUAL "server_e2e_contract_test")
         set(EXTRA_LIBS glog::glog vendored::workflow pthread)
     elseif(${src} STREQUAL "process_stop_unittest")
+        set(EXTRA_LIBS vendored::workflow pthread)
+    elseif(${src} STREQUAL "http_reply_unittest")
         set(EXTRA_LIBS vendored::workflow pthread)
     elseif(${src} STREQUAL "do_work_lifetime_unittest")
         # backend_cv_model.h inlines a call to gpu_jpeg::render_decode_metrics();
