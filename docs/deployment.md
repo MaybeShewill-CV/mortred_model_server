@@ -699,7 +699,7 @@ from the building blocks above:
    `full-cpu`, or `docker compose --profile cpu build`.
 2. **Write a cpu model toml** for the model you want — `type = "mnn"` or
    `type = "onnx"` with `device = "cpu"`. The canonical sample is
-   `conf/ci/mobilenetv2_onnx_hosted.toml` (kept honest by the hosted golden
+   `conf/ci/mobilenetv2_hosted.toml` (kept honest by the hosted golden
    gate). A `type="tensorrt"` toml on cpu fails init with a clear error by
    design.
 3. **Write a machine pack** that selects the catalog id and points

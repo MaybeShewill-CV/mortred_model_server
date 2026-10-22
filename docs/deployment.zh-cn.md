@@ -654,7 +654,7 @@ MNN / TensorRT 没有对等旋钮。进程占用由 supervisor spawn 按 pack st
 1. **构建 / 安装 cpu 档**——`install_deps.sh --cpu`、CMake preset
    `full-cpu`，或 `docker compose --profile cpu build`。
 2. **为想要的模型写一份 cpu 模型 toml**——`type = "mnn"` 或 `type = "onnx"`
-   且 `device = "cpu"`。权威样例是 `conf/ci/mobilenetv2_onnx_hosted.toml`
+   且 `device = "cpu"`。权威样例是 `conf/ci/mobilenetv2_hosted.toml`
    （由 hosted golden 门禁保持真实）。`type="tensorrt"` 的 toml 在 cpu 上
    按设计 fail-closed 报错。
 3. **写机器 pack** 选中 catalog id，并把 `model_config` 指向你的 cpu toml
