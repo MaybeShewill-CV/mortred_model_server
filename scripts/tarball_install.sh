@@ -39,6 +39,7 @@ apt-get update
 # Pins follow the Ubuntu release. Both 20.04 and 22.04 ship glog as
 # libgoogle-glog0v5 (libglog.so.0). libgoogle-glog0v6 is Ubuntu 24.04 and is
 # not in jammy; a failed apt line must stay visible (no fallback that swallows it).
+# libopencv-dnn is required: libmodels.so references cv::dnn::NMSBoxes.
 if [ ! -r /etc/os-release ]; then
     echo "[ERROR] /etc/os-release missing; runtime packages are pinned per Ubuntu release" >&2
     exit 1
@@ -50,12 +51,14 @@ case "${VERSION_ID:-}" in
         PKGS=(
             ca-certificates curl libssl1.1 libgoogle-glog0v5
             libopencv-core4.2 libopencv-imgproc4.2 libopencv-imgcodecs4.2
+            libopencv-dnn4.2
         )
         ;;
     22.04)
         PKGS=(
             ca-certificates curl libssl3 libgoogle-glog0v5
             libopencv-core4.5d libopencv-imgproc4.5d libopencv-imgcodecs4.5d
+            libopencv-dnn4.5d
         )
         ;;
     *)

@@ -67,6 +67,13 @@ cleanup() {
     local ec=$?
     if [ "$booted" = "1" ]; then
         if [ "$ec" -ne 0 ]; then
+            # Child stderr (dynamic linker "error while loading shared libraries",
+            # model init) is the per-id file under /opt/mortred/logs, not the
+            # supervisor's stdout that `compose logs` prints.
+            echo "== child logs (failure) ==" >&2
+            "${COMPOSE[@]}" exec -T mortred-cpu sh -c \
+                'for f in /opt/mortred/logs/*.log; do [ -f "$f" ] || continue; echo "----- $f -----"; tail -n 80 "$f"; done' \
+                || true
             echo "== compose logs (failure) ==" >&2
             "${COMPOSE[@]}" logs --no-color || true
         fi

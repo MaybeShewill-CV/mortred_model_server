@@ -80,7 +80,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl \
         ocl-icd-libopencl1 libssl3 \
-        libgoogle-glog0v5 libopencv-core4.5d libopencv-imgproc4.5d libopencv-imgcodecs4.5d \
+        libgoogle-glog0v5 \
+        libopencv-core4.5d libopencv-imgproc4.5d libopencv-imgcodecs4.5d \
+        libopencv-dnn4.5d \
     && curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb \
     && dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb \
     && apt-get update \
@@ -171,9 +173,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # jammy runtime soname is libgoogle-glog0v5 (libglog.so.0), matching
 # libgoogle-glog-dev in the build-cpu stage. libgoogle-glog0v6 is not in jammy.
+# libmodels.so calls cv::dnn::NMSBoxes, so the loader needs libopencv_dnn.so.4.5d.
+# core/imgproc/imgcodecs do not provide it; the process then exits 127.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl libssl3 \
-        libgoogle-glog0v5 libopencv-core4.5d libopencv-imgproc4.5d libopencv-imgcodecs4.5d \
+        libgoogle-glog0v5 \
+        libopencv-core4.5d libopencv-imgproc4.5d libopencv-imgcodecs4.5d \
+        libopencv-dnn4.5d \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build-cpu /opt/mortred /opt/mortred
