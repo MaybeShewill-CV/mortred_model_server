@@ -8,7 +8,8 @@ option(MORTRED_ENABLE_VALGRIND_TESTS
        "Register a small curated set of *-memory-check ctests (label=valgrind)"
        OFF)
 find_program(CMAKE_MEMORYCHECK_COMMAND valgrind)
-# Always use the in-tree suppression file (glog/libunwind .init Param noise).
+# Always use the in-tree suppression file (glog/libunwind Param noise and
+# libunwind setcontext Invalid reads on EXPECT_THROW).
 set(_mortred_valgrind_supp "${CMAKE_CURRENT_SOURCE_DIR}/valgrind.supp")
 set(memcheck_command
     ${CMAKE_MEMORYCHECK_COMMAND}

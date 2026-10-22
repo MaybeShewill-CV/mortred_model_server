@@ -65,12 +65,18 @@ jobs:
           # ci.yml tests job / Launchpad #1989124/#1991919). Remove it first.
           sudo apt-get remove -y 'libunwind-*-dev' || true
           # apt libgtest-dev ships prebuilt libs + GTestConfig on jammy; the old
-          # build-from-/usr/src/googletest flow is unnecessary
-          sudo apt-get install -y --no-install-recommends libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev
+          # build-from-/usr/src/googletest flow is unnecessary.
+          # build-essential/git: install_deps.sh --workflow compiles workflow.
+          sudo apt-get install -y --no-install-recommends build-essential git \
+            libopencv-dev libgoogle-glog-dev libeigen3-dev libgtest-dev libssl-dev
 
       - if: matrix.mode == 'pr'
-        name: Install vendored header-only deps (3rd_party is generated, not tracked)
-        run: ./scripts/install_deps.sh --headers
+        name: Install vendored deps (workflow + header-only set; 3rd_party is generated, not tracked)
+        run: |
+          # Same pair as ci.yml tests: server headers include workflow/WFTask.h
+          # even in tests-only configure. --headers does not install workflow.
+          ./scripts/install_deps.sh --workflow
+          ./scripts/install_deps.sh --headers
 
       - if: matrix.mode == 'pr'
         name: Configure (tests-only)

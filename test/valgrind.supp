@@ -23,3 +23,14 @@
    ...
    fun:call_init*
 }
+
+# Ubuntu 22.04 + Valgrind 3.18 + libunwind 1.3 (libunwind.so.8).
+# EXPECT_THROW unwinds through _Ux86_64_setcontext, which reads below the
+# stack pointer. Memcheck reports that as Invalid read of size 8 (Addr8).
+# The gtest still passes and the leak summary stays definitely-lost 0.
+# Top frame is the libunwind symbol only — not a mortred leak suppression.
+{
+   libunwind_setcontext_invalid_read
+   Memcheck:Addr8
+   fun:_Ux86_64_setcontext
+}
