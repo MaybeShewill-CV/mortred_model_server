@@ -55,14 +55,14 @@ using namespace mortred::test::golden;
 
 // ============ golden 用例（保持迁移前的声明顺序） ============
 
-GOLDEN_CLASSIFICATION_CASE(mobilenetv2_classification, "conf/ci/mobilenetv2_onnx_hosted.toml",
+GOLDEN_CLASSIFICATION_CASE(mobilenetv2_classification, "conf/ci/mobilenetv2_hosted.toml",
                            "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
                            mortred::factory::classification::create_mobilenetv2_classifier, std_classification_output);
 
 TEST(model_golden, mobilenetv2_batch_matches_single) {
     // batch=N must be numerically equivalent to N single runs (the batched
     // [N,H,W,3] session run is the whole point of the batching upgrade)
-    std::string conf = "conf/ci/mobilenetv2_onnx_hosted.toml";
+    std::string conf = "conf/ci/mobilenetv2_hosted.toml";
     if (!weights_available(conf))
         MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
@@ -95,7 +95,7 @@ TEST(model_golden, mobilenetv2_mixed_batch_isolates_failed_items) {
     // ORIGINAL slot, silently cross-wiring results whenever one item failed
     // preprocessing (or failing the whole batch). The generic run_image_batch
     // must keep the valid items aligned with their single-run results.
-    std::string conf = "conf/ci/mobilenetv2_onnx_hosted.toml";
+    std::string conf = "conf/ci/mobilenetv2_hosted.toml";
     if (!weights_available(conf))
         MORTRED_SKIP_OR_FAIL_WEIGHTS("weights not available");
     auto cfg = load_model_cfg(conf);
@@ -170,7 +170,7 @@ GOLDEN_FEATURE_EMBEDDING_CASE(dinov2_feature_embedding, "conf/ci/dinov2_vitb14_o
                               "demo_data/model_test_input/classification/ILSVRC2012_val_00000003.JPEG",
                               mortred::factory::feature_embedding::create_dinov2_feature_extractor, std_feature_embedding_output);
 
-GOLDEN_OBJECT_DETECTION_CASE(nanodet_detection, "conf/ci/nanodet_onnx_hosted.toml",
+GOLDEN_OBJECT_DETECTION_CASE(nanodet_detection, "conf/ci/nanodet_hosted.toml",
                              "demo_data/model_test_input/object_detection/bus.jpg",
                              mortred::factory::object_detection::create_nanodet_detector, std_object_detection_output);
 
@@ -237,7 +237,7 @@ GOLDEN_FACE_DETECTION_CASE(libface_detection, "conf/ci/libface_onnx_hosted.toml"
                            "demo_data/model_test_input/object_detection/face_wo_mask.jpg",
                            mortred::factory::object_detection::create_libface_detector, std_face_detection_output);
 
-GOLDEN_SCENE_SEGMENTATION_CASE(bisenetv2_segmentation, "conf/ci/bisenetv2_onnx_hosted.toml",
+GOLDEN_SCENE_SEGMENTATION_CASE(bisenetv2_segmentation, "conf/ci/bisenetv2_hosted.toml",
                                "demo_data/model_test_input/scene_segmentation/cityscapes_test.png",
                                mortred::factory::scene_segmentation::create_bisenetv2_segmentor, std_scene_segmentation_output);
 
@@ -245,7 +245,7 @@ GOLDEN_SCENE_SEGMENTATION_CASE(pphuman_segmentation, "conf/ci/pphuman_onnx_hoste
                                "demo_data/model_test_input/scene_segmentation/human_image.jpg",
                                mortred::factory::scene_segmentation::create_pphuman_segmentor, std_scene_segmentation_output);
 
-GOLDEN_TEXT_REGION_CASE(dbnet_text_detection, "conf/ci/dbnet_onnx_hosted.toml",
+GOLDEN_TEXT_REGION_CASE(dbnet_text_detection, "conf/ci/dbnet_hosted.toml",
                         "demo_data/model_test_input/ocr/railway_ticket.png", mortred::factory::ocr::create_dbtext_detector,
                         std_text_regions_output);
 
@@ -270,7 +270,7 @@ GOLDEN_ENHANCEMENT_CASE(realesrgan_enhancement, "conf/ci/realesrgan_onnx_hosted.
                         "demo_data/model_test_input/enhancement/real_esr/test.JPG",
                         mortred::factory::enhancement::create_realesrgan_enhancementor, std_enhancement_output);
 
-GOLDEN_KEYPOINT_CASE(superpoint_feature_point, "conf/ci/superpoint_onnx_hosted.toml",
+GOLDEN_KEYPOINT_CASE(superpoint_feature_point, "conf/ci/superpoint_hosted.toml",
                      "demo_data/model_test_input/feature_point/test.png", mortred::factory::feature_point::create_superpoint_extractor,
                      std_feature_point_output);
 

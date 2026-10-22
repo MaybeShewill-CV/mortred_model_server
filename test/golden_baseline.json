@@ -70,7 +70,7 @@
     "libface_detection.json": "20f8f676e040a46b623ad69caff755001cda6fca4168785095e40b2ef6eca3f2",
     "metric3d_1088.json": "a036bf67800814de85025756ea7e6f50a40b01464db6a260ba8baf89df671069",
     "metric3d_512.json": "f243416080350b7cc6308f31aecc6ad417d8b778238fb40d79db7d08ba01aa4a",
-    "mobilenetv2_classification.json": "38f82e37c4b611e2475c99ce70a9bd67cbb95f4e2d916917ae0ba142f19da1ff",
+    "mobilenetv2_classification.json": "36cdd929f03c1bafef505d8cca4a7e45bfbe7c2f1c08ffc664d8ec695fa15247",
     "modnet_matting.json": "2622fe6c9cdfe1eab26beb61f804f29aca5d6d2e3861df6b712b3325c5b05128",
     "nanodet_416.json": "a3db96807c47e8f6bcecfac248fa35b2cdc123781ce5a3e63b0b2e781c272aad",
     "nanodet_detection.json": "89749a24b847e9ed8acf279b9d1e13cc1be5ccb64f41c30c062c60282bbebce7",

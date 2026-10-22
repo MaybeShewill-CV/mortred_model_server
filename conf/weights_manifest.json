@@ -18,7 +18,7 @@
       "size": 32318002,
       "sha256": "9a014e1b9013cbb75a62b49b4f53733db64b167dbb77ec7ef39d5833f77f43c8",
       "hf_path": "classification/densenet/densenet.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -39,7 +39,7 @@
       "size": 343011643,
       "sha256": "3d0bb5047137182658ca312b7c88e8f0e66dd6a00efaad49efeeba086722a58e",
       "hf_path": "classification/dinov2/dinov2_vitb14_pretrain.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -60,7 +60,7 @@
       "size": 1213134417,
       "sha256": "2129c3806af506bdaf566ffb2d2dcf3434c84aa238dc5d7f94a94a5b2c473306",
       "hf_path": "classification/dinov2/dinov2_vitl14_pretrain.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -81,7 +81,7 @@
       "size": 86627082,
       "sha256": "7e3231a8ac0b23aff42884867133fbcab1dbd0836a6fa5a971aad60d0a668c74",
       "hf_path": "classification/dinov2/dinov2_vits14_pretrain.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -92,7 +92,7 @@
       "size": 13994438,
       "sha256": "b84e0f14c995b2436c95063d4479ceed28602ce23664943a33ddd533188c1cdf",
       "hf_path": "classification/mobilenetv2/mobilenetv2.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "cpu",
         "gpu"
@@ -126,7 +126,7 @@
       "size": 102147996,
       "sha256": "83915f2e75a969f1571ab4476974ddae3899aea42d954318a8357e3cc0465034",
       "hf_path": "classification/resnet/resnet.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -237,7 +237,7 @@
       "size": 25078049,
       "sha256": "dc0054dc55212d1fb61ab6d70f32810255249abc630e8791bbab5d6369e4ea41",
       "hf_path": "enhancement/attentive_gan_derain/attentive_gan_derain.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -258,7 +258,7 @@
       "size": 34587766,
       "sha256": "f69ca5a261475cf1d28278d8382964c05f9c9eeb431b3d493b50e3443a447cc9",
       "hf_path": "enhancement/enlighten_gan/enlightengan.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -279,7 +279,7 @@
       "size": 4867906,
       "sha256": "d077428fcad6d331aa75dbfe10893826e9760fffd3b03f0c884c6fb20a78ba89",
       "hf_path": "enhancement/real_esrgan/realesr-general-x4v3.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -351,7 +351,7 @@
       "size": 5208191,
       "sha256": "0806317ce524cf55a238610721ba791d0005ea951259220d2b1f5ed23a185720",
       "hf_path": "feature_point/superpoint/superpoint_120x160.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "cpu",
         "gpu"
@@ -613,7 +613,7 @@
       "size": 40980691,
       "sha256": "196eb5700194ac8acd3d0958d89924fcc0bfed45c69d276a5aa05ff817da8d9c",
       "hf_path": "matting/modnet/modnet_hrnet_w18.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -644,7 +644,7 @@
       "size": 255807057,
       "sha256": "919ab158d820e763028bac632391ef7af3b4048309308f47c693f3aa54f7a271",
       "hf_path": "matting/ppmatting/pp_humanmatting-resnet34_vd.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -665,7 +665,7 @@
       "size": 98289824,
       "sha256": "5ecd8708b9542e8ccdfff71ddc89591d1a9548f7072d194e3371d319aa11a2a6",
       "hf_path": "matting/ppmatting/ppmatting_hrnet_w18_human_1024.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -686,7 +686,7 @@
       "size": 98289824,
       "sha256": "7689f8b5a6ac786f68cdd390bd92d0c6c526eeaea92f6676f986f3f81fe908a9",
       "hf_path": "matting/ppmatting/ppmatting_hrnet_w18_human_512.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -697,7 +697,7 @@
       "size": 35948801,
       "sha256": "840a19f8209498d1401db238b333ff4eb917ba1a6d61b24c9a4daf4a3676d095",
       "hf_path": "matting/ppmatting/ppmattingv2_stdc1_human_512.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -728,7 +728,7 @@
       "size": 390839536,
       "sha256": "a11124f7dd06253752a40e22e32c8815e39eb1e67f8a04cd22ce67bdfd5fb19a",
       "hf_path": "mono_depth_estimation/depth_anything/depth_anything_vitb14.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -759,7 +759,7 @@
       "size": 1340387697,
       "sha256": "4fa8c21385454406f1e2f12add116eadf8df18f8509de151a9213d826d5ceef2",
       "hf_path": "mono_depth_estimation/depth_anything/depth_anything_vitl14.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -790,7 +790,7 @@
       "size": 100983418,
       "sha256": "bfef6b523ff080ab016ce354d9bf0ac4387e25193cca15d4f4771d896334ae80",
       "hf_path": "mono_depth_estimation/depth_anything/depth_anything_vits14.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -831,7 +831,7 @@
       "size": 815655232,
       "sha256": "d54ad607ad569b7d9668a1da87a4160548d106c789771f6d4f35efae90ba026c",
       "hf_path": "mono_depth_estimation/metric3d/metric3d_750k_1088x1920.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -872,7 +872,7 @@
       "size": 815530692,
       "sha256": "f0a3cc3e6e8ff8210af322ad6cc728ba39215f39ae76167f5731e747d1f6fff7",
       "hf_path": "mono_depth_estimation/metric3d/metric3d_750k_512x1088.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -903,7 +903,7 @@
       "size": 7513289,
       "sha256": "2cd9cccb4d6d0c06a483b94d16ed4796bd492fdfc26605c31a0118ef3874d30f",
       "hf_path": "object_detection/centerface_detection/centerface.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -924,7 +924,7 @@
       "size": 229738,
       "sha256": "ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0",
       "hf_path": "object_detection/libfacedetection/face_detection_yunet_2026may.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -946,7 +946,7 @@
       "size": 9886200,
       "sha256": "ba1bd1ee436ef92af68f297851854b092995957fe2f4abbc23ac7d1ef5b603a0",
       "hf_path": "object_detection/nanodet/nanodet_plus_m_1x5.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "cpu",
         "gpu"
@@ -958,7 +958,7 @@
       "size": 4786923,
       "sha256": "ba89e0af46b91cb4538417c61fb4dd697b825adc351b3595377dfc66a3518abd",
       "hf_path": "object_detection/nanodet/nanodet_plus_m_416.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -979,7 +979,7 @@
       "size": 186659980,
       "sha256": "5c311e06684c15329b91f85d6754bdc3612f364937bd0d6a482beefce516ede5",
       "hf_path": "object_detection/yolov5/yolov5l.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -1070,7 +1070,7 @@
       "size": 74320101,
       "sha256": "e00eff8953ac88bbbbc85c306dc18850e5a6b545864f5ab8e2c4e7b824f072bf",
       "hf_path": "object_detection/yolov6/yolov6s.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -1101,7 +1101,7 @@
       "size": 147672761,
       "sha256": "d263722c02951a31f2e93649debcdf83b254b086fab4b4d927145d9c6009f78c",
       "hf_path": "object_detection/yolov7/yolov7.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -1132,7 +1132,7 @@
       "size": 285306489,
       "sha256": "fcc4de18c1aef501acff066394736a1fc2bb43a394c58f2affa52872a66fdea9",
       "hf_path": "object_detection/yolov7/yolov7x.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -1153,7 +1153,7 @@
       "size": 174869004,
       "sha256": "0011c5293437f0948a15d352fd21a3d4f2bd2fa74dd76f1e36defb598aaf8519",
       "hf_path": "object_detection/yolov8/yolov8l.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -1174,7 +1174,7 @@
       "size": 12768391,
       "sha256": "a78645a1617f8f90b2247f0b5131534d59e7baafae6beea9f02bc72bdaf0463e",
       "hf_path": "object_detection/yolov8/yolov8n.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -1206,7 +1206,7 @@
       "size": 44787110,
       "sha256": "48a131d647eeea9a38a77b264ca596222e84fb6bc95a36001789ff947fc51ad7",
       "hf_path": "object_detection/yolov8/yolov8s.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -1237,7 +1237,7 @@
       "size": 272998287,
       "sha256": "5d19d8c804b53ba6bbb9ec407712f7746e1afcc2e01046521680128457d99a1e",
       "hf_path": "object_detection/yolov8/yolov8x.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -1259,7 +1259,7 @@
       "size": 48866519,
       "sha256": "196b194daba448ece4b429a9a57765e1c790c0992db0a30927b545780885e860",
       "hf_path": "ocr/db_text_detector/db_model_large.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "cpu",
         "gpu"
@@ -1642,7 +1642,7 @@
       "size": 9884538,
       "sha256": "707cb0608bd80bf787e3a89014475aa05d897401456ff658c57bcab669c6f977",
       "hf_path": "scene_segmentation/bisenetv2/bisenetv2_cityscapes.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "cpu",
         "gpu"
@@ -1674,7 +1674,7 @@
       "size": 280747508,
       "sha256": "98a9eaf66c91ffbaa52a85c33270a3b58e1c0847bcdc9c3c03c8cbb16df10436",
       "hf_path": "scene_segmentation/hrnet/hrnetw48_ccd.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -1765,7 +1765,7 @@
       "size": 145623681,
       "sha256": "d35a322f19eda8434df4944e52c1f141055db15cd9852076062ca29579c61879",
       "hf_path": "scene_segmentation/msocrnet/msocrnet_fp16.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -1796,7 +1796,7 @@
       "size": 12220577,
       "sha256": "cb291f8c48afa4407bced4d333e8acfeb48cb4d89bc8e57b5eb3eeaa6c6e0bb3",
       "hf_path": "scene_segmentation/pphuman_seg/pp_humanseg_192x192_lite.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -1817,7 +1817,7 @@
       "size": 30168805,
       "sha256": "c6d4463cd3099218f5b9d2fa5d49d7318af5de442ab57d7114d8dff396289596",
       "hf_path": "scene_segmentation/pphuman_seg/pp_humanseg_192x192_mobile.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],
@@ -1838,7 +1838,7 @@
       "size": 107224098,
       "sha256": "6ab6818a1e0a4fdd3ab1c5f769d2166557af8278917fac21ab50c11416971762",
       "hf_path": "scene_segmentation/pphuman_seg/pp_humanseg_512x512_server.static_bs1.onnx",
-      "on_hf": true,
+      "on_hf": false,
       "profiles": [
         "gpu"
       ],

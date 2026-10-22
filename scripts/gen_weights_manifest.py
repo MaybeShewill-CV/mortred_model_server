@@ -39,17 +39,14 @@ CPU_WEIGHTS = {
     "weights/object_detection/yolov8/yolov8s.onnx",
     # Hosted cpu-profile golden set (conf/ci_hosted_golden.json). Keep these
     # tagged cpu so fetch --profile cpu and CI stay aligned after regenerate.
-    # mobilenetv2 golden runs conf/ci/mobilenetv2_onnx_hosted.toml; the .mnn
-    # stays tagged cpu for the backend_unittest MnnSession cases.
-    "weights/classification/mobilenetv2/mobilenetv2.static_bs1.onnx",
+    # The golden set runs on the .mnn graphs (the only mobilenetv2/nanodet/
+    # dbnet/superpoint/bisenetv2 files actually published on HF); the
+    # .static_bs1.onnx twins were never uploaded and stay gpu-only until
+    # someone pushes them to the HF repo.
     "weights/object_detection/nanodet/nanodet_plus_m_1x5.mnn",
-    "weights/object_detection/nanodet/nanodet_plus_m_1x5.static_bs1.onnx",
     "weights/ocr/db_text_detector/db_model_large.mnn",
-    "weights/ocr/db_text_detector/db_model_large.static_bs1.onnx",
     "weights/feature_point/superpoint/superpoint_120x160.mnn",
-    "weights/feature_point/superpoint/superpoint_120x160.static_bs1.onnx",
     "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.mnn",
-    "weights/scene_segmentation/bisenetv2/bisenetv2_cityscapes.static_bs1.onnx",
 }
 
 
@@ -87,7 +84,8 @@ def main() -> int:
     parser.add_argument("--repo", type=str, default="MaybeShewill-CV/mortred_model_server")
     parser.add_argument("--revision", type=str, default="main")
     parser.add_argument("--no-hf-api", action="store_true",
-                        help="offline mode: skip HF API queries, set on_hf to true")
+                        help="offline mode: skip HF API queries; keep previous on_hf "
+                             "flags (unknown entries default to off-HF)")
     parser.add_argument("--force-hash", action="store_true", help="force rehash of all sha256")
     args = parser.parse_args()
 
@@ -109,7 +107,8 @@ def main() -> int:
             hf_files = fetch_hf_files()
             print(f"[info] HF repo file count: {len(hf_files)}")
         except Exception as exc:  # noqa: BLE001
-            print(f"[warn] HF API query failed, on_hf set to true: {exc}")
+            print(f"[warn] HF API query failed; keeping previous on_hf flags "
+                  f"(new entries marked off-HF): {exc}")
 
     product_onnx = product_onnx_paths()
     files = []
@@ -124,12 +123,20 @@ def main() -> int:
         else:
             sha = sha256_of(p)
         hf_path = rel[len("weights/"):] if rel.startswith("weights/") else rel
+        if hf_files is not None:
+            on_hf = hf_path in hf_files
+        else:
+            # No HF ground truth (offline mode or API outage). Never claim
+            # on_hf=true for files we cannot verify: a false "on HF" flag once
+            # let the hosted CI golden set reference files that 404'd on every
+            # fetch. Keep the previous flag when known; unknown files are off-HF.
+            on_hf = bool(prev.get("on_hf", False))
         entry = {
             "path": rel,
             "size": size,
             "sha256": sha,
             "hf_path": hf_path,
-            "on_hf": (hf_files is None) or (hf_path in hf_files),
+            "on_hf": on_hf,
             # deployment profiles this weight belongs to; curated cpu set is
             # both, everything else is gpu-only (drives fetch --profile)
             "profiles": ["cpu", "gpu"] if rel in CPU_WEIGHTS else ["gpu"],

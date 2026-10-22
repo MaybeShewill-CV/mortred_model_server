@@ -1,0 +1,21 @@
+# Hosted cpu-profile golden config for mobilenetv2 (MNN-CPU).
+# MNN weight is the sha256-locked file actually published on Hugging Face
+# (conf/weights_manifest.json); the .static_bs1.onnx twin has never been
+# uploaded, so the ONNX variant (conf/ci/mobilenetv2_onnx_hosted.toml) is not
+# runnable on hosted CI.
+[MOBILENETV2]
+[MOBILENETV2.backend]
+type = "mnn"
+model_file_path = "../weights/classification/mobilenetv2/mobilenetv2_ilsvrc2012.mnn"
+device = "cpu"
+threads = 4
+input_layout = "nhwc"
+precision_mode = 0
+power_mode = 0
+
+[MOBILENETV2.params]
+# No image_decode=budget here: test/golden/mobilenetv2_classification.json was
+# recorded with the default decode path, and budget decode changes the pixels
+# enough to flip the softmax output. Keep the recording-time config.
+model_input_image_size = [224, 224]
+class_name_file = "../conf/model/classification/imagenet_classes.txt"

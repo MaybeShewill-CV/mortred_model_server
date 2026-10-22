@@ -51,8 +51,10 @@ if [ ! -f "$IMAGE_JPEG" ]; then
 fi
 
 echo "== fetch MOBILENETV2 weights =="
-python3 "$ROOT/scripts/fetch_weights.py" --only mobilenetv2.static_bs1.onnx
-python3 "$ROOT/scripts/fetch_weights.py" --check --only mobilenetv2.static_bs1.onnx
+# The MNN graph is the sha256-locked mobilenetv2 file actually published on
+# Hugging Face; the .static_bs1.onnx twin was never uploaded (404 on hosted CI).
+python3 "$ROOT/scripts/fetch_weights.py" --only mobilenetv2_ilsvrc2012.mnn
+python3 "$ROOT/scripts/fetch_weights.py" --check --only mobilenetv2_ilsvrc2012.mnn
 
 # The repo ships no default cpu product configs (docs/deployment.md teaches
 # cpu usage). CI injects its own overlay: a device=cpu model toml from
@@ -77,10 +79,10 @@ python3 - "$ROOT" "$CI_BOOT_DIR" <<'PY'
 import pathlib, sys
 root = pathlib.Path(sys.argv[1])
 out = pathlib.Path(sys.argv[2])
-src = root / "conf/ci/mobilenetv2_onnx_hosted.toml"
+src = root / "conf/ci/mobilenetv2_hosted.toml"
 text = src.read_text(encoding="utf-8")
-if 'type = "onnx"' not in text or 'device = "cpu"' not in text:
-    raise SystemExit("cpu mobilenet config must stay ONNX on cpu: %s" % src)
+if 'type = "mnn"' not in text or 'device = "cpu"' not in text:
+    raise SystemExit("cpu mobilenet config must stay MNN on cpu: %s" % src)
 (out / "mobilenetv2_config.toml").write_text(text, encoding="utf-8")
 (out / "ci_pack.toml").write_text(
     "[pack.mobilenetv2]\n"
