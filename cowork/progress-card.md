@@ -85,5 +85,6 @@ batch infer 优化 + P0-4 第 3 步（4 个 sampler 收敛迁移到 BackendCvMod
 - 2026-10-21 23:59x 用户决策批次二：enlightengan 间歇 segfault 根因修复（1fedfdea，preprocess 无 init 时 dtype 尾部解引用空 session，0/20→20/20）；旧 stash 已删；三件套微基准入库 scripts/microbench（run.sh 复现基线数字）。batch infer 按指示继续押后。
 - 2026-10-22 P1 战役九项全部完成（01372fe4..7d030fe1）：加盐、死代码三处、队头阻塞定性、连接数默认、改名、mini_toml、gateway 重试、阈值单源、英文文案。单测/契约族全绿，改名后全量 check 96/97（唯一失败为 p0_1 环境项）。
 - 2026-10-22 P1 完成验证：最终全量 check 96/97（99%）。
+- 2026-10-22 新发现：**main 的 GitHub CI 红灯跨多个提交**（c22451a1 起 tests/gcc、container boot、cpu weights fetch、werror docker、inference paths 多 job 失败；部分对应本卡已修的 enlightengan/p0_1，但 werror docker 在本地全绿仍失败，需拉日志定性；CodeQL 亦有失败）。v1.1.0 的 release 流水线已正确触发（in progress）。最新 push 的 CI in progress。
 - 2026-10-22 小项清理批次完成（7cf6dccf/449579bb/ff59defa），v1.1.0 已发布（3a15802e + tag）。
 - 2026-10-22 小项批次验证：全量 check **100/101（99%）**（4 个新测试目标入列，总数 97→101；唯一失败仍为 p0_1 环境项）。
