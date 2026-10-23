@@ -26,6 +26,19 @@
 namespace mortred {
 namespace control {
 
+/*** SO_RCVTIMEO value for a probe budget, split into seconds plus the sub-second
+ * remainder. tv_usec must stay below 1e6: a whole-second budget written only
+ * into tv_usec is rejected by the kernel, and recv then keeps no timeout. */
+inline timeval recv_timeout_for_ms(int timeout_ms) {
+    timeval tv{};
+    if (timeout_ms <= 0) {
+        return tv;
+    }
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = static_cast<suseconds_t>((timeout_ms % 1000) * 1000);
+    return tv;
+}
+
 inline bool endpoint_ready(int port, const char* path, int timeout_ms) {
     if (port <= 0 || path == nullptr || path[0] != '/' || timeout_ms <= 0) {
         return false;
@@ -63,9 +76,14 @@ inline bool endpoint_ready(int port, const char* path, int timeout_ms) {
     }
 
     ::fcntl(fd, F_SETFL, flags);
-    timeval recv_timeout{};
-    recv_timeout.tv_usec = static_cast<suseconds_t>(timeout_ms) * 1000;
-    ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &recv_timeout, sizeof(recv_timeout));
+    const timeval recv_timeout = recv_timeout_for_ms(timeout_ms);
+    if (::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &recv_timeout,
+                     sizeof(recv_timeout)) != 0) {
+        // Without the timeout a silent peer blocks recv forever, and the monitor
+        // thread that runs this probe also owns ordered shutdown.
+        ::close(fd);
+        return false;
+    }
 
     const std::string request = std::string("GET ") + path +
                                 " HTTP/1.1\r\n"
