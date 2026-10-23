@@ -500,17 +500,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         }
         const size_t n_items = parsed.items.size();
 
-        if (queue_would_overflow(_m_waiting_jobs.load(), n_items, _m_max_queue_depth)) {
-            _m_metrics.inc_queue_rejected();
-            _m_metrics.inc_http_requests(request_method, "429");
-            const int retry_after = compute_retry_after_seconds(
-                _m_waiting_jobs.load(), _m_workers.ewma_ms(), _m_workers.watermark());
-            task->get_resp()->add_header_pair("Retry-After",
-                                              std::to_string(retry_after).c_str());
-            reply_status(task, StatusCode::RATE_LIMITED, _m_model_name);
-            return;
-        }
-
         InferenceTask task_req;
         task_req.task_id = task_id;
         task_req.items = std::move(parsed.items);
@@ -521,7 +510,19 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
                 std::chrono::steady_clock::now() + std::chrono::milliseconds(_m_model_run_timeout);
         }
 
-        _m_waiting_jobs += n_items;
+        // Claim the queue slots after the move so a rejection needs no rollback.
+        // Check and accounting must be one atomic step: a load() followed by a
+        // later += let concurrent handler threads all pass the check.
+        if (!try_reserve_queue(_m_waiting_jobs, n_items, _m_max_queue_depth)) {
+            _m_metrics.inc_queue_rejected();
+            _m_metrics.inc_http_requests(request_method, "429");
+            const int retry_after = compute_retry_after_seconds(
+                _m_waiting_jobs.load(), _m_workers.ewma_ms(), _m_workers.watermark());
+            task->get_resp()->add_header_pair("Retry-After",
+                                              std::to_string(retry_after).c_str());
+            reply_status(task, StatusCode::RATE_LIMITED, _m_model_name);
+            return;
+        }
         _m_metrics.set_queue_depth(_m_waiting_jobs.load());
         _m_metrics.set_waiting_jobs(_m_waiting_jobs.load());
         _m_received_jobs += n_items;
