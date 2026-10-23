@@ -329,10 +329,11 @@ TEST(async_endpoints, drain_timeout_returns_with_inflight_log) {
     FLAGS_logtostderr = true;
     testing::internal::CaptureStderr();
     const auto start = std::chrono::steady_clock::now();
-    eps.drain(start + std::chrono::milliseconds(200));
+    const bool drained = eps.drain(start + std::chrono::milliseconds(200));
     const auto elapsed = std::chrono::steady_clock::now() - start;
     const std::string log = testing::internal::GetCapturedStderr();
 
+    EXPECT_FALSE(drained);
     EXPECT_LT(elapsed, std::chrono::seconds(2));
     EXPECT_NE(log.find("drain timeout"), std::string::npos) << log;
     EXPECT_NE(log.find("inflight=1"), std::string::npos) << log;
@@ -353,11 +354,13 @@ TEST(async_endpoints, shared_deadline_budget_under_350ms) {
     testing::internal::CaptureStderr();
     const auto start = std::chrono::steady_clock::now();
     const auto deadline = start + std::chrono::milliseconds(200);
-    eps.drain(deadline);
-    pool.drain(deadline);
+    const bool eps_drained = eps.drain(deadline);
+    const bool pool_drained = pool.drain(deadline);
     const auto elapsed = std::chrono::steady_clock::now() - start;
     testing::internal::GetCapturedStderr();
 
+    EXPECT_FALSE(eps_drained);
+    EXPECT_FALSE(pool_drained);
     EXPECT_LT(elapsed, std::chrono::seconds(2));
     EXPECT_LT(elapsed, std::chrono::milliseconds(350));
     pool.checkin(std::move(held));
@@ -413,10 +416,10 @@ TEST(async_endpoints, failed_init_destructor_skips_drain) {
 
     EXPECT_LT(elapsed, std::chrono::seconds(2));
     EXPECT_EQ(log.find("drain timeout"), std::string::npos) << log;
-    EXPECT_EQ(log.find("server members destroying after drain"), std::string::npos) << log;
+    EXPECT_EQ(log.find("drain timeout at shutdown"), std::string::npos) << log;
 }
 
-TEST(async_endpoints, initialized_destructor_logs_timeout_then_destroy) {
+TEST(async_endpoints, initialized_destructor_fails_closed_on_drain_timeout) {
     class ArmedServer : public NeverInitServer {
     public:
         void arm_without_returning_worker() {
@@ -425,21 +428,16 @@ TEST(async_endpoints, initialized_destructor_logs_timeout_then_destroy) {
     };
 
     FLAGS_logtostderr = true;
-    testing::internal::CaptureStderr();
-    const auto start = std::chrono::steady_clock::now();
-    {
-        ArmedServer server;
-        server.arm_without_returning_worker();
-    }
-    const auto elapsed = std::chrono::steady_clock::now() - start;
-    const std::string log = testing::internal::GetCapturedStderr();
-
-    const auto timeout_at = log.find("drain timeout");
-    const auto destroy_at = log.find("server members destroying after drain");
-    EXPECT_LT(elapsed, std::chrono::seconds(5));
-    EXPECT_NE(timeout_at, std::string::npos) << log;
-    EXPECT_NE(destroy_at, std::string::npos) << log;
-    EXPECT_LT(timeout_at, destroy_at) << log;
+    // P0-1: a worker that never comes back means the members the late go
+    // callback writes (_m_metrics / _m_workers) must not be destroyed. Same
+    // fail-closed policy as StuckWorkerAction::EXIT, so the process aborts
+    // instead of continuing into a use-after-free.
+    EXPECT_DEATH(
+        {
+            ArmedServer server;
+            server.arm_without_returning_worker();
+        },
+        "refusing to destroy them");
 }
 
 int main(int argc, char** argv) {

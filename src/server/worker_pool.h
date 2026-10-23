@@ -127,11 +127,12 @@ public:
 
     /*** Wait until every leased worker is back. Optional deadline ends the wait
      * early with a `drain timeout` log and the still-out count; default is
-     * unbounded (time_point::max). */
-    void drain(std::chrono::steady_clock::time_point deadline =
+     * unbounded (time_point::max). false means a worker is still out and can
+     * still check in: the caller must not destroy state that worker writes. */
+    bool drain(std::chrono::steady_clock::time_point deadline =
                    std::chrono::steady_clock::time_point::max()) {
         if (_watermark == 0) {
-            return;
+            return true;
         }
         constexpr int k_poll_ms = 5;
         while (available_approx() != _watermark) {
@@ -140,7 +141,7 @@ public:
                 const size_t remaining =
                     _watermark > available_approx() ? _watermark - available_approx() : 0;
                 LOG(WARNING) << "worker pool drain timeout, remaining=" << remaining;
-                return;
+                return false;
             }
             auto sleep_ms = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
             if (sleep_ms.count() > k_poll_ms) {
@@ -150,10 +151,11 @@ public:
                 const size_t remaining =
                     _watermark > available_approx() ? _watermark - available_approx() : 0;
                 LOG(WARNING) << "worker pool drain timeout, remaining=" << remaining;
-                return;
+                return false;
             }
             std::this_thread::sleep_for(sleep_ms);
         }
+        return true;
     }
 
 private:

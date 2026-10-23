@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- **Shutdown drain use-after-free:** `WorkerPool::drain` and `AsyncJobEndpoints::drain` now report whether the deadline cut the wait short, and `~BaseAiServerImpl` aborts on a short drain instead of destroying `_m_metrics` / `_m_workers` that a late go callback still writes. Same fail-closed policy as `StuckWorkerAction::EXIT`, so the supervisor restarts the process. Covered by a death test on an initialized server whose worker never comes back.
+
 ## [1.1.0] - 2026-10-22
 
 ### Fixed

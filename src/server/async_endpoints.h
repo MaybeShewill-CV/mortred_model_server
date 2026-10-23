@@ -130,8 +130,9 @@ public:
 
     /*** Wait until compute and wait inflight are zero. Optional deadline ends
      * the wait early with a `drain timeout` log and remaining counts; default
-     * is unbounded (time_point::max). */
-    void drain(std::chrono::steady_clock::time_point deadline =
+     * is unbounded (time_point::max). false means a request is still in flight
+     * and can still write state: the caller must not destroy it. */
+    bool drain(std::chrono::steady_clock::time_point deadline =
                    std::chrono::steady_clock::time_point::max()) {
         constexpr int k_poll_ms = 5;
         while (_inflight.load(std::memory_order_acquire) != 0 ||
@@ -142,7 +143,7 @@ public:
                              << _inflight.load(std::memory_order_relaxed)
                              << " wait_inflight="
                              << _wait_inflight.load(std::memory_order_relaxed);
-                return;
+                return false;
             }
             auto sleep_ms = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
             if (sleep_ms.count() > k_poll_ms) {
@@ -153,10 +154,11 @@ public:
                              << _inflight.load(std::memory_order_relaxed)
                              << " wait_inflight="
                              << _wait_inflight.load(std::memory_order_relaxed);
-                return;
+                return false;
             }
             std::this_thread::sleep_for(sleep_ms);
         }
+        return true;
     }
 
     // Unit-test seam: leave outstanding compute without the HTTP submit path.

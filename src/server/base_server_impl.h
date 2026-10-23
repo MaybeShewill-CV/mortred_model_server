@@ -72,18 +72,18 @@ public:
      * this wait is enough to keep _m_metrics and the pool EWMA alive. After
      * HTTP has replied, a detached go may still hold the lease until its
      * SUCCESS callback checkin). Async and worker drains share one steady_clock
-     * deadline with a total budget of kDrainTimeoutMs; on timeout each drain
-     * returns after logging `drain timeout` and the remaining count. A hung
-     * model past that budget is still SIGKILL'd after kStopGraceMs by the
-     * outer process manager. Model and gateway mains arm ProcessStop so
-     * SIGINT/SIGTERM reach server->stop() and this drain. The drain only runs
-     * when init succeeded: the worker watermark is committed at the end of a
-     * successful init, so a partially-filled queue from a failed init would
-     * otherwise spin forever — on failure the queue destructor releases the
-     * remaining workers itself. Residual note: a go task popped by the
-     * executor but preempted before its first queue access is not observable
-     * through the queue; this microsecond-level window is mitigated by
-     * stop()/wait_finish() preceding destruction in all callers.
+     * deadline with a total budget of kDrainTimeoutMs.
+     *
+     * A timeout means a leased worker can still write _m_metrics / _m_workers
+     * after this body returns, so destroying the members would be a
+     * use-after-free. Fail closed like StuckWorkerAction::EXIT: abort here and
+     * let the supervisor restart the process. Model and gateway mains arm
+     * ProcessStop so SIGINT/SIGTERM reach server->stop() and this drain.
+     *
+     * The drain only runs when init succeeded: the worker watermark is
+     * committed at the end of a successful init, so a partially-filled queue
+     * from a failed init would otherwise spin forever — on failure the queue
+     * destructor releases the remaining workers itself.
      */
     virtual ~BaseAiServerImpl() {
         // stop the batch runner first: it may hold a worker, and queued
@@ -94,9 +94,12 @@ public:
         }
         const auto deadline = std::chrono::steady_clock::now() +
                               std::chrono::milliseconds(kDrainTimeoutMs);
-        _m_async_eps.drain(deadline);
-        _m_workers.drain(deadline);
-        LOG(WARNING) << "server members destroying after drain";
+        const bool async_drained = _m_async_eps.drain(deadline);
+        const bool workers_drained = _m_workers.drain(deadline);
+        if (!async_drained || !workers_drained) {
+            LOG(FATAL) << "drain timeout at shutdown: a leased worker can still write "
+                          "server members, refusing to destroy them";
+        }
     }
 
     BaseAiServerImpl() = default;
