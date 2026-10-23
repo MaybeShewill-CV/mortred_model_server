@@ -16,3 +16,10 @@ weights
 .deps-build
 __pycache__
 *.pyc
+# Golden baselines are ~500MB of JSON/PNG for label heavy-golden only.
+# The image `check` target excludes that label, the runtime install does
+# not ship test/, and CodeQL traces `cmake --build` (not those tests).
+# Baking them into the loaded image exhausted the GitHub runner while
+# buildx exported it (write test/golden/ppmatting_matting.json: no space
+# left on device).
+test/golden
