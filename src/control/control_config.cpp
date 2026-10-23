@@ -232,6 +232,9 @@ bool ControlConfig::load(const std::string& path, ControlConfig* out, std::strin
             p.has_restart_policy = true;
             p.restart_policy = v;
         }
+        if (kv.count("start_timeout_ms") != 0) {
+            p.start_timeout_ms = mini_toml::to_int(kv.at("start_timeout_ms"), 0);
+        }
         cfg.servers[id] = p;
     }
 

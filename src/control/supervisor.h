@@ -112,7 +112,10 @@ class ProcessSupervisor {
     /*** gateway first (wait for /healthz), then autostart-eligible models.
      *  Both phases honor deadlines so a stuck child cannot block supervisor
      *  startup forever. Gateway binary missing, start failure, or deadline
-     *  without running skips the model wave; reason is on status()/autostart_gate(). */
+     *  without running skips the model wave; reason is on status()/autostart_gate().
+     *
+     *  models_deadline_ms is the default per-model budget, measured from that
+     *  model's own launch; [servers.<id>] start_timeout_ms overrides it. */
     void autostart_all(int gateway_deadline_ms = 15000, int models_deadline_ms = 60000);
 
     /*** signal-thread entry: request the ordered shutdown sequence */

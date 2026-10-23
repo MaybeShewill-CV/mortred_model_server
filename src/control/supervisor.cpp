@@ -25,6 +25,7 @@
 #include <random>
 #include <sstream>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "control/occupancy_gate.h"
@@ -1338,36 +1339,59 @@ void ProcessSupervisor::autostart_all(int gateway_deadline_ms, int models_deadli
         }
         return n;
     };
-    const int64_t deadline = monotonic_ms() + models_deadline_ms;
+    // Each child's budget starts at its own launch, not at the wave start:
+    // under start_concurrency=1 a slow model must not shrink the budget of the
+    // models queued behind it. [servers.<id>] start_timeout_ms overrides the
+    // models_deadline_ms default per model.
+    auto budget_ms = [this, models_deadline_ms](const std::string& id) {
+        const ServerPolicy policy = _cfg.effective_policy(id);
+        return policy.start_timeout_ms > 0 ? static_cast<int64_t>(policy.start_timeout_ms)
+                                           : static_cast<int64_t>(models_deadline_ms);
+    };
+    std::vector<int64_t> launched_at(queue.size(), 0);
     size_t launched = 0;
     while (launched < queue.size() || unresolved_count(launched) > 0) {
         if (_shutdown_requested.load()) {
             return;
         }
-        if (monotonic_ms() >= deadline) {
+        std::vector<std::pair<size_t, int64_t>> expired;
+        const int64_t now = monotonic_ms();
+        for (size_t i = 0; i < launched && i < queue.size(); ++i) {
+            if (launched_at[i] <= 0) {
+                continue;
+            }
+            const int64_t budget = budget_ms(queue[i]);
+            if (now < launched_at[i] + budget) {
+                continue;
+            }
+            const Status s = status(queue[i]);
+            if (s.pid >= 0 && s.state != "running" && s.state != "failed") {
+                expired.emplace_back(i, budget);
+            }
+        }
+        if (!expired.empty()) {
             std::ostringstream oss;
-            oss << "models not ready within deadline (" << models_deadline_ms << " ms):";
+            oss << "models not ready within deadline:";
             std::fprintf(stderr,
-                         "mortred-supervisor: autostart models deadline (%d ms) elapsed "
-                         "with unresolved children:\n",
-                         models_deadline_ms);
-            for (size_t i = 0; i < launched && i < queue.size(); ++i) {
-                const Status s = status(queue[i]);
-                if (s.pid >= 0 && s.state != "running" && s.state != "failed") {
-                    oss << " " << queue[i];
-                    std::fprintf(stderr, "  - %s state=%s pid=%d error=%s\n", queue[i].c_str(),
-                                 s.state.c_str(), s.pid, s.error.c_str());
-                }
+                         "mortred-supervisor: autostart start timeout elapsed with "
+                         "unresolved children:\n");
+            for (const auto& entry : expired) {
+                const Status s = status(queue[entry.first]);
+                oss << " " << queue[entry.first];
+                std::fprintf(stderr, "  - %s budget=%lld ms state=%s pid=%d error=%s\n",
+                             queue[entry.first].c_str(),
+                             static_cast<long long>(entry.second), s.state.c_str(), s.pid,
+                             s.error.c_str());
             }
             {
                 // Same critical section as the gate write. Judge by lock state:
-                // only a launched non-gateway child still starting becomes
-                // failed. Leave running and not-yet-launched stopped children
+                // only the expired, launched, non-gateway children still starting
+                // become failed. Running and not-yet-launched children are left
                 // alone. Do not signal; ordered shutdown still owns SIGINT,
                 // kStopGraceMs, then SIGKILL.
                 std::lock_guard<std::mutex> lock(_mu);
-                for (size_t i = 0; i < launched && i < queue.size(); ++i) {
-                    Child* child = find_locked(queue[i]);
+                for (const auto& entry : expired) {
+                    Child* child = find_locked(queue[entry.first]);
                     if (child == nullptr || child->is_gateway || child->pid <= 0 ||
                         child->engine.state() != SupervisedState::kStarting) {
                         continue;
@@ -1389,7 +1413,7 @@ void ProcessSupervisor::autostart_all(int gateway_deadline_ms, int models_deadli
             return;
         }
         while (launched < queue.size() && unresolved_count(launched) < width) {
-            const std::string& id = queue[launched++];
+            const std::string& id = queue[launched];
             std::string err;
             if (!start_server(id, &err)) {
                 std::ostringstream oss;
@@ -1404,6 +1428,8 @@ void ProcessSupervisor::autostart_all(int gateway_deadline_ms, int models_deadli
                 std::fprintf(stderr, "mortred-supervisor: autostart %s failed: %s\n", id.c_str(),
                              err.c_str());
             }
+            launched_at[launched] = monotonic_ms();
+            ++launched;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
