@@ -95,14 +95,16 @@ TEST(worker_pool, drain_timeout_returns_with_remaining_log) {
     FLAGS_logtostderr = true;
     testing::internal::CaptureStderr();
     const auto start = std::chrono::steady_clock::now();
-    pool.drain(start + std::chrono::milliseconds(200));
+    const bool drained = pool.drain(start + std::chrono::milliseconds(200));
     const auto elapsed = std::chrono::steady_clock::now() - start;
     const std::string log = testing::internal::GetCapturedStderr();
 
+    EXPECT_FALSE(drained);
     EXPECT_LT(elapsed, std::chrono::seconds(2));
     EXPECT_NE(log.find("drain timeout"), std::string::npos) << log;
     EXPECT_NE(log.find("remaining=1"), std::string::npos) << log;
     pool.checkin(std::move(held));
+    EXPECT_TRUE(pool.drain(std::chrono::steady_clock::now() + std::chrono::milliseconds(200)));
 }
 
 int main(int argc, char** argv) {
