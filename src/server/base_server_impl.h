@@ -71,14 +71,15 @@ public:
      * exactly one worker; metrics/EWMA are written before that enqueue, so
      * this wait is enough to keep _m_metrics and the pool EWMA alive. After
      * HTTP has replied, a detached go may still hold the lease until its
-     * SUCCESS callback checkin). Async and worker drains share one steady_clock
-     * deadline with a total budget of kDrainTimeoutMs.
+     * SUCCESS callback checkin). Batch, async and worker drains share one
+     * steady_clock deadline with a total budget of kDrainTimeoutMs.
      *
-     * A timeout means a leased worker can still write _m_metrics / _m_workers
-     * after this body returns, so destroying the members would be a
-     * use-after-free. Fail closed like StuckWorkerAction::EXIT: abort here and
-     * let the supervisor restart the process. Model and gateway mains arm
-     * ProcessStop so SIGINT/SIGTERM reach server->stop() and this drain.
+     * A timeout means a leased worker (or an in-flight batch) can still write
+     * _m_metrics / _m_workers / BatchRequestState after this body returns, so
+     * destroying the members would be a use-after-free. Fail closed like
+     * StuckWorkerAction::EXIT: abort here and let the supervisor restart the
+     * process. Model and gateway mains arm ProcessStop so SIGINT/SIGTERM reach
+     * server->stop() and this drain.
      *
      * The drain only runs when init succeeded: the worker watermark is
      * committed at the end of a successful init, so a partially-filled queue
@@ -86,17 +87,22 @@ public:
      * destructor releases the remaining workers itself.
      */
     virtual ~BaseAiServerImpl() {
-        // stop the batch runner first: it may hold a worker, and queued
-        // entries must be failed before the worker drain below
-        _m_batch.stop();
-        if (!_m_successfully_initialized) {
-            return;
-        }
+        // One deadline for every drain: batch first (it may hold a worker and
+        // queued entries must be failed before the worker drain), then async
+        // and workers.
         const auto deadline = std::chrono::steady_clock::now() +
                               std::chrono::milliseconds(kDrainTimeoutMs);
+        const bool batch_stopped = _m_batch.stop(deadline);
+        if (!_m_successfully_initialized) {
+            if (!batch_stopped) {
+                LOG(FATAL) << "drain timeout at shutdown: a batch is still in flight, "
+                              "refusing to destroy it";
+            }
+            return;
+        }
         const bool async_drained = _m_async_eps.drain(deadline);
         const bool workers_drained = _m_workers.drain(deadline);
-        if (!async_drained || !workers_drained) {
+        if (!batch_stopped || !async_drained || !workers_drained) {
             LOG(FATAL) << "drain timeout at shutdown: a leased worker can still write "
                           "server members, refusing to destroy them";
         }

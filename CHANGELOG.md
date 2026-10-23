@@ -9,6 +9,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 - **Shutdown drain use-after-free:** `WorkerPool::drain` and `AsyncJobEndpoints::drain` now report whether the deadline cut the wait short, and `~BaseAiServerImpl` aborts on a short drain instead of destroying `_m_metrics` / `_m_workers` that a late go callback still writes. Same fail-closed policy as `StuckWorkerAction::EXIT`, so the supervisor restarts the process. Covered by a death test on an initialized server whose worker never comes back.
+- **Batch stop can no longer hang shutdown:** `BatchCollector::stop` takes the same `kDrainTimeoutMs` deadline as the other drains and reports a batch that is still in flight, instead of waiting on it forever; `~BaseAiServerImpl` fails closed on that report too. A throw from a custom `run_batch` is now fenced at the collector, so the worker is checked back in and every item fails with `MODEL_RUN_SESSION_FAILED` (previously the throw escaped the go task and the worker never returned).
 
 ## [1.1.0] - 2026-10-22
 
