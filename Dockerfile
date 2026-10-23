@@ -32,8 +32,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /src
 COPY . /src/
 # root 环境下 --all 会同时安装 NVIDIA deb（CUDA/TRT/cuDNN 头与库）并构建 MNN/workflow/onnxruntime/fmt
+# .deps-build holds MNN/CUTLASS sources, the ORT tarball, and NVIDIA debs.
+# Later stages only COPY /src/3rd_party. The scratch is unused after --check;
+# leaving it in this layer keeps a second multi-GB tree in the build cache
+# beside the CodeQL image.
 RUN ./scripts/install_deps.sh --all \
-    && ./scripts/install_deps.sh --check
+    && ./scripts/install_deps.sh --check \
+    && rm -rf /src/.deps-build
 
 # ---------- 阶段 2：full build + 测试 + 安装树 ----------
 FROM nvidia/cuda:12.6.2-devel-ubuntu22.04@sha256:1c253f721b28b27c924677493c8ed45812c1b1a562bca828c144683b444e7298 AS build
@@ -62,6 +67,33 @@ RUN cmake -S /src -B /src/build \
     && cmake --build /src/build -j"$(nproc)" \
     && LD_LIBRARY_PATH=/src/_lib:/src/3rd_party/libs cmake --build /src/build --target check -j"$(nproc)" \
     && cmake --install /src/build --prefix /opt/mortred
+
+# ---------- CodeQL carrier (configure only; not a default target) ----------
+# codeql.yml Analyze (full) tags this stage as mortred-full:ci and traces
+# `cmake --build /src/build --clean-first` inside it. That command needs the
+# CUDA toolchain, system -dev packages, /src/3rd_party, sources, and a
+# configured build tree. It does not need object files, the /opt/mortred
+# install tree, or test/golden (dockerignored). Loading the `build` stage
+# instead exported those unused gigabytes a second time via buildx and
+# filled the runner disk.
+# Keep this stage off the default `docker build` path: the last stage stays
+# mortred-gpu.
+FROM nvidia/cuda:12.6.2-devel-ubuntu22.04@sha256:1c253f721b28b27c924677493c8ed45812c1b1a562bca828c144683b444e7298 AS codeql
+
+ENV DEBIAN_FRONTEND=noninteractive
+# Same toolchain packages as the `build` stage so configure sees the same
+# OpenCV / glog / Eigen / GTest / CUDA layout the full compile links against.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential git cmake libssl-dev ca-certificates curl \
+        libeigen3-dev libopencv-dev libgoogle-glog-dev libgtest-dev \
+        python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY --from=deps /src/3rd_party /src/3rd_party
+COPY . /src/
+RUN cmake -S /src -B /src/build \
+        -DMORTRED_BUILD_FULL=ON -DMORTRED_INSTALL=ON -DCMAKE_BUILD_TYPE=Release
 
 # ---------- 阶段 3：运行时（只装运行库） ----------
 FROM nvidia/cuda:12.6.2-runtime-ubuntu22.04@sha256:b4506fed312e533afe2fc310e789744a9f4f5bd25d999c1ae2a2025fc48ee223 AS runtime

@@ -92,11 +92,56 @@ jobs:
         with:
           category: "/language:cpp"
 
-      # ================= full: push main / manual (Docker full build + full in-container CodeQL flow) =================
-      # Note: tests-only can't compile apps/model layers (vendored MNN/TRT/workflow missing), so full mode does
-      # real compile tracing inside the Docker build image (install_deps.sh automated deps) and produces SARIF.
-      # The init step only downloads the codeql bundle to the runner toolcache (not part of this mode's analysis).
-      # Note: first push to main needs manual confirmation (the in-container codeql flow can't be validated in a local sandbox).
+      # ================= full: push main / manual (Docker carrier + in-container CodeQL) =================
+      # tests-only can't compile apps/model layers (vendored MNN/TRT/workflow missing).
+      # Full mode configures inside the `codeql` image (install_deps.sh in the
+      # deps stage) and traces `cmake --build --clean-first` in `docker run`.
+      # The init step only downloads the CodeQL bundle to the runner toolcache.
+      #
+      # Do not build this with the buildx container driver and `load: true`.
+      # That driver keeps the image in its own store, then `--load` exports a
+      # second tarball into dockerd. On ubuntu-22.04 that export died with
+      # "write /src/test/golden/ppmatting_matting.json: no space left on device"
+      # while loading the `build` stage (compile products + install tree +
+      # golden JSON that --clean-first never reads). The engine's docker
+      # driver stores the tagged image once and does not send that tarball.
+      - if: matrix.mode == 'full'
+        name: Free runner disk
+        run: |
+          set -euo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          # Hosted images preinstall Android, .NET, and other SDKs this job
+          # never uses. The CUDA devel carrier plus the traced compile need
+          # that space. CodeQL init below re-downloads its own bundle.
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/local/share/powershell \
+            /usr/local/share/chromium \
+            /usr/local/share/boost \
+            /usr/share/swift \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /opt/microsoft \
+            /usr/local/julia \
+            /opt/hostedtoolcache/CodeQL \
+            /opt/hostedtoolcache/go \
+            /opt/hostedtoolcache/Ruby \
+            /opt/hostedtoolcache/PyPy \
+            /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk
+          sudo apt-get clean
+          # Swap is a file on some images; drop it so the image unpack can grow.
+          sudo swapoff -a || true
+          sudo rm -f /swapfile /mnt/swapfile
+          docker system prune -af
+          # Golden JSON is not an input to the traced compile or to /out SARIF.
+          # .dockerignore already keeps it out of the image; this frees the
+          # checkout copy on the runner disk.
+          rm -rf "${GITHUB_WORKSPACE}/test/golden"
+          echo "Disk after cleanup:"
+          df -h
+
       - if: matrix.mode == 'full'
         name: Download CodeQL CLI (via init)
         uses: github/codeql-action/init@v4
@@ -105,21 +150,41 @@ jobs:
           queries: security-and-quality
 
       - if: matrix.mode == 'full'
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - if: matrix.mode == 'full'
-        name: Build full image (deps cached)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: build
-          push: false
-          load: true
-          tags: mortred-full:ci
-          cache-from: type=gha
-          # Full builds only import the GHA cache. Exporting the multi-GB
-          # dependency layer can exceed Azure Storage's 1-hour SAS URL validity.
+        name: Build CodeQL carrier image
+        run: |
+          set -euo pipefail
+          docker buildx ls
+          # The preinstalled `default` builder is dockerd BuildKit (driver
+          # docker). With no --load, that driver exports type=image straight
+          # into the image store. --load on the container driver is the
+          # tarball path that filled the disk.
+          if docker buildx inspect default --format '{{.Driver}}' 2>/dev/null | grep -qx docker; then
+            docker buildx use default
+            builder=default
+          else
+            docker buildx create --name codeql-docker --driver docker --use
+            builder=codeql-docker
+          fi
+          driver="$(docker buildx inspect "$builder" --format '{{.Driver}}')"
+          echo "buildx builder=${builder} driver=${driver}"
+          test "$driver" = "docker"
+          docker buildx build \
+            --builder "$builder" \
+            --target codeql \
+            --tag mortred-full:ci \
+            --progress=plain \
+            .
+          docker image ls mortred-full:ci
+          # Drop the untagged deps-stage cache (its own source + 3rd_party
+          # layers) before the traced compile writes object files.
+          docker builder prune -af
+          docker image inspect mortred-full:ci >/dev/null
+          # Configured tree, vendored libs, no golden payloads, and a clean
+          # target so `cmake --build --clean-first` can run in the next step.
+          docker run --rm mortred-full:ci \
+            bash -c 'test -f /src/build/CMakeCache.txt && test -d /src/3rd_party/libs && test ! -e /src/test/golden && cmake --build /src/build --target clean'
+          echo "Disk after image build:"
+          df -h
 
       # Locate the codeql bundle root in toolcache (contains the codeql/ CLI and ql/ query packs)
       - if: matrix.mode == 'full'
