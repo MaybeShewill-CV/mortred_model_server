@@ -13,6 +13,7 @@
 #define MORTRED_SERVER_REQUEST_ADMISSION_H
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cstdlib>
 #include <string>
@@ -91,6 +92,26 @@ inline bool queue_would_overflow(size_t waiting_jobs, size_t n_items, int max_qu
         return false;
     }
     return waiting_jobs + n_items > static_cast<size_t>(max_queue_depth);
+}
+
+/*** Claim n queue slots in one atomic step. A load() + later add() pair let every
+ * concurrent handler thread pass the check, so the cap could be overshot by up
+ * to one in-flight request per thread and the published queue depth could read
+ * above the configured maximum. max_queue_depth <= 0 means uncapped. */
+inline bool try_reserve_queue(std::atomic<size_t>& waiting, size_t n_items,
+                              int max_queue_depth) {
+    if (n_items == 0) {
+        return true;
+    }
+    size_t current = waiting.load(std::memory_order_relaxed);
+    while (!queue_would_overflow(current, n_items, max_queue_depth)) {
+        if (waiting.compare_exchange_weak(current, current + n_items,
+                                          std::memory_order_acq_rel,
+                                          std::memory_order_relaxed)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 }  // namespace server
