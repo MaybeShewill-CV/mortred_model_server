@@ -10,8 +10,10 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <functional>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -51,6 +53,12 @@ struct FakeModel {
     // When true, item_status is full-length OK but outputs is short — OK slots
     // past outputs.size() must become MODEL_RUN_SESSION_FAILED.
     bool short_outputs = false;
+    // Hold inside run_batch until release (stop-deadline test).
+    std::atomic<bool> hold{false};
+    std::atomic<bool> entered{false};
+    std::atomic<bool> release{false};
+    // Throw from run_batch (exception-fence test).
+    bool throws = false;
 
     StatusCode run(const base64_input& in, FakeOutput& out) {
         out.value = static_cast<int>(in.input_image_content.size());
@@ -60,6 +68,15 @@ struct FakeModel {
     StatusCode run_batch(const std::vector<base64_input>& in, std::vector<FakeOutput>& out,
                          std::vector<StatusCode>& item_status) {
         batch_calls.fetch_add(1);
+        if (throws) {
+            throw std::runtime_error("fake run_batch failure");
+        }
+        if (hold.load()) {
+            entered.store(true, std::memory_order_release);
+            while (!release.load(std::memory_order_acquire)) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            }
+        }
         if (delay_ms > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
         }
@@ -433,5 +450,98 @@ TEST(batch_collector, short_outputs_with_ok_status_is_session_failed) {
     EXPECT_EQ(snap.item_outputs[1].value, 0);
 
     collector.stop();
+}
+
+// P0-2: a throw from a custom run_batch must not escape the go task. If it
+// does, finish_in_flight never runs, the worker never comes back and the
+// destructor drain waits forever.
+TEST(batch_collector, run_batch_throw_fails_every_item_and_returns_worker) {
+    WorkerPool<FakeWorker> pool;
+    PrometheusMetrics metrics;
+    auto model = std::make_unique<FakeModel>();
+    FakeModel* raw = model.get();
+    raw->throws = true;
+    pool.adopt(std::move(model));
+    pool.commit_watermark(1);
+
+    BatchCollector<FakeWorker, FakeOutput> collector(pool, metrics);
+    collector.configure(/*max_batch_size=*/4, /*max_batch_delay_ms=*/10,
+                        /*worker_wait_timeout_ms=*/500);
+    collector.start();
+
+    std::mutex mu;
+    std::condition_variable cv;
+    bool done = false;
+
+    auto state = std::make_shared<BatchRequestState<FakeOutput>>();
+    state->req.items.push_back(text_item("aa"));
+    state->req.items.push_back(text_item("bbbb"));
+    state->init(2);
+    state->notify_done = [&]() {
+        std::lock_guard<std::mutex> lock(mu);
+        done = true;
+        cv.notify_all();
+    };
+
+    collector.submit(state);
+    {
+        std::unique_lock<std::mutex> lock(mu);
+        ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds(2), [&]() { return done; }));
+    }
+
+    auto snap = assemble_batch_slots(*state);
+    EXPECT_EQ(snap.model_run_status, StatusCode::MODEL_RUN_SESSION_FAILED);
+    ASSERT_EQ(snap.item_status.size(), 2u);
+    EXPECT_NE(snap.item_status[0], StatusCode::OK);
+    EXPECT_NE(snap.item_status[1], StatusCode::OK);
+    EXPECT_EQ(pool.available_approx(), 1u) << "worker must be checked in after a throw";
+    EXPECT_TRUE(collector.stop(std::chrono::steady_clock::now() + std::chrono::milliseconds(500)));
+}
+
+// P0-2: the destructor passes one deadline to stop(); a batch that outlives it
+// must be reported so the caller fails closed instead of destroying the state
+// that batch still writes.
+TEST(batch_collector, stop_deadline_reports_batch_still_in_flight) {
+    WorkerPool<FakeWorker> pool;
+    PrometheusMetrics metrics;
+    auto model = std::make_unique<FakeModel>();
+    FakeModel* raw = model.get();
+    raw->hold.store(true);
+    pool.adopt(std::move(model));
+    pool.commit_watermark(1);
+
+    BatchCollector<FakeWorker, FakeOutput> collector(pool, metrics);
+    collector.configure(/*max_batch_size=*/4, /*max_batch_delay_ms=*/10,
+                        /*worker_wait_timeout_ms=*/500);
+    std::thread runner;
+    collector.set_go_starter([&runner](std::function<void()> fn) {
+        if (runner.joinable()) {
+            runner.join();
+        }
+        runner = std::thread(std::move(fn));
+    });
+    collector.start();
+
+    auto state = std::make_shared<BatchRequestState<FakeOutput>>();
+    state->req.items.push_back(text_item("aa"));
+    state->init(1);
+    collector.submit(state);
+
+    const auto entered_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (!raw->entered.load() && std::chrono::steady_clock::now() < entered_deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    ASSERT_TRUE(raw->entered.load()) << "batch never entered run_batch";
+
+    const auto start = std::chrono::steady_clock::now();
+    const bool stopped = collector.stop(start + std::chrono::milliseconds(100));
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    EXPECT_FALSE(stopped);
+    EXPECT_LT(elapsed, std::chrono::seconds(2)) << "stop must honour the deadline";
+
+    raw->release.store(true);
+    runner.join();
+    EXPECT_TRUE(collector.stop(std::chrono::steady_clock::now() + std::chrono::milliseconds(500)));
+    EXPECT_EQ(pool.available_approx(), 1u);
 }
 

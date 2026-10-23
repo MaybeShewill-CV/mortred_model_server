@@ -24,6 +24,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -150,10 +151,15 @@ public:
      * writing slots, then join — matching "stop batch first" in the
      * orchestrator destructor. SME-08: bump epoch (no new mutex) so in-flight
      * submit TOCTOUs fix up unpublished slots; final drain catches late
-     * enqueues after join. */
-    void stop() {
+     * enqueues after join.
+     *
+     * false means the deadline passed with a batch still in flight: it can
+     * still write its BatchRequestState, so the caller must not destroy it. */
+    bool stop(std::chrono::steady_clock::time_point deadline =
+                  std::chrono::steady_clock::time_point::max()) {
         _accepting.store(false, std::memory_order_release);
         _epoch.fetch_add(1, std::memory_order_acq_rel);
+        bool drained = true;
         if (_thread.joinable()) {
             {
                 std::lock_guard<std::mutex> lock(_ready_mu);
@@ -164,9 +170,10 @@ public:
             // observe zero (it drains queue+ready on the way out). Then wait for
             // any already-dispatched GoStarter exec to finish write_slot.
             _thread.join();
-            wait_in_flight_zero();
+            drained = wait_in_flight_zero(deadline);
         }
         drain_queue_and_ready();
+        return drained;
     }
 
     /*** Enqueue one batch_entry per item. Does not block the caller.
@@ -428,8 +435,22 @@ private:
         std::vector<MODEL_OUTPUT> outputs;
         std::vector<StatusCode> item_status;
         const auto run_start = Timestamp::now();
-        const auto status = worker->run_batch(inputs, outputs, item_status);
-        (void)status;  // per-item codes are authoritative; aggregate is not a filler
+        // A custom run_batch may throw. Without this fence the throw escapes the
+        // go task, finish_in_flight never runs and the worker never comes back:
+        // the destructor drain would wait forever. A session-level throw is not
+        // attributable to one item, so every item fails (short vectors below).
+        try {
+            const auto status = worker->run_batch(inputs, outputs, item_status);
+            (void)status;  // per-item codes are authoritative; aggregate is not a filler
+        } catch (const std::exception& e) {
+            LOG(ERROR) << "run_batch threw: " << e.what();
+            outputs.clear();
+            item_status.clear();
+        } catch (...) {
+            LOG(ERROR) << "run_batch threw a non-std exception";
+            outputs.clear();
+            item_status.clear();
+        }
         const double run_ms = (Timestamp::now() - run_start) * 1000;
         // metrics + EWMA before checkin (pool drain / destructor contract)
         _pool.observe_run_ms(static_cast<int64_t>(run_ms));
@@ -483,9 +504,18 @@ private:
         }
     }
 
-    void wait_in_flight_zero() {
+    bool wait_in_flight_zero(std::chrono::steady_clock::time_point deadline) {
         std::unique_lock<std::mutex> lock(_ready_mu);
-        _ready_cv.wait(lock, [this]() { return _in_flight == 0; });
+        if (deadline == std::chrono::steady_clock::time_point::max()) {
+            _ready_cv.wait(lock, [this]() { return _in_flight == 0; });
+            return true;
+        }
+        const bool drained =
+            _ready_cv.wait_until(lock, deadline, [this]() { return _in_flight == 0; });
+        if (!drained) {
+            LOG(WARNING) << "batch collector drain timeout, in_flight=" << _in_flight;
+        }
+        return drained;
     }
 
     WorkerPool<WORKER>& _pool;
