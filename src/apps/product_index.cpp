@@ -65,8 +65,8 @@ void project_http(std::vector<ProductEntry> *out, std::set<std::string> *seen, c
         product.benchmark = static_cast<bool>(entry.make_worker);
         const auto captured = entry;
         if (product.http) {
-            product.make_server = [captured](const std::string &name) {
-                return mortred::factory::cv_catalog::create_server(captured, name);
+            product.make_server = [captured](const std::string &) {
+                return mortred::factory::cv_catalog::create_server(captured);
             };
         }
         if (product.benchmark) {
@@ -155,8 +155,8 @@ std::vector<ProductEntry> build_index() {
         product.benchmark = true;
 #endif
         const auto captured = entry;
-        product.make_server = [captured](const std::string &name) {
-            return mortred::factory::cv_catalog::create_server(captured, name);
+        product.make_server = [captured](const std::string &) {
+            return mortred::factory::cv_catalog::create_server(captured);
         };
 #ifdef MORTRED_WITH_CUSTOM_DRIVERS
         product.run_benchmark = [id = entry.model_section](int argc, char **argv) {

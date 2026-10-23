@@ -84,10 +84,10 @@ jobs:
       # ccache only: tests-only deps (opencv/glog/eigen3/gtest) come straight
       # from apt - the Linux-only project no longer needs vcpkg for them, which
       # removes the recurring clone/bootstrap/port-build flakiness in CI.
-      # workflow stays the one vendored source build: model_factory_unittest
-      # instantiates BaseAiServer (workflow server wrapper), so the workflow
-      # headers and lib must exist even in tests-only configure. Same dep pair
-      # the sanitizers job installs.
+      # workflow stays the one vendored source build: the server-level tests
+      # (server_e2e_contract_test, do_work_lifetime_unittest) instantiate the
+      # workflow HTTP wrapper, so its headers and lib must exist even in a
+      # tests-only configure. Same dep pair the sanitizers job installs.
       # gcc and quality-gates share the same key to avoid rebuilding the same dependency set.
       - name: Cache ccache
         id: cache-deps
@@ -187,7 +187,7 @@ jobs:
 
       - name: Install vendored deps (workflow + header-only set; 3rd_party is generated, not tracked)
         run: |
-          # see tests job: model_factory_unittest needs the vendored workflow
+          # see tests job: the server-level tests need the vendored workflow
           ./scripts/install_deps.sh --workflow
           ./scripts/install_deps.sh --headers
 

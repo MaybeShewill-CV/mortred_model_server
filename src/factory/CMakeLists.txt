@@ -1,7 +1,6 @@
 # build factory libs
 
 set(FACTORY_LIB_SRC
-    ${CMAKE_CURRENT_LIST_DIR}/base_factory.h
     ${CMAKE_CURRENT_LIST_DIR}/classification_task.h
     ${CMAKE_CURRENT_LIST_DIR}/clip_task.h
     ${CMAKE_CURRENT_LIST_DIR}/cv_catalog.h
