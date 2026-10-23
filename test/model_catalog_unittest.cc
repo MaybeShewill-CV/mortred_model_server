@@ -301,7 +301,7 @@ TEST_F(ModelCatalogTest, FeatureEmbeddingEntryDeclaresParamSpecs) {
 }
 
 TEST(ModelCatalog, UnknownSectionIsRejected) {
-    EXPECT_EQ(mortred::factory::cv_catalog::create_server(mortred::factory::classification::catalog(), "NO_SUCH_MODEL", "no_such_server"),
+    EXPECT_EQ(mortred::factory::cv_catalog::create_server(mortred::factory::classification::catalog(), "NO_SUCH_MODEL"),
               nullptr);
     EXPECT_EQ(mortred::factory::model_catalog::create_model(mortred::factory::clip::catalog(), "NO_SUCH_MODEL"), nullptr);
 }
