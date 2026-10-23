@@ -100,6 +100,10 @@ struct ServerPolicy {
     int rss_mib = 0;
     int thread_count = 0;  // 0 = unset
     int fd_count = 0;      // 0 = unset
+    // Autostart readiness budget for this model; 0 = the autostart_all
+    // models_deadline_ms default (60s). A big TensorRT engine loads for
+    // minutes, so it needs its own budget instead of the wave default.
+    int start_timeout_ms = 0;
 };
 
 struct ControlConfig {

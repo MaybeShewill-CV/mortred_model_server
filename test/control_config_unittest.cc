@@ -54,7 +54,8 @@ TEST_F(ControlConfigTest, parses_all_sections) {
         "upstream_recv_timeout_ms = 60000\n"
         "[servers.fake_model_server]\n"
         "autostart = false\n"
-        "restart_policy = \"always\"\n");
+        "restart_policy = \"always\"\n"
+        "start_timeout_ms = 4200\n");
     ControlConfig cfg;
     std::string err;
     ASSERT_TRUE(ControlConfig::load(path_.string(), &cfg, &err)) << err;
@@ -67,10 +68,12 @@ TEST_F(ControlConfigTest, parses_all_sections) {
     const auto policy = cfg.effective_policy("fake_model_server");
     EXPECT_FALSE(policy.autostart);
     EXPECT_EQ(policy.restart_policy, "always");
+    EXPECT_EQ(policy.start_timeout_ms, 4200);
 
     const auto fallback = cfg.effective_policy("unknown_server");
     EXPECT_TRUE(fallback.autostart);  // falls back to autostart_default=true
     EXPECT_EQ(fallback.restart_policy, "on-failure");
+    EXPECT_EQ(fallback.start_timeout_ms, 0) << "unset means the autostart default";
 }
 
 TEST_F(ControlConfigTest, pack_limits_autostart_to_listed_ids) {

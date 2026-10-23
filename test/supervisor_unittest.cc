@@ -515,6 +515,39 @@ TEST_F(SupervisorTest, autostart_models_respects_deadline) {
     EXPECT_EQ(later.pid, pid_at_return);
 }
 
+TEST_F(SupervisorTest, autostart_per_model_start_timeout_overrides_default) {
+    // [servers.<id>] start_timeout_ms is this model's own readiness budget; the
+    // autostart_all models_deadline_ms is only the fallback. A 400 ms budget
+    // must win over a 5 s default, otherwise a big engine loads past 60 s and
+    // gets marked failed while it is still starting.
+    write_fake_config("never-ready", 0);
+    catalog_ = Catalog{};
+    write_catalog();
+    install_gateway_stub("ready");
+
+    ControlConfig cfg = base_cfg();
+    cfg.supervisor.autostart_default = true;
+    mortred::control::ServerPolicy policy;
+    policy.start_timeout_ms = 400;
+    cfg.servers["fake_model_server"] = policy;
+    auto sup = std::make_unique<ProcessSupervisor>(
+        root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
+    sup->set_gateway_trust("scrape-token", "infer-token", "admin-token");
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    const auto t0 = std::chrono::steady_clock::now();
+    sup->autostart_all(/*gateway_deadline_ms=*/3000, /*models_deadline_ms=*/5000);
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - t0)
+                        .count();
+    EXPECT_LT(ms, 3000) << "per-model start_timeout_ms must win over the 5 s default, took "
+                        << ms << " ms";
+    const auto s = sup->status("fake_model_server");
+    EXPECT_EQ(s.state, "failed");
+    EXPECT_NE(s.error.find("deadline"), std::string::npos) << s.error;
+}
+
 TEST_F(SupervisorTest, autostart_running_sibling_stays_running_on_peer_deadline) {
     // Two model children in one wave. ready_sibling reaches running before the
     // models deadline; fake_model_server never becomes ready and trips it.
