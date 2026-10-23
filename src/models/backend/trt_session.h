@@ -139,6 +139,9 @@ class TrtSession : public InferenceSession {
     std::vector<TensorInfo> _m_input_infos;
     std::vector<TensorInfo> _m_output_infos;
     std::string _m_model_file_path;
+    // device pinned at init; run()/the destructor re-select it because CUDA
+    // work happens on go/worker threads whose current device is per thread
+    int _m_device_id = 0;
 
     // pinned host staging for H2D/D2H: pageable std::vector transfers pay a
     // driver-side staging copy (~3x measured vs pinned). Slots come from
