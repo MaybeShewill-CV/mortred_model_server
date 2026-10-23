@@ -266,6 +266,20 @@ channels = 3
     EXPECT_EQ(adapter.init(cfg), StatusCode::MODEL_INIT_FAILED);
 }
 
+TEST(DiffusionParam, DdpmTimestepsMustFitTheScheduleBuiltAtInit) {
+    // Request timesteps (ParamSpec allows 1..1000) is both the p_sample count and
+    // the highest beta/alpha index, so anything above [DDPM_SAMPLER] timesteps
+    // must be rejected instead of reading past the schedule built at init.
+    using mortred::models::diffusion::ddpm_timesteps_fit_schedule;
+    EXPECT_FALSE(ddpm_timesteps_fit_schedule(0, 1000));
+    EXPECT_FALSE(ddpm_timesteps_fit_schedule(-1, 1000));
+    EXPECT_TRUE(ddpm_timesteps_fit_schedule(1, 1));
+    EXPECT_TRUE(ddpm_timesteps_fit_schedule(1000, 1000));
+    EXPECT_FALSE(ddpm_timesteps_fit_schedule(1001, 1000));
+    // no schedule built (direct model use without adapter seeding) fits nothing
+    EXPECT_FALSE(ddpm_timesteps_fit_schedule(1, 0));
+}
+
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

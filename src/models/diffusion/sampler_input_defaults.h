@@ -74,6 +74,14 @@ inline StatusCode require_positive_i32(const toml::table &section, const char *s
     return StatusCode::OK;
 }
 
+/*** A DDPM request's step count is both the number of p_sample iterations and the
+ * highest beta/alpha index, so it must stay inside the schedule that
+ * [DDPM_SAMPLER] timesteps built at init. A request override above it is
+ * rejected instead of indexing past that schedule. */
+inline bool ddpm_timesteps_fit_schedule(int64_t requested, int64_t schedule_size) {
+    return requested > 0 && requested <= schedule_size;
+}
+
 inline StatusCode seed_ddpm_input(const toml::table &cfg, std_ddpm_input *input) {
     const toml::table *section = cfg["DDPM_SAMPLER"].as_table();
     if (section == nullptr) {
