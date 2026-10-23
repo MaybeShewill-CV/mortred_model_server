@@ -108,15 +108,15 @@ class ModelCatalogTest : public ::testing::Test {
         return (found == entry_tasks_.end() ? std::string("<unknown>") : found->second) + "/" + entry.model_section;
     }
 
-    // constructing the server instantiates CvModelServer<OUTPUT> and proves the
-    // registration lambda is valid; init() is intentionally not called
+    // constructing the server instantiates CvModelServer<OUTPUT>; init() is
+    // intentionally not called
     template <typename OUTPUT>
     void check_create_server(const std::vector<mortred::factory::cv_catalog::CvModelEntry<OUTPUT>> &entries, const std::string &task) {
         for (const auto &entry : entries) {
-            const auto server_name = "model_catalog_ut_" + task + "_" + entry.model_section;
-            auto server = mortred::factory::cv_catalog::create_server(entry, server_name);
-            ASSERT_NE(server, nullptr) << server_name;
-            EXPECT_NE(dynamic_cast<mortred::server::CvModelServer<OUTPUT> *>(server.get()), nullptr) << server_name;
+            const auto label = task + "/" + entry.model_section;
+            auto server = mortred::factory::cv_catalog::create_server(entry);
+            ASSERT_NE(server, nullptr) << label;
+            EXPECT_NE(dynamic_cast<mortred::server::CvModelServer<OUTPUT> *>(server.get()), nullptr) << label;
         }
     }
 

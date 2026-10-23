@@ -79,7 +79,6 @@ set(TEST_LIST
     session_io_unittest
     mnn_layout_unittest
     param_spec_unittest
-    model_factory_unittest
     byte_tracker_unittest
     simple_tokenizer_unittest
     request_size_limit_unittest
@@ -229,14 +228,6 @@ foreach(src ${TEST_LIST})
         set(EXTRA_LIBS glog::glog)
     elseif(${src} STREQUAL "item_exec_unittest")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
-    elseif(${src} STREQUAL "model_factory_unittest")
-        # instantiates BaseAiServer (WFServer subclass): its vtable pulls
-        # WFServerBase typeinfo from libworkflow, needed once sanitizer flags
-        # make the compiler emit it; link the vendored lib when available
-        set(EXTRA_LIBS glog::glog)
-        if(MORTRED_WORKFLOW_AVAILABLE)
-            list(APPEND EXTRA_LIBS vendored::workflow)
-        endif()
     elseif(${src} STREQUAL "diffusion_param_unittest")
         set(EXTRA_LIBS glog::glog ${OpenCV_LIBS})
     elseif(${src} STREQUAL "model_golden_test")

@@ -17,6 +17,9 @@ All notable changes to this project are documented here. The format follows
 - **DDPM could read past its step schedule:** request `timesteps` (the ParamSpec allows 1..1000) doubles as the p_sample iteration count and the highest `_m_betas` / `_m_alpha_cumprod` index, but those vectors are sized by `[DDPM_SAMPLER] timesteps` at init. An above-schedule request now fails with `INVALID_REQUEST_PARAMETER` (422) instead of indexing out of range, and `timesteps <= 0` fails init instead of building an empty schedule.
 - **Admission cap could be overshot:** the queue gate compared `_m_waiting_jobs.load()` against `max_queue_depth` and added the item count later, so concurrent handler threads could all pass the check. The cap was advisory, `set_queue_depth` could publish values above the configured maximum, and `Retry-After` was computed from that inflated depth. `try_reserve_queue` claims the slots in one CAS, so rejection is fail-closed and the published depth matches accepted work. Batch intake needs no separate bound: a queued batch entry is still counted until its request replies.
 
+### Removed
+- **Dead server-factory registry:** `TypeErasedFactory` / `ServerFactory` had one caller that registered a creator into a process-wide map under a mutex and immediately called `create()` — `std::make_unique` plus global state, and it contradicted the neighbouring lint's own rationale. `cv_catalog::create_server` constructs `CvModelServer` directly now; the header, its 13-test unit suite and the `register_type` lint (the symbol no longer exists, so a reintroduction is a compile error) are gone.
+
 ## [1.1.0] - 2026-10-22
 
 ### Fixed

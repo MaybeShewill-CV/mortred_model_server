@@ -628,20 +628,6 @@ def check_trt_engine_manifest() -> list[str]:
     return errors
 
 
-def check_factory_register_type_banned() -> list[str]:
-    """src/factory/*_task.h must not call register_type: models construct
-    directly; servers use the register_creator closure (avoids the
-    "write the global registry on every create" anti-pattern)."""
-    errors: list[str] = []
-    for header in sorted((ROOT / "src" / "factory").glob("*_task.h")):
-        for i, line in enumerate(header.read_text(encoding="utf-8").splitlines(), 1):
-            if "register_type" in line:
-                errors.append(
-                    f"{header.relative_to(ROOT)}:{i}: register_type is banned in task "
-                    f"headers (models construct directly; servers use register_creator)")
-    return errors
-
-
 def check_security_scan() -> list[str]:
     """Source-level security lint: bans dangerous calls
     (system/popen/strcpy/strcat/gets/scanf). Prevents historical vulnerability
@@ -1243,7 +1229,6 @@ def main() -> int:
     errors.extend(check_server_config_structure())
     errors.extend(check_server_exe_mapping())
     errors.extend(check_trt_engine_manifest())
-    errors.extend(check_factory_register_type_banned())
     errors.extend(check_security_scan())
     errors.extend(check_ci_no_python3_runs_sh())
     errors.extend(check_ci_convert_trt_dry_run_contract())

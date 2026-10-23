@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-#include "factory/base_factory.h"
 #include "glog/logging.h"
 #include "models/backend/param_spec.h"
 #include "models/base_model.h"
@@ -35,30 +34,26 @@ const CvModelEntry<OUTPUT> *find_entry(const std::vector<CvModelEntry<OUTPUT>> &
 }
 
 template <typename OUTPUT>
-std::unique_ptr<mortred::server::BaseAiServer> create_server(const CvModelEntry<OUTPUT> &entry, const std::string &server_name) {
-    auto &server_factory = mortred::factory::ServerFactory<mortred::server::BaseAiServer>::get_instance();
-    server_factory.register_creator(server_name, [entry]() -> std::unique_ptr<mortred::server::BaseAiServer> {
-        mortred::server::CvServerSpec<OUTPUT> spec;
-        spec.server_section = entry.server_section;
-        spec.model_section = entry.model_section;
-        spec.display_name = entry.display_name;
-        spec.make_worker = entry.make_worker;
-        spec.fill_response = entry.fill_response;
-        spec.param_specs = entry.param_specs;
-        return std::make_unique<mortred::server::CvModelServer<OUTPUT>>(std::move(spec));
-    });
-    return server_factory.create(server_name);
+std::unique_ptr<mortred::server::BaseAiServer> create_server(const CvModelEntry<OUTPUT> &entry) {
+    mortred::server::CvServerSpec<OUTPUT> spec;
+    spec.server_section = entry.server_section;
+    spec.model_section = entry.model_section;
+    spec.display_name = entry.display_name;
+    spec.make_worker = entry.make_worker;
+    spec.fill_response = entry.fill_response;
+    spec.param_specs = entry.param_specs;
+    return std::make_unique<mortred::server::CvModelServer<OUTPUT>>(std::move(spec));
 }
 
 template <typename OUTPUT>
 std::unique_ptr<mortred::server::BaseAiServer> create_server(const std::vector<CvModelEntry<OUTPUT>> &entries,
-                                                          const std::string &model_section, const std::string &server_name) {
+                                                             const std::string &model_section) {
     const auto *entry = find_entry(entries, model_section);
     if (entry == nullptr) {
         LOG(ERROR) << "model section not found in CV catalog: " << model_section;
         return nullptr;
     }
-    return create_server(*entry, server_name);
+    return create_server(*entry);
 }
 
 } // namespace cv_catalog
