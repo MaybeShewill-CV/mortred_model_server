@@ -20,6 +20,7 @@
 #include "common/cv_utils.h"
 #include "common/file_path_util.h"
 #include "models/diffusion/ddpm_unet.h"
+#include "models/diffusion/sampler_input_defaults.h"
 
 namespace mortred {
 namespace models {
@@ -314,6 +315,11 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::init(const toml::table &config) {
     // choose beta schedule type
     auto ddpm_sampler_cfg = config["DDPM_SAMPLER"];
     _m_timesteps = ddpm_sampler_cfg["timesteps"].value_or<int64_t>(0);
+    if (_m_timesteps <= 0) {
+        // an empty schedule would make every beta/alpha index in p_sample OOB
+        LOG(ERROR) << "[DDPM_SAMPLER] timesteps must be > 0, got " << _m_timesteps;
+        return StatusCode::MODEL_INIT_FAILED;
+    }
     _m_beta_start = ddpm_sampler_cfg["beta_start"].value_or<double>(0.0);
     _m_beta_end = ddpm_sampler_cfg["beta_end"].value_or<double>(0.0);
     _m_beta_schedule = _m_beta_schedule_type_map[ddpm_sampler_cfg["beta_schedule"].value_or<std::string>("")];
@@ -374,6 +380,13 @@ StatusCode DDPMSampler<INPUT, OUTPUT>::Impl::run(const INPUT& in, OUTPUT& out) {
     if (sample_size.width <= 0 || sample_size.height <= 0) {
         LOG(ERROR) << "ddpm sample_size is empty";
         return StatusCode::MODEL_EMPTY_INPUT_IMAGE;
+    }
+    if (!ddpm_timesteps_fit_schedule(sample_timestep, _m_timesteps)) {
+        // request-level timesteps (ParamSpec allows 1..1000) can exceed what
+        // [DDPM_SAMPLER] built at init; p_sample would index past the schedule
+        LOG(ERROR) << "ddpm timesteps " << sample_timestep
+                   << " outside the schedule built at init (" << _m_timesteps << ")";
+        return StatusCode::INVALID_REQUEST_PARAMETER;
     }
 
     // p-sample loop; the sampling status travels as a local so concurrent
