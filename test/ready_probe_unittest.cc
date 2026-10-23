@@ -94,3 +94,39 @@ TEST(ready_probe, no_response_times_out_as_not_ready) {
     // the timeout must be honored (no hang); leave scheduling slack
     EXPECT_LT(elapsed_ms, 1500);
 }
+
+TEST(ready_probe, recv_timeout_splits_seconds_and_micros) {
+    using mortred::control::recv_timeout_for_ms;
+
+    const timeval whole_second = recv_timeout_for_ms(1000);
+    EXPECT_EQ(whole_second.tv_sec, 1);
+    EXPECT_EQ(whole_second.tv_usec, 0);
+
+    const timeval one_and_a_half = recv_timeout_for_ms(1500);
+    EXPECT_EQ(one_and_a_half.tv_sec, 1);
+    EXPECT_EQ(one_and_a_half.tv_usec, 500000);
+
+    const timeval sub_second = recv_timeout_for_ms(300);
+    EXPECT_EQ(sub_second.tv_sec, 0);
+    EXPECT_EQ(sub_second.tv_usec, 300000);
+
+    // tv_usec must stay inside the kernel's accepted range for every budget
+    for (const int ms : {1, 999, 1000, 1001, 2500, 60000}) {
+        const timeval tv = recv_timeout_for_ms(ms);
+        EXPECT_LT(tv.tv_usec, 1000000) << "ms=" << ms;
+    }
+}
+
+TEST(ready_probe, whole_second_budget_is_honored_not_ignored) {
+    // A whole-second budget used to be written as tv_usec = 1'000'000, which the
+    // kernel rejects; setsockopt's failure was ignored and recv then waited for
+    // the peer to close instead of for the budget.
+    const int port = start_one_shot_listener("");
+    ASSERT_GT(port, 0);
+    const auto t0 = std::chrono::steady_clock::now();
+    EXPECT_FALSE(mortred::control::endpoint_ready(port, "/ready", 1000));
+    const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now() - t0).count();
+    EXPECT_GE(elapsed_ms, 900);
+    EXPECT_LT(elapsed_ms, 1300) << "SO_RCVTIMEO was not applied (elapsed " << elapsed_ms << " ms)";
+}
