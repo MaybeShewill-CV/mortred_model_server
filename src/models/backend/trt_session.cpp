@@ -244,6 +244,13 @@ StatusCode TrtSession::DeviceBuffer::ensure(size_t size_bytes) {
 }
 
 TrtSession::~TrtSession() {
+    // cudaFree/cudaStreamDestroy are context sensitive and destruction may run on
+    // a thread whose current device differs from the one init selected.
+    const auto set_dev = cudaSetDevice(_m_device_id);
+    if (set_dev != cudaSuccess) {
+        LOG(WARNING) << "tensorrt release cudaSetDevice(" << _m_device_id
+                     << ") failed: " << cudaGetErrorString(set_dev);
+    }
     release_pinned_staging();
     _m_device_buffers.clear();
     if (_m_stream != nullptr) {
@@ -321,6 +328,7 @@ StatusCode TrtSession::init(const BackendConfig& config, std::string* err) {
         }
         return StatusCode::MODEL_INIT_FAILED;
     }
+    _m_device_id = config.device_id;
     const auto cuda_init = cudaFree(nullptr);
     if (cuda_init != cudaSuccess) {
         if (err != nullptr) {
@@ -478,6 +486,16 @@ StatusCode TrtSession::run(const std::vector<NamedTensor>& inputs,
     if (_m_context == nullptr || _m_engine == nullptr) {
         LOG(ERROR) << "tensorrt session is not initialized";
         return StatusCode::MODEL_INIT_FAILED;
+    }
+    // run() executes on whichever go/worker thread picked the session, and the
+    // current CUDA device is per thread (default 0). Every allocation, copy and
+    // stream call below is context sensitive, so re-select the configured device
+    // instead of inheriting the caller's.
+    const auto set_dev = cudaSetDevice(_m_device_id);
+    if (set_dev != cudaSuccess) {
+        LOG(ERROR) << "tensorrt run cudaSetDevice(" << _m_device_id
+                   << ") failed: " << cudaGetErrorString(set_dev);
+        return StatusCode::TRT_CUDA_ERROR;
     }
     std::vector<const NamedTensor*> ordered_inputs;
     std::string match_err;
