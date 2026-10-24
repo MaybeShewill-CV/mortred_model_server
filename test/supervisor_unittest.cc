@@ -548,6 +548,39 @@ TEST_F(SupervisorTest, autostart_per_model_start_timeout_overrides_default) {
     EXPECT_NE(s.error.find("deadline"), std::string::npos) << s.error;
 }
 
+TEST_F(SupervisorTest, recatalog_with_live_child_does_not_terminate) {
+    // P1-1: spawn_locked creates two std::thread readers per child, whose only
+    // join site is handle_exit's detached joiner. Every other Child destruction
+    // path (this reset, or teardown racing the reaper) used to destroy joinable
+    // threads, and ~std::thread calls std::terminate. ~Child now detaches them.
+    write_fake_config("ready", 0);
+    catalog_ = Catalog{};
+    write_catalog();
+    install_gateway_stub("ready");
+
+    ControlConfig cfg = base_cfg();
+    cfg.supervisor.autostart_default = true;
+    auto sup = std::make_unique<ProcessSupervisor>(
+        root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
+    sup->set_gateway_trust("scrape-token", "infer-token", "admin-token");
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    sup->autostart_all(/*gateway_deadline_ms=*/3000, /*models_deadline_ms=*/3000);
+    const pid_t pid = sup->status("fake_model_server").pid;
+    ASSERT_GT(pid, 0) << "fake child should still be running";
+    ASSERT_EQ(sup->status("fake_model_server").state, "running");
+
+    // Re-applying the catalog clears the tracked children while the readers of
+    // the live one are still joinable: this is the deterministic trigger.
+    sup->set_catalog(catalog_);
+
+    // The reset dropped the only handle to that process, so the test owns it.
+    ::killpg(pid, SIGKILL);
+    sup->request_shutdown();
+    sup->wait_shutdown();
+}
+
 TEST_F(SupervisorTest, autostart_running_sibling_stays_running_on_peer_deadline) {
     // Two model children in one wave. ready_sibling reaches running before the
     // models deadline; fake_model_server never becomes ready and trips it.

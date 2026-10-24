@@ -27,6 +27,8 @@ All notable changes to this project are documented here. The format follows
 ### Removed
 - **Dead server-factory registry:** `TypeErasedFactory` / `ServerFactory` had one caller that registered a creator into a process-wide map under a mutex and immediately called `create()` — `std::make_unique` plus global state, and it contradicted the neighbouring lint's own rationale. `cv_catalog::create_server` constructs `CvModelServer` directly now; the header, its 13-test unit suite and the `register_type` lint (the symbol no longer exists, so a reintroduction is a compile error) are gone.
 
+- **Supervisor teardown could abort:** a `Child` owns two log-reader `std::thread`s whose only join site is `handle_exit`. Any other destruction path (catalog reset, or teardown racing the reaper) destroyed a still-joinable thread and `std::terminate`d the process. `~Child` now detaches them: the reader closure owns its pipe fd and a `shared_ptr<LogBuffer>` copy, and joining on the reaper is deliberately avoided so a stalled filesystem cannot stop reaping.
+
 ## [1.1.0] - 2026-10-22
 
 ### Fixed

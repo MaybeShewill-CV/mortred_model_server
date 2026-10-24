@@ -169,6 +169,25 @@ class ProcessSupervisor {
         std::thread reader_err;
         std::shared_ptr<LogBuffer> log;
         std::string error;
+
+        Child() = default;
+        Child(const Child&) = delete;
+        Child& operator=(const Child&) = delete;
+
+        /*** Readers normally leave through handle_exit's joiner. Every other
+         * destruction path (catalog reset, teardown racing the reaper) would
+         * otherwise destroy a still-joinable std::thread, which calls
+         * std::terminate. Detaching is safe here: the reader closure owns its
+         * pipe fd and a shared_ptr<LogBuffer> copy, and it must never be joined
+         * on the reaper (a stalled filesystem would block reaping). */
+        ~Child() {
+            if (reader_out.joinable()) {
+                reader_out.detach();
+            }
+            if (reader_err.joinable()) {
+                reader_err.detach();
+            }
+        }
     };
 
     static int64_t monotonic_ms();
