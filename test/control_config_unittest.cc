@@ -43,6 +43,27 @@ TEST_F(ControlConfigTest, defaults_when_file_missing) {
     EXPECT_FALSE(err.empty());
 }
 
+TEST_F(ControlConfigTest, unknown_sections_and_keys_warn_with_file_line) {
+    // Stage 1 of P1-8: a typo is no longer silent, but it still does not fail
+    // the load — the caller keeps the struct default for that key.
+    write(
+        "[supervisor]\n"
+        "api_prt = 9000\n"
+        "[gatewy]\n"
+        "port = 1\n");
+    testing::internal::CaptureStderr();
+    ControlConfig cfg;
+    std::string err;
+    ASSERT_TRUE(ControlConfig::load(path_.string(), &cfg, &err)) << err;
+    const std::string log = testing::internal::GetCapturedStderr();
+
+    EXPECT_NE(log.find(path_.string() + ":2:"), std::string::npos) << log;
+    EXPECT_NE(log.find("unknown config key 'api_prt'"), std::string::npos) << log;
+    EXPECT_NE(log.find(path_.string() + ":3:"), std::string::npos) << log;
+    EXPECT_NE(log.find("unknown config section [gatewy]"), std::string::npos) << log;
+    EXPECT_EQ(cfg.supervisor.api_port, 8787) << "the typo keeps the default";
+}
+
 TEST_F(ControlConfigTest, parses_all_sections) {
     write(
         "[supervisor]\n"

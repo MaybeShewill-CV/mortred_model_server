@@ -9,7 +9,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <filesystem>
+#include <map>
+#include <set>
 #include <unordered_set>
 
 #include "control/mini_toml.h"
@@ -135,20 +138,77 @@ bool apply_gateway_limit(const mini_toml::Table& kv, const std::string& ctx,
 
 }  // namespace
 
+namespace {
+
+/*** Warn about sections/keys this schema does not read, with the file:line they
+ * came from. A typo'd key used to be ignored in total silence, so the caller's
+ * defaults took over with no signal at all. Stage 1: warn, never fail. */
+void warn_unknown_config_entries(const std::string& path, const mini_toml::Doc& doc,
+                                 const mini_toml::KeyLines& key_lines,
+                                 const mini_toml::SectionLines& section_lines) {
+    static const std::map<std::string, std::set<std::string>> kSectionKeys = {
+        {"supervisor",
+         {"api_host", "api_port", "autostart_default", "start_concurrency", "log_dir",
+          "log_rotate_mb", "gpu_sample_interval_ms", "bin_dir", "lib_dir", "libs_dir",
+          "pack_file"}},
+        {"gateway",
+         {"host", "port", "request_size_limit_mb", "max_connections",
+          "upstream_send_timeout_ms", "upstream_recv_timeout_ms"}},
+        {"gateway.rate_limit",
+         {"enabled", "shadow", "rate_per_sec", "burst", "max_tracked", "trusted_proxies"}},
+        {"gateway.abuse_limit",
+         {"enabled", "shadow", "rate_per_sec", "burst", "max_tracked", "trusted_proxies"}},
+    };
+    static const std::set<std::string> kServerKeys = {"enabled", "autostart", "restart_policy",
+                                                      "start_timeout_ms"};
+    for (const auto& section_entry : doc) {
+        const std::string& section = section_entry.first;
+        const bool is_server = section.compare(0, 8, "servers.") == 0;
+        const auto known = kSectionKeys.find(section);
+        if (!is_server && known == kSectionKeys.end()) {
+            const auto line = section_lines.find(section);
+            std::fprintf(stderr, "%s:%d: unknown config section [%s] ignored\n", path.c_str(),
+                         line == section_lines.end() ? 0 : line->second, section.c_str());
+            continue;
+        }
+        const std::set<std::string>& allowed = is_server ? kServerKeys : known->second;
+        for (const auto& key_entry : section_entry.second) {
+            if (allowed.count(key_entry.first) != 0) {
+                continue;
+            }
+            int line = 0;
+            const auto section_it = key_lines.find(section);
+            if (section_it != key_lines.end()) {
+                const auto key_it = section_it->second.find(key_entry.first);
+                if (key_it != section_it->second.end()) {
+                    line = key_it->second;
+                }
+            }
+            std::fprintf(stderr, "%s:%d: unknown config key '%s' in [%s] ignored\n", path.c_str(),
+                         line, key_entry.first.c_str(), section.c_str());
+        }
+    }
+}
+
+}  // namespace
+
 bool ControlConfig::load(const std::string& path, ControlConfig* out, std::string* err) {
     mini_toml::Doc doc;
-    if (!mini_toml::load(path, &doc)) {
+    mini_toml::KeyLines key_lines;
+    mini_toml::SectionLines section_lines;
+    if (!mini_toml::load(path, &doc, &key_lines, &section_lines)) {
         if (err != nullptr) {
             *err = "cannot open control config: " + path;
         }
         return false;
     }
+    warn_unknown_config_entries(path, doc, key_lines, section_lines);
 
     ControlConfig cfg;
 
     if (doc.count("supervisor") != 0) {
         const auto& kv = doc.at("supervisor");
-        const std::string ctx = "[supervisor]";
+        const std::string ctx = path + " [supervisor]";
         if (!read_str(kv, "api_host", &cfg.supervisor.api_host, ctx, err) ||
             !read_str(kv, "log_dir", &cfg.supervisor.log_dir, ctx, err) ||
             !read_str(kv, "bin_dir", &cfg.supervisor.bin_dir, ctx, err) ||
@@ -170,7 +230,7 @@ bool ControlConfig::load(const std::string& path, ControlConfig* out, std::strin
 
     if (doc.count("gateway") != 0) {
         const auto& kv = doc.at("gateway");
-        const std::string ctx = "[gateway]";
+        const std::string ctx = path + " [gateway]";
         if (!read_str(kv, "host", &cfg.gateway.host, ctx, err) ||
             !read_int(kv, "port", &cfg.gateway.port, 1, 65535, ctx, err) ||
             !read_int(kv, "request_size_limit_mb", &cfg.gateway.request_size_limit_mb, 1, 4096,
@@ -188,13 +248,13 @@ bool ControlConfig::load(const std::string& path, ControlConfig* out, std::strin
     // pre-auth L0) are separate mini_toml sections. Every key is optional;
     // an omitted section keeps the struct defaults (abuse limit stays off).
     if (doc.count("gateway.rate_limit") != 0) {
-        if (!apply_gateway_limit(doc.at("gateway.rate_limit"), "[gateway.rate_limit]",
+        if (!apply_gateway_limit(doc.at("gateway.rate_limit"), path + " [gateway.rate_limit]",
                                  &cfg.gateway.rate_limit, err)) {
             return false;
         }
     }
     if (doc.count("gateway.abuse_limit") != 0) {
-        if (!apply_gateway_limit(doc.at("gateway.abuse_limit"), "[gateway.abuse_limit]",
+        if (!apply_gateway_limit(doc.at("gateway.abuse_limit"), path + " [gateway.abuse_limit]",
                                  &cfg.gateway.abuse_limit, err)) {
             return false;
         }
@@ -207,7 +267,7 @@ bool ControlConfig::load(const std::string& path, ControlConfig* out, std::strin
         const std::string id = section.substr(8);
         if (id.empty()) {
             if (err != nullptr) {
-                *err = "[" + section + "]: empty server id";
+                *err = path + " [" + section + "]: empty server id";
             }
             return false;
         }
@@ -224,7 +284,7 @@ bool ControlConfig::load(const std::string& path, ControlConfig* out, std::strin
             RestartPolicyKind kind = RestartPolicyKind::kOnFailure;
             if (!parse_restart_policy(v, &kind)) {
                 if (err != nullptr) {
-                    *err = "[" + section + "]: restart_policy must be on-failure|always|no, got '" +
+                    *err = path + " [" + section + "]: restart_policy must be on-failure|always|no, got '" +
                            v + "'";
                 }
                 return false;
