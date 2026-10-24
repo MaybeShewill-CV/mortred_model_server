@@ -167,7 +167,8 @@ void stop(pid_t pid) {
 class GatewayE2ETest : public ::testing::Test {
   protected:
     void SetUp() override {
-        root_ = fs::temp_directory_path() / "mortred_gateway_e2e";
+        root_ = fs::temp_directory_path() /
+                ("mortred_gateway_e2e_" + std::to_string(::getpid()));
         std::error_code ec;
         fs::remove_all(root_, ec);
         fs::create_directories(root_ / "conf" / "server", ec);
@@ -710,7 +711,8 @@ std::string keys_toml(const std::string& key, const std::string& name = "tenant-
 class GatewayAuthTest : public ::testing::Test {
   protected:
     void SetUp() override {
-        root_ = fs::temp_directory_path() / "mortred_gateway_auth_e2e";
+        root_ = fs::temp_directory_path() /
+                ("mortred_gateway_auth_e2e_" + std::to_string(::getpid()));
         std::error_code ec;
         fs::remove_all(root_, ec);
         fs::create_directories(root_ / "conf" / "server", ec);

@@ -581,3 +581,16 @@ if(MORTRED_ENABLE_VALGRIND_TESTS)
     message(STATUS "Valgrind memory-check tests enabled (label=valgrind; "
                    "run: ctest -L valgrind --output-on-failure)")
 endif()
+
+# Bound every registered test: a hung binary used to ride ctest's 1500 s default,
+# which looks like a stuck gate rather than a failed test. heavy-golden keeps a
+# larger budget for slow disks / sanitizer builds.
+get_property(_mortred_all_tests DIRECTORY PROPERTY TESTS)
+foreach(_mortred_test IN LISTS _mortred_all_tests)
+    get_test_property(${_mortred_test} LABELS _mortred_test_labels)
+    if("heavy-golden" IN_LIST _mortred_test_labels)
+        set_tests_properties(${_mortred_test} PROPERTIES TIMEOUT 1800)
+    else()
+        set_tests_properties(${_mortred_test} PROPERTIES TIMEOUT 900)
+    endif()
+endforeach()
