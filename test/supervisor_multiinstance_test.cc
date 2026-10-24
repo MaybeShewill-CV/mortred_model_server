@@ -136,7 +136,8 @@ void write_instance_config(const Instance& inst, int model_port) {
 class SupervisorMultiInstanceTest : public ::testing::Test {
   protected:
     void SetUp() override {
-        base_dir_ = fs::temp_directory_path() / "mortred_supervisor_multiinstance";
+        base_dir_ = fs::temp_directory_path() /
+                    ("mortred_supervisor_multiinstance_" + std::to_string(::getpid()));
         std::error_code ec;
         fs::remove_all(base_dir_, ec);
 

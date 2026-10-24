@@ -143,7 +143,8 @@ void write_instance_config(const Instance& inst, int model_port) {
 class GatewayMultiInstanceTest : public ::testing::Test {
   protected:
     void SetUp() override {
-        base_dir_ = fs::temp_directory_path() / "mortred_gateway_multiinstance";
+        base_dir_ = fs::temp_directory_path() /
+                    ("mortred_gateway_multiinstance_" + std::to_string(::getpid()));
         std::error_code ec;
         fs::remove_all(base_dir_, ec);
 

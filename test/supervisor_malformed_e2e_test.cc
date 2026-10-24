@@ -148,7 +148,8 @@ void stop(pid_t pid) {
 class SupervisorMalformedE2ETest : public ::testing::Test {
   protected:
     void SetUp() override {
-        root_ = fs::temp_directory_path() / "mortred_supervisor_malformed_e2e";
+        root_ = fs::temp_directory_path() /
+                ("mortred_supervisor_malformed_e2e_" + std::to_string(::getpid()));
         std::error_code ec;
         fs::remove_all(root_, ec);
         fs::create_directories(root_ / "conf" / "server", ec);
