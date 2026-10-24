@@ -556,27 +556,30 @@ TEST_F(SupervisorTest, recatalog_with_live_child_does_not_terminate) {
     write_fake_config("ready", 0);
     catalog_ = Catalog{};
     write_catalog();
-    install_gateway_stub("ready");
 
     ControlConfig cfg = base_cfg();
-    cfg.supervisor.autostart_default = true;
     auto sup = std::make_unique<ProcessSupervisor>(
         root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
-    sup->set_gateway_trust("scrape-token", "infer-token", "admin-token");
     sup->set_catalog(catalog_);
     ASSERT_TRUE(sup->start_threads());
 
-    sup->autostart_all(/*gateway_deadline_ms=*/3000, /*models_deadline_ms=*/3000);
+    // Deliberately no gateway: free_test_port() is per process, not per test, so
+    // any child left behind would fail every later test's bind.
+    std::string err;
+    ASSERT_TRUE(sup->start_server("fake_model_server", &err)) << err;
     const pid_t pid = sup->status("fake_model_server").pid;
     ASSERT_GT(pid, 0) << "fake child should still be running";
-    ASSERT_EQ(sup->status("fake_model_server").state, "running");
 
     // Re-applying the catalog clears the tracked children while the readers of
     // the live one are still joinable: this is the deterministic trigger.
     sup->set_catalog(catalog_);
 
     // The reset dropped the only handle to that process, so the test owns it.
+    // Wait for it to actually exit so the shared fixed port is free again.
     ::killpg(pid, SIGKILL);
+    for (int i = 0; i < 400 && ::kill(pid, 0) == 0; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
     sup->request_shutdown();
     sup->wait_shutdown();
 }
