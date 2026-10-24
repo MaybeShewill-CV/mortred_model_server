@@ -15,6 +15,7 @@
 
 #include "models/backend/f32_output.h"
 #include "models/backend/model_runtime.h"
+#include "models/classification/top_k.h"
 #include <opencv2/opencv.hpp>
 
 #include "common/cv_utils.h"
@@ -148,24 +149,7 @@ StatusCode MobileNetv2<INPUT, OUTPUT>::postprocess(const std::vector<NamedTensor
     if (context.params != nullptr) {
         keep = context.params->get_i32("top_k", keep);
     }
-    if (keep < static_cast<int>(score_count)) {
-        std::vector<int> order(static_cast<size_t>(score_count));
-        for (int idx = 0; idx < static_cast<int>(score_count); ++idx) {
-            order[static_cast<size_t>(idx)] = idx;
-        }
-        std::partial_sort(order.begin(), order.begin() + keep, order.end(),
-                          [&internal_out](int lhs, int rhs) {
-                              return internal_out.scores[static_cast<size_t>(lhs)] >
-                                     internal_out.scores[static_cast<size_t>(rhs)];
-                          });
-        order.resize(static_cast<size_t>(keep));
-        std::vector<float> top_scores;
-        top_scores.reserve(order.size());
-        for (const int idx : order) {
-            top_scores.push_back(internal_out.scores[static_cast<size_t>(idx)]);
-        }
-        internal_out.scores = std::move(top_scores);
-    }
+    apply_top_k(&internal_out.scores, keep);
     output = std::move(internal_out);
     return StatusCode::OK;
 }

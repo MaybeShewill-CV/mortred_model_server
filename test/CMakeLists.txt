@@ -79,6 +79,7 @@ set(TEST_LIST
     session_io_unittest
     mnn_layout_unittest
     param_spec_unittest
+    classification_topk_unittest
     byte_tracker_unittest
     simple_tokenizer_unittest
     request_size_limit_unittest
