@@ -29,6 +29,10 @@ namespace mini_toml {
 
 using Table = std::map<std::string, std::string>;
 using Doc = std::map<std::string, Table>;
+// 1-based source locations, so callers can name the offending line instead of
+// only the section. Kept beside the Doc; the parse structures stay unchanged.
+using KeyLines = std::map<std::string, std::map<std::string, int>>;
+using SectionLines = std::map<std::string, int>;
 
 inline std::string trim(const std::string& s) {
     size_t b = 0;
@@ -49,18 +53,24 @@ inline std::string unquote(const std::string& s) {
     return s;
 }
 
-inline Doc parse(const std::string& content, std::vector<std::string>* problems = nullptr) {
+inline Doc parse(const std::string& content, std::vector<std::string>* problems = nullptr,
+                 KeyLines* key_lines = nullptr, SectionLines* section_lines = nullptr) {
     Doc doc;
     std::string section;
     std::istringstream ss(content);
     std::string line;
+    int line_no = 0;
     while (std::getline(ss, line)) {
+        ++line_no;
         const std::string t = trim(line);
         if (t.empty() || t[0] == '#') {
             continue;
         }
         if (t.front() == '[' && t.back() == ']') {
             section = trim(t.substr(1, t.size() - 2));
+            if (section_lines != nullptr) {
+                (*section_lines)[section] = line_no;
+            }
             continue;
         }
         const auto eq = t.find('=');
@@ -68,9 +78,10 @@ inline Doc parse(const std::string& content, std::vector<std::string>* problems 
             // A config line the parser will drop. Never silent: a typo'd key
             // used to vanish and the caller's defaults silently took over.
             if (problems != nullptr) {
-                problems->push_back(section.empty()
+                const std::string where = "line " + std::to_string(line_no) + ": ";
+                problems->push_back(where + (section.empty()
                     ? "key-value line outside any [section] dropped: '" + t + "'"
-                    : "line without '=' inside [" + section + "] dropped: '" + t + "'");
+                    : "line without '=' inside [" + section + "] dropped: '" + t + "'"));
             }
             continue;
         }
@@ -79,12 +90,17 @@ inline Doc parse(const std::string& content, std::vector<std::string>* problems 
         if (hash != std::string::npos) {
             value = trim(value.substr(0, hash));
         }
-        doc[section][trim(t.substr(0, eq))] = unquote(value);
+        const std::string key = trim(t.substr(0, eq));
+        doc[section][key] = unquote(value);
+        if (key_lines != nullptr) {
+            (*key_lines)[section][key] = line_no;
+        }
     }
     return doc;
 }
 
-inline bool load(const std::string& path, Doc* out) {
+inline bool load(const std::string& path, Doc* out, KeyLines* key_lines = nullptr,
+                 SectionLines* section_lines = nullptr) {
     std::ifstream in(path, std::ios::binary);
     if (!in.is_open()) {
         return false;
@@ -92,7 +108,7 @@ inline bool load(const std::string& path, Doc* out) {
     std::stringstream ss;
     ss << in.rdbuf();
     std::vector<std::string> problems;
-    *out = parse(ss.str(), &problems);
+    *out = parse(ss.str(), &problems, key_lines, section_lines);
     for (const auto& problem : problems) {
         std::fprintf(stderr, "[mini_toml] %s: %s\n", path.c_str(), problem.c_str());
     }

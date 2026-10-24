@@ -36,10 +36,28 @@ TEST(mini_toml, reports_dropped_lines_instead_of_staying_silent) {
         "no_equal_sign\n"
         "hash = \"aa\"\n", &problems);
     ASSERT_EQ(problems.size(), 2u);
+    EXPECT_NE(problems[0].find("line 1:"), std::string::npos) << problems[0];
     EXPECT_NE(problems[0].find("outside any [section]"), std::string::npos);
+    EXPECT_NE(problems[1].find("line 3:"), std::string::npos) << problems[1];
     EXPECT_NE(problems[1].find("no_equal_sign"), std::string::npos);
     // the well-formed line still lands
     EXPECT_EQ(doc.at("keys.a").at("hash"), "aa");
+}
+
+TEST(mini_toml, records_section_and_key_lines) {
+    mortred::control::mini_toml::KeyLines key_lines;
+    mortred::control::mini_toml::SectionLines section_lines;
+    const auto doc = parse(
+        "[a]\n"
+        "x = 1\n"
+        "\n"
+        "[b]\n"
+        "y = 2\n", nullptr, &key_lines, &section_lines);
+    EXPECT_EQ(doc.size(), 2u);
+    EXPECT_EQ(section_lines.at("a"), 1);
+    EXPECT_EQ(section_lines.at("b"), 4);
+    EXPECT_EQ(key_lines.at("a").at("x"), 2);
+    EXPECT_EQ(key_lines.at("b").at("y"), 5);
 }
 
 TEST(mini_toml, to_int_and_to_bool_fall_back) {
