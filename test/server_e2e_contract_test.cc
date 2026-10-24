@@ -435,15 +435,42 @@ const std::vector<std::pair<std::string, std::string>> k_metrics_headers = {
     {"Authorization", "Bearer e2e-scrape-token"},
 };
 
+/*** Temporarily set (or unset, nullptr) the scrape token and restore the
+ * previous value, so tests that need it closed do not leak into later cases. */
 class ScrapeTokenScope {
 public:
-    explicit ScrapeTokenScope(const char* token) {
-        ::setenv("MORTRED_METRICS_TOKEN", token, 1);
+    explicit ScrapeTokenScope(const char* token)
+        : had_(std::getenv("MORTRED_METRICS_TOKEN") != nullptr) {
+        if (had_) {
+            previous_ = std::getenv("MORTRED_METRICS_TOKEN");
+        }
+        if (token == nullptr) {
+            ::unsetenv("MORTRED_METRICS_TOKEN");
+        } else {
+            ::setenv("MORTRED_METRICS_TOKEN", token, 1);
+        }
     }
-    ~ScrapeTokenScope() { ::unsetenv("MORTRED_METRICS_TOKEN"); }
+    ~ScrapeTokenScope() {
+        if (had_) {
+            ::setenv("MORTRED_METRICS_TOKEN", previous_.c_str(), 1);
+        } else {
+            ::unsetenv("MORTRED_METRICS_TOKEN");
+        }
+    }
     ScrapeTokenScope(const ScrapeTokenScope&) = delete;
     ScrapeTokenScope& operator=(const ScrapeTokenScope&) = delete;
+
+private:
+    bool had_ = false;
+    std::string previous_;
 };
+
+/*** The binary emulates a deployment that has a scrape token configured; install
+ * it before any test runs so every scrape uses k_metrics_headers. */
+[[maybe_unused]] const bool k_scrape_token_installed = []() {
+    ::setenv("MORTRED_METRICS_TOKEN", k_scrape_token, 1);
+    return true;
+}();
 
 rapidjson::Document parse_body(const std::string& body) {
     rapidjson::Document doc;
@@ -885,7 +912,6 @@ TEST(server_e2e_contract, metrics_inference_duration_sum_is_positive_after_reque
     // is nonzero on any machine. Still catches the observe-before-assign
     // regression, which yields 0 regardless of the delay.
     ServerHandle handle = start_server("fake_delay_ms=25\n");
-    ScrapeTokenScope scrape(k_scrape_token);
     const std::string body = "{\"images\":[\"aGVsbG8=\"]}";
     auto resp = send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
     ASSERT_EQ(resp.status, 200);
@@ -905,7 +931,6 @@ TEST(server_e2e_contract, metrics_inference_duration_sum_is_positive_after_reque
 
 TEST(server_e2e_contract, metrics_requires_bearer_when_auth_token_is_set) {
     ServerHandle handle = start_server();
-    ScrapeTokenScope scrape(k_scrape_token);
     auto anon = send_request(handle.port, "GET", "/metrics", "", {});
     EXPECT_EQ(anon.status, 401);
     auto health = send_request(handle.port, "GET", "/healthz", "", {});
@@ -924,6 +949,7 @@ TEST(server_e2e_contract, metrics_requires_bearer_when_auth_token_is_set) {
 
 TEST(server_e2e_contract, metrics_stays_closed_without_scrape_token) {
     // Unset MORTRED_METRICS_TOKEN must not fall back to the inference token.
+    ScrapeTokenScope closed(nullptr);
     ServerHandle handle = start_server();
     auto inference_token = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
     EXPECT_EQ(inference_token.status, 401);
@@ -1015,7 +1041,7 @@ double metrics_bucket_le(const std::string& body, const std::string& metric,
 // scrapes show 0; received/finished totals remain the durable rendezvous here.
 bool wait_for_job_release(int port, double expected_total, int attempts = 40) {
     for (int attempt = 0; attempt < attempts; ++attempt) {
-        const auto metrics = send_request(port, "GET", "/metrics", "", k_json_auth_headers);
+        const auto metrics = send_request(port, "GET", "/metrics", "", k_metrics_headers);
         if (metrics.status != 200) {
             return false;
         }
@@ -1108,7 +1134,7 @@ TEST(server_e2e_contract, queue_limit_returns_429_with_retry_after) {
     EXPECT_GE(retry_after, 1);
     EXPECT_LE(retry_after, 60);
 
-    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_metrics_headers);
     ASSERT_EQ(metrics.status, 200);
     EXPECT_GT(metrics_value(metrics.body, "mortred_queue_rejected_total"), 0.0);
 }
@@ -1146,7 +1172,7 @@ TEST(server_e2e_contract, batch_collects_and_distributes_per_request_results) {
     // all four requests went through the batch path: 4 observed items in
     // fewer than 4 batches proves real coalescing happened (exactly-one-
     // batch assertions would be timing-fragile on loaded CI machines)
-    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_metrics_headers);
     ASSERT_EQ(metrics.status, 200);
     EXPECT_EQ(metrics_value(metrics.body, "mortred_batch_size_sum"), 4.0);
     const double batch_count = metrics_value(metrics.body, "mortred_batch_size_count");
@@ -1158,7 +1184,7 @@ TEST(server_e2e_contract, batch_collects_and_distributes_per_request_results) {
 
 TEST(server_e2e_contract, batch_size_one_counts_each_executed_image) {
     ServerHandle handle = start_server();
-    auto before = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    auto before = send_request(handle.port, "GET", "/metrics", "", k_metrics_headers);
     ASSERT_EQ(before.status, 200);
     EXPECT_EQ(before.body.find("mortred_batch_size_count{"), std::string::npos) << before.body;
 
@@ -1172,7 +1198,7 @@ TEST(server_e2e_contract, batch_size_one_counts_each_executed_image) {
     EXPECT_EQ(doc["results"][0]["status"].GetInt(), 0);
     EXPECT_EQ(doc["results"][1]["status"].GetInt(), 0);
 
-    auto after = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    auto after = send_request(handle.port, "GET", "/metrics", "", k_metrics_headers);
     ASSERT_EQ(after.status, 200);
     EXPECT_EQ(metrics_value(after.body, "mortred_batch_size_count"), 2.0);
     EXPECT_EQ(metrics_value(after.body, "mortred_batch_size_sum"), 2.0);
@@ -1191,14 +1217,14 @@ TEST(server_e2e_contract, batch_size_one_omits_item_still_inside_run) {
     ASSERT_TRUE(doc["results"].IsArray());
     ASSERT_EQ(doc["results"].Size(), 2u);
 
-    auto early = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    auto early = send_request(handle.port, "GET", "/metrics", "", k_metrics_headers);
     ASSERT_EQ(early.status, 200);
     EXPECT_EQ(early.body.find("mortred_batch_size_count{"), std::string::npos) << early.body;
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
     std::string settled;
     while (std::chrono::steady_clock::now() < deadline) {
-        auto metrics = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+        auto metrics = send_request(handle.port, "GET", "/metrics", "", k_metrics_headers);
         ASSERT_EQ(metrics.status, 200);
         const std::string key = "mortred_inference_duration_ms_count";
         if (metrics.body.find(key + "{") != std::string::npos) {
@@ -1220,7 +1246,7 @@ TEST(server_e2e_contract, batch_size_one_omits_item_still_inside_run) {
     EXPECT_EQ(metrics_bucket_le(settled, "mortred_batch_size_bucket", "1"), 1.0);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    auto later = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    auto later = send_request(handle.port, "GET", "/metrics", "", k_metrics_headers);
     ASSERT_EQ(later.status, 200);
     EXPECT_EQ(metrics_value(later.body, "mortred_batch_size_count"), 1.0);
     EXPECT_EQ(metrics_value(later.body, "mortred_batch_size_sum"), 1.0);
@@ -1254,7 +1280,7 @@ TEST(server_e2e_contract, async_submit_bad_json_metrics_use_http_400) {
     ASSERT_FALSE(doc.HasParseError());
     EXPECT_EQ(doc["status"].GetInt(), 50);
 
-    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_metrics_headers);
     ASSERT_EQ(metrics.status, 200) << metrics.body;
     EXPECT_NE(metrics.body.find("method=\"POST\",status=\"400\""), std::string::npos)
         << metrics.body;
@@ -1269,7 +1295,7 @@ TEST(server_e2e_contract, async_submit_unknown_field_metrics_use_http_422) {
                      k_json_auth_headers);
     EXPECT_EQ(resp.status, 422);
 
-    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_metrics_headers);
     ASSERT_EQ(metrics.status, 200) << metrics.body;
     EXPECT_NE(metrics.body.find("method=\"POST\",status=\"422\""), std::string::npos)
         << metrics.body;
@@ -1585,7 +1611,7 @@ TEST(server_e2e_contract, async_job_replies_are_counted_in_http_requests) {
                                       k_json_auth_headers);
     EXPECT_EQ(missing.status, 404) << missing.body;
 
-    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    const auto metrics = send_request(handle.port, "GET", "/metrics", "", k_metrics_headers);
     ASSERT_EQ(metrics.status, 200) << metrics.body;
     EXPECT_NE(metrics.body.find("method=\"POST\",status=\"202\""), std::string::npos)
         << metrics.body;
