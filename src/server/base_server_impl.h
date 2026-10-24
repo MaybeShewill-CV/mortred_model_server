@@ -358,12 +358,16 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
                                    (request_uri[5] == '\0' || request_uri[5] == '/');
     const bool is_metrics_endpoint = strcmp(request_uri, "/metrics") == 0;
     const auto auth_header = authorization_header_of(task->get_req());
-    bool authorized = mortred::common::is_bearer_authorized(auth_header, _m_auth_token);
-    if (!authorized && is_metrics_endpoint) {
+    bool authorized = false;
+    if (is_metrics_endpoint) {
+        // Scrape surface, never the inference surface: only the scrape token may
+        // read metrics (the gateway enforces the same split through
+        // scrape_token_usable). Unset means closed, not "fall back to inference".
         const char* metrics_env = std::getenv("MORTRED_METRICS_TOKEN");
-        if (metrics_env != nullptr && *metrics_env != '\0') {
-            authorized = mortred::common::is_bearer_authorized(auth_header, std::string(metrics_env));
-        }
+        authorized = metrics_env != nullptr &&
+                     mortred::common::is_bearer_authorized(auth_header, std::string(metrics_env));
+    } else {
+        authorized = mortred::common::is_bearer_authorized(auth_header, _m_auth_token);
     }
     if (!is_health_endpoint && !authorized) {
         _m_metrics.inc_http_requests(request_method, "401");

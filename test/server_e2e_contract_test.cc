@@ -428,6 +428,23 @@ const std::vector<std::pair<std::string, std::string>> k_json_auth_headers = {
     {"Authorization", "Bearer test-secret"},
 };
 
+// /metrics is a scrape surface: only MORTRED_METRICS_TOKEN authorizes it, never
+// the inference token. The value is read per request, so a test can scope it.
+constexpr const char* k_scrape_token = "e2e-scrape-token";
+const std::vector<std::pair<std::string, std::string>> k_metrics_headers = {
+    {"Authorization", "Bearer e2e-scrape-token"},
+};
+
+class ScrapeTokenScope {
+public:
+    explicit ScrapeTokenScope(const char* token) {
+        ::setenv("MORTRED_METRICS_TOKEN", token, 1);
+    }
+    ~ScrapeTokenScope() { ::unsetenv("MORTRED_METRICS_TOKEN"); }
+    ScrapeTokenScope(const ScrapeTokenScope&) = delete;
+    ScrapeTokenScope& operator=(const ScrapeTokenScope&) = delete;
+};
+
 rapidjson::Document parse_body(const std::string& body) {
     rapidjson::Document doc;
     doc.Parse(body.c_str());
@@ -868,11 +885,12 @@ TEST(server_e2e_contract, metrics_inference_duration_sum_is_positive_after_reque
     // is nonzero on any machine. Still catches the observe-before-assign
     // regression, which yields 0 regardless of the delay.
     ServerHandle handle = start_server("fake_delay_ms=25\n");
+    ScrapeTokenScope scrape(k_scrape_token);
     const std::string body = "{\"images\":[\"aGVsbG8=\"]}";
     auto resp = send_request(handle.port, "POST", "/test/model", body, k_json_auth_headers);
     ASSERT_EQ(resp.status, 200);
 
-    auto metrics = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    auto metrics = send_request(handle.port, "GET", "/metrics", "", k_metrics_headers);
     ASSERT_EQ(metrics.status, 200);
     const std::string key = "mortred_inference_duration_ms_sum";
     const auto pos = metrics.body.find(key);
@@ -887,14 +905,30 @@ TEST(server_e2e_contract, metrics_inference_duration_sum_is_positive_after_reque
 
 TEST(server_e2e_contract, metrics_requires_bearer_when_auth_token_is_set) {
     ServerHandle handle = start_server();
+    ScrapeTokenScope scrape(k_scrape_token);
     auto anon = send_request(handle.port, "GET", "/metrics", "", {});
     EXPECT_EQ(anon.status, 401);
     auto health = send_request(handle.port, "GET", "/healthz", "", {});
     EXPECT_EQ(health.status, 200);
     auto ready = send_request(handle.port, "GET", "/ready", "", {});
     EXPECT_EQ(ready.status, 200);
-    auto ok = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    auto inference_token = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    EXPECT_EQ(inference_token.status, 401)
+        << "the inference token must not read the scrape surface";
+    auto wrong_scrape =
+        send_request(handle.port, "GET", "/metrics", "", {{"Authorization", "Bearer not-the-scrape"}});
+    EXPECT_EQ(wrong_scrape.status, 401);
+    auto ok = send_request(handle.port, "GET", "/metrics", "", k_metrics_headers);
     EXPECT_EQ(ok.status, 200);
+}
+
+TEST(server_e2e_contract, metrics_stays_closed_without_scrape_token) {
+    // Unset MORTRED_METRICS_TOKEN must not fall back to the inference token.
+    ServerHandle handle = start_server();
+    auto inference_token = send_request(handle.port, "GET", "/metrics", "", k_json_auth_headers);
+    EXPECT_EQ(inference_token.status, 401);
+    auto health = send_request(handle.port, "GET", "/healthz", "", k_json_auth_headers);
+    EXPECT_EQ(health.status, 200) << "the inference token still authorizes the model surface";
 }
 
 TEST(server_e2e_contract, metrics_is_unauthorized_when_auth_token_is_empty) {

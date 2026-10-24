@@ -390,7 +390,7 @@ def load_pinned_rps(
     port: int,
     expect_gpu: bool,
 ) -> tuple[float | None, str]:
-    before = fetch_decode_counters(port, auth_token)
+    before = fetch_decode_counters(port, calib_metrics_token(auth_token))
     report = run_load(
         LoadConfig(
             url=url,
@@ -403,7 +403,7 @@ def load_pinned_rps(
             progress=False,
         )
     )
-    after = fetch_decode_counters(port, auth_token)
+    after = fetch_decode_counters(port, calib_metrics_token(auth_token))
     if report.ok <= 0 or report.rps <= 0:
         return None, "load failed ok=%s errors=%s" % (report.ok, report.errors)
     if expect_gpu:
@@ -1150,6 +1150,13 @@ def calib_auth_token() -> str:
     return secrets.token_urlsafe(24)
 
 
+def calib_metrics_token(auth_token: str) -> str:
+    # Model /metrics only accepts MORTRED_METRICS_TOKEN, never the inference
+    # token (the gateway enforces the same split). Each calibration run gets its
+    # own scrape token derived from the run token.
+    return auth_token + "-scrape"
+
+
 def start_model(
     root: Path,
     binary: Path,
@@ -1164,6 +1171,7 @@ def start_model(
     env = os.environ.copy()
     env.pop("MORTRED_LISTEN_PORT", None)
     env["MORTRED_AUTH_TOKEN"] = auth_token
+    env["MORTRED_METRICS_TOKEN"] = calib_metrics_token(auth_token)
     env["MORTRED_LISTEN_HOST"] = "127.0.0.1"
     env["MORTRED_PROJECT_ROOT"] = str(root)
     env["MORTRED_WORKER_NUMS"] = str(workers)
@@ -1350,7 +1358,7 @@ def run_one_point(
         )
         sampler.start()
         conc = max(1, int(concurrency))
-        before_metrics = fetch_metrics_text(port, auth_token)
+        before_metrics = fetch_metrics_text(port, calib_metrics_token(auth_token))
         # Worker sweep only. Decode vote uses load_pinned_rps and its own warmup.
         sweep_warmup_s = 5.0
         # duration+10 is 70s at duration=60 and cuts off the 5s warmup.
@@ -1368,7 +1376,7 @@ def run_one_point(
                 progress=False,
             )
         )
-        after_metrics = fetch_metrics_text(port, auth_token)
+        after_metrics = fetch_metrics_text(port, calib_metrics_token(auth_token))
         stop.set()
         sampler.join(timeout=2)
         if samples:
