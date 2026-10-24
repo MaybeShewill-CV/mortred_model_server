@@ -45,7 +45,7 @@ template <typename INPUT, typename OUTPUT> StatusCode PPMatting<INPUT, OUTPUT>::
     this->set_image_decode_hint(_m_input_size_host, mortred::models::cv_input::parse_image_decode_upscale(params, "ppmatting"));
     this->set_gpu_preprocess({
         .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::DIRECT_RESIZE,
-        .norm = {.scale = 1.0f / 255.0f, .mean = {0.5f, 0.5f, 0.5f}, .std = {0.5f, 0.5f, 0.5f}},
+        .norm = mortred::models::backend::k_norm_signed_unit,
         .color = mortred::models::backend::GpuPreprocessDescriptor::Color::RGB,
         .pad_value = 114,
         .output_dtype = input_info.dtype,
@@ -57,14 +57,11 @@ template <typename INPUT, typename OUTPUT> StatusCode PPMatting<INPUT, OUTPUT>::
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> PPMatting<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
 
-    auto result = mortred::models::backend::ImagePipeline(input_image)
-                      .bgr_to_rgb()
-                      .resize(_m_input_size_host)
-                      .to_float()
-                      .scale(1.0f / 255.0f)
-                      .subtract({0.5f, 0.5f, 0.5f})
-                      .divide({0.5f, 0.5f, 0.5f})
-                      .nchw(this->session().inputs().front());
+    auto result =
+        mortred::models::backend::dense_norm_pipeline(
+            input_image, _m_input_size_host,
+            mortred::models::backend::k_norm_signed_unit)
+            .nchw(this->session().inputs().front());
     if (!result.ok()) {
         LOG(ERROR) << result.error;
         return {};

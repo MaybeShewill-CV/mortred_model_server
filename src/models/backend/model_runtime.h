@@ -12,6 +12,7 @@
 #include "models/backend/f32_output.h"
 #include "models/backend/session.h"
 #include "models/backend/tensor.h"
+#include "models/backend/gpu_preprocess_desc.h"
 #include "toml/toml.hpp"
 
 namespace mortred {
@@ -77,6 +78,25 @@ class ImagePipeline {
     StatusCode status_ = StatusCode::OK;
     std::string error_;
 };
+
+/*** Norm the segmentation/matting family registers for the GPU path (maps
+ * [0,255] to [-1,1]). The CPU chain below and the descriptor share it so the
+ * two paths cannot drift. */
+inline constexpr GpuPreprocessDescriptor::Norm k_norm_signed_unit{
+    1.0f / 255.0f, {0.5f, 0.5f, 0.5f}, {0.5f, 0.5f, 0.5f}};
+
+/*** CPU mirror of the descriptor's norm chain: DIRECT_RESIZE -> RGB -> f32 ->
+ * (x * scale - mean) / std. Five models used to spell this chain out. */
+inline ImagePipeline dense_norm_pipeline(const cv::Mat &input, const cv::Size &network,
+                                         const GpuPreprocessDescriptor::Norm &norm) {
+    return ImagePipeline(input)
+        .bgr_to_rgb()
+        .resize(network)
+        .to_float()
+        .scale(norm.scale)
+        .mean_std({norm.mean[0], norm.mean[1], norm.mean[2]},
+                  {norm.std[0], norm.std[1], norm.std[2]});
+}
 
 /*** fused single-pass preprocess: BGR uint8 source -> letterbox -> RGB ->
  * /255 -> NCHW f32 tensor, numerically identical to
