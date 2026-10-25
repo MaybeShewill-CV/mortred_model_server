@@ -25,7 +25,7 @@ namespace common {
     X(MODEL_EMPTY_OUTPUT, 5, "model output empty")                                                                                         \
     X(MODEL_OUTPUT_CONTRACT_FAILED, 6, "model output contract failed")                                                                     \
     X(MODEL_NOT_IMPLEMENTED, 7, "model not implemented")                                                                                   \
-    X(MODEL_INPUT_SIZE_REJECTED, 8, "input size must be 256x256")                                                                                    \
+    X(MODEL_INPUT_SIZE_REJECTED, 8, "input size does not match the model's expected size")                                                                                    \
     X(SERVER_INIT_FAILED, 11, "server init failed")                                                                                        \
     X(JSON_DECODE_ERROR, 50, "decode json error")                                                                                          \
     X(UNSUPPORTED_MEDIA_TYPE, 60, "unsupported media type")                                                                                \

@@ -9,6 +9,8 @@
 
 #include <opencv2/opencv.hpp>
 
+#include <string>
+
 #include "glog/logging.h"
 
 #include "models/backend/f32_output.h"
@@ -68,7 +70,9 @@ mortred::models::backend::PreparedInput RealEsrGan<INPUT, OUTPUT>::prepare_input
     if (channels_ok && (image.rows != 256 || image.cols != 256)) {
         LOG(ERROR) << "real esrgan input size rejected: " << image.size();
         return mortred::models::backend::PreparedInput::invalid(
-            StatusCode::MODEL_INPUT_SIZE_REJECTED, mortred::common::status_code_to_str(StatusCode::MODEL_INPUT_SIZE_REJECTED));
+            StatusCode::MODEL_INPUT_SIZE_REJECTED,
+            "real esrgan requires a 256x256 input, got " + std::to_string(image.cols) + "x" +
+                std::to_string(image.rows));
     }
 
     prepared.inputs = preprocess(image);

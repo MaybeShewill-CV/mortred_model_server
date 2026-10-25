@@ -790,8 +790,7 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::reply_sync_request(
             fill_response_data(allocator, data, output, options);
         });
     const StatusCode status = snap.model_run_status;
-    unified.status = mortred::common::to_underlying(status);
-    unified.status_str = mortred::common::status_code_to_str(status);
+    mortred::common::set_status(&unified, status);
     if (status != StatusCode::OK) {
         LOG(ERROR) << "worker run failed with status " << mortred::common::to_underlying(status);
     }

@@ -109,8 +109,7 @@ inline mortred::common::UnifiedResponse status_envelope(
     const std::string& model_name = {}) {
     mortred::common::UnifiedResponse unified;
     unified.task_id = task_id;
-    unified.status = mortred::common::to_underlying(status);
-    unified.status_str = mortred::common::status_code_to_str(status);
+    mortred::common::set_status(&unified, status);
     unified.model_name = model_name;
     unified.errors = std::move(errors);
     return unified;

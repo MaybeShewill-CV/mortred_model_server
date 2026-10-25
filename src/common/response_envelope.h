@@ -55,6 +55,13 @@ struct UnifiedResponse {
     std::vector<ResponseError> errors;
 };
 
+/*** The numeric code and its wire string are one value. Pairing them by hand at
+ * every reply site is how `status` and `status_str` drift apart on the wire. */
+inline void set_status(UnifiedResponse *resp, StatusCode code) {
+    resp->status = to_underlying(code);
+    resp->status_str = status_code_to_str(code);
+}
+
 namespace envelope {
 
 inline constexpr const char *k_status = "status";
