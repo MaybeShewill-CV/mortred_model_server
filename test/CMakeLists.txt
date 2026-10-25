@@ -104,6 +104,7 @@ set(TEST_LIST
     async_job_stress_test
     restart_policy_unittest
     catalog_unittest
+    listen_port_unittest
     control_config_unittest
     trt_spawn_gate_unittest
     occupancy_gate_unittest

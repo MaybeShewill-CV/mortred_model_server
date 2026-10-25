@@ -22,7 +22,9 @@ namespace apps {
 /***
  * Runtime projection of the factory `*_task.h::catalog()` tables. There is no
  * handwritten product list here: every row is copied from a catalog entry at
- * process start. `id` is the catalog `model_section` (`YOLOV8`, `MOBILENETV2`).
+ * process start. `id` is the catalog `model_section`, which is lowercase
+ * (`yolov8s`, `mobilenetv2`) — `--model` matches it exactly, while the TOML
+ * table it reads is `server_section` (uppercase, e.g. `YOLOV8_DETECTION_SERVER`).
  */
 struct ProductEntry {
     std::string id;
@@ -38,6 +40,10 @@ struct ProductEntry {
 class ProductIndex {
   public:
     static const std::vector<ProductEntry> &all();
+
+    /*** Catalog ids that collided while the index was built. Non-empty means the
+     * projection lost a row, so entry points must refuse to start. */
+    static const std::vector<std::string> &duplicate_ids();
     static const ProductEntry *find(const std::string &id);
     static void print_list(std::FILE *out);
 };

@@ -12,6 +12,7 @@
 #include <toml/toml.hpp>
 
 #include "apps/cli_flags.h"
+#include "apps/common/exit_codes.h"
 #include "apps/common/model_server_main.h"
 #include "apps/product_index.h"
 
@@ -36,11 +37,20 @@ int main(int argc, char **argv) {
     if (!mortred::apps::parse_model_cli(argc, argv, &cli, &err)) {
         std::fprintf(stderr, "%s\n", err.c_str());
         print_usage(argv[0]);
-        return -1;
+        return mortred::apps::kExitUsage;
     }
     if (cli.help) {
         print_usage(argv[0]);
         return 0;
+    }
+    const auto &duplicate_ids = mortred::apps::ProductIndex::duplicate_ids();
+    if (!duplicate_ids.empty()) {
+        std::fprintf(stderr, "duplicate catalog id(s):");
+        for (const auto &id : duplicate_ids) {
+            std::fprintf(stderr, " %s", id.c_str());
+        }
+        std::fprintf(stderr, "\n");
+        return mortred::apps::kExitConfig;
     }
     if (cli.list) {
         mortred::apps::ProductIndex::print_list(stdout);
@@ -48,18 +58,18 @@ int main(int argc, char **argv) {
     }
     if (cli.model.empty() || cli.rest_argc() != 2) {
         print_usage(argv[0]);
-        return -1;
+        return mortred::apps::kExitUsage;
     }
 
     const auto *entry = mortred::apps::ProductIndex::find(cli.model);
     if (entry == nullptr) {
         std::fprintf(stderr, "unknown --model '%s' (see --list)\n", cli.model.c_str());
-        return -1;
+        return mortred::apps::kExitUsage;
     }
     if (!entry->http || !entry->make_server) {
         std::fprintf(stderr, "model '%s' is not served over HTTP (bench-only; see --list)\n",
                      cli.model.c_str());
-        return -1;
+        return mortred::apps::kExitUsage;
     }
 
     const std::string config_path = cli.rest[1];
@@ -67,14 +77,14 @@ int main(int argc, char **argv) {
     if (!parsed) {
         std::fprintf(stderr, "parse toml config file failed: %s\n",
                      std::string(parsed.error().description()).c_str());
-        return -1;
+        return mortred::apps::kExitConfig;
     }
     const auto config = std::move(parsed).table();
     std::string model_alias;
     if (mortred::apps::find_section_ci(config, cli.model, &model_alias) == nullptr) {
         std::fprintf(stderr, "--model %s does not match a [%s] table in %s\n", cli.model.c_str(),
                      cli.model.c_str(), config_path.c_str());
-        return -1;
+        return mortred::apps::kExitConfig;
     }
     if (model_alias != cli.model) {
         std::fprintf(stderr,
@@ -87,7 +97,7 @@ int main(int argc, char **argv) {
     if (server_tbl == nullptr) {
         std::fprintf(stderr, "server section [%s] missing from %s\n",
                      entry->server_section.c_str(), config_path.c_str());
-        return -1;
+        return mortred::apps::kExitConfig;
     }
     const auto declared = server_tbl->get("model");
     if (declared != nullptr) {
@@ -96,7 +106,7 @@ int main(int argc, char **argv) {
             if (declared_name != cli.model) {
                 std::fprintf(stderr, "config model=\"%s\" does not match --model %s\n",
                              declared_name.c_str(), cli.model.c_str());
-                return -1;
+                return mortred::apps::kExitConfig;
             }
         }
     }

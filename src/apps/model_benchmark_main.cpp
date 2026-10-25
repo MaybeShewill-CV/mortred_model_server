@@ -11,6 +11,7 @@
 #include <glog/logging.h>
 
 #include "apps/cli_flags.h"
+#include "apps/common/exit_codes.h"
 #include "apps/product_index.h"
 
 namespace {
@@ -34,11 +35,20 @@ int main(int argc, char **argv) {
     if (!mortred::apps::parse_model_cli(argc, argv, &cli, &err)) {
         std::fprintf(stderr, "%s\n", err.c_str());
         print_usage(argv[0]);
-        return -1;
+        return mortred::apps::kExitUsage;
     }
     if (cli.help) {
         print_usage(argv[0]);
         return 0;
+    }
+    const auto &duplicate_ids = mortred::apps::ProductIndex::duplicate_ids();
+    if (!duplicate_ids.empty()) {
+        std::fprintf(stderr, "duplicate catalog id(s):");
+        for (const auto &id : duplicate_ids) {
+            std::fprintf(stderr, " %s", id.c_str());
+        }
+        std::fprintf(stderr, "\n");
+        return mortred::apps::kExitConfig;
     }
     if (cli.list) {
         mortred::apps::ProductIndex::print_list(stdout);
@@ -46,7 +56,7 @@ int main(int argc, char **argv) {
     }
     if (cli.model.empty() || cli.rest_argc() < 2) {
         print_usage(argv[0]);
-        return -1;
+        return mortred::apps::kExitUsage;
     }
 
     google::InitGoogleLogging(argv[0]);
@@ -58,11 +68,11 @@ int main(int argc, char **argv) {
     const auto *entry = mortred::apps::ProductIndex::find(cli.model);
     if (entry == nullptr) {
         LOG(ERROR) << "unknown --model '" << cli.model << "' (see --list)";
-        return -1;
+        return mortred::apps::kExitUsage;
     }
     if (!entry->benchmark || !entry->run_benchmark) {
         LOG(ERROR) << "model '" << cli.model << "' has no benchmark driver";
-        return -1;
+        return mortred::apps::kExitUsage;
     }
     return entry->run_benchmark(cli.rest_argc(), cli.rest.data());
 }
