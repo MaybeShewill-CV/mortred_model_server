@@ -548,6 +548,42 @@ TEST_F(SupervisorTest, autostart_per_model_start_timeout_overrides_default) {
     EXPECT_NE(s.error.find("deadline"), std::string::npos) << s.error;
 }
 
+TEST_F(SupervisorTest, recatalog_with_live_child_does_not_terminate) {
+    // P1-1: spawn_locked creates two std::thread readers per child, whose only
+    // join site is handle_exit's detached joiner. Every other Child destruction
+    // path (this reset, or teardown racing the reaper) used to destroy joinable
+    // threads, and ~std::thread calls std::terminate. ~Child now detaches them.
+    write_fake_config("ready", 0);
+    catalog_ = Catalog{};
+    write_catalog();
+
+    ControlConfig cfg = base_cfg();
+    auto sup = std::make_unique<ProcessSupervisor>(
+        root_.string(), cfg, (root_ / "conf" / "mortred.toml").string());
+    sup->set_catalog(catalog_);
+    ASSERT_TRUE(sup->start_threads());
+
+    // Deliberately no gateway: free_test_port() is per process, not per test, so
+    // any child left behind would fail every later test's bind.
+    std::string err;
+    ASSERT_TRUE(sup->start_server("fake_model_server", &err)) << err;
+    const pid_t pid = sup->status("fake_model_server").pid;
+    ASSERT_GT(pid, 0) << "fake child should still be running";
+
+    // Re-applying the catalog clears the tracked children while the readers of
+    // the live one are still joinable: this is the deterministic trigger.
+    sup->set_catalog(catalog_);
+
+    // The reset dropped the only handle to that process, so the test owns it.
+    // Wait for it to actually exit so the shared fixed port is free again.
+    ::killpg(pid, SIGKILL);
+    for (int i = 0; i < 400 && ::kill(pid, 0) == 0; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    sup->request_shutdown();
+    sup->wait_shutdown();
+}
+
 TEST_F(SupervisorTest, autostart_running_sibling_stays_running_on_peer_deadline) {
     // Two model children in one wave. ready_sibling reaches running before the
     // models deadline; fake_model_server never becomes ready and trips it.
