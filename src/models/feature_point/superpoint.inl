@@ -21,6 +21,8 @@ namespace mortred {
 namespace models {
 namespace feature_point {
 
+using mortred::models::backend::find_output;
+
 using FeatureOutput = mortred::models::io_define::feature_point::std_feature_point_output;
 using mortred::common::StatusCode;
 using mortred::models::backend::NamedTensor;
@@ -55,16 +57,6 @@ template <typename INPUT, typename OUTPUT> StatusCode SuperPoint<INPUT, OUTPUT>:
     });
 
     return StatusCode::OK;
-}
-
-template <typename INPUT, typename OUTPUT>
-const NamedTensor *SuperPoint<INPUT, OUTPUT>::find_output(const std::vector<NamedTensor> &outputs, const std::string &name) const {
-    for (const auto &item : outputs) {
-        if (item.name == name) {
-            return &item;
-        }
-    }
-    return nullptr;
 }
 
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> SuperPoint<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {

@@ -14,6 +14,7 @@
 #include "glog/logging.h"
 
 #include "models/backend/tensor.h"
+#include "models/backend/tensor_contract.h"
 
 namespace mortred {
 namespace models {
@@ -135,11 +136,6 @@ class SamPromptDecoder::Impl {
         return iter == _m_session->inputs().end() ? nullptr : &*iter;
     }
 
-    const NamedTensor *find_output(const std::vector<NamedTensor> &outputs, const std::string &name) const {
-        const auto iter = std::find_if(outputs.begin(), outputs.end(), [&name](const NamedTensor &item) { return item.name == name; });
-        return iter == outputs.end() ? nullptr : &*iter;
-    }
-
     const TensorInfo *find_output(const std::string &name) const {
         const auto iter = std::find_if(_m_session->outputs().begin(), _m_session->outputs().end(),
                                        [&name](const TensorInfo &info) { return info.name == name; });
@@ -226,16 +222,16 @@ class SamPromptDecoder::Impl {
             return contract_status;
         }
 
-        const auto *iou = find_output(outputs, "iou_predictions");
+        const auto *iou = mortred::models::backend::find_output(outputs, "iou_predictions");
         const auto *iou_data = iou->tensor.template data<float>();
         const auto iou_count = static_cast<int>(iou->tensor.element_count());
         const auto best_mask_idx = static_cast<int>(std::distance(iou_data, std::max_element(iou_data, iou_data + iou_count)));
 
-        const auto *full_masks = find_output(outputs, "masks");
+        const auto *full_masks = mortred::models::backend::find_output(outputs, "masks");
         if (full_masks != nullptr) {
             return decode_full_mask(full_masks->tensor, best_mask_idx, out_mask);
         }
-        const auto *low_res_masks = find_output(outputs, "low_res_masks");
+        const auto *low_res_masks = mortred::models::backend::find_output(outputs, "low_res_masks");
         return decode_low_res_mask(low_res_masks->tensor, best_mask_idx, out_mask);
     }
 

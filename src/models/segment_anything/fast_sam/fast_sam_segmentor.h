@@ -43,9 +43,6 @@ template <typename INPUT, typename OUTPUT> class FastSamSegmentor : public mortr
 
     StatusCode on_init(const toml::table &params) override;
 
-    const mortred::models::backend::NamedTensor *find_output(const std::vector<mortred::models::backend::NamedTensor> &outputs,
-                                                          const std::string &name) const;
-
     cv::Mat upscale_mask_image(const cv::Mat &mask, const cv::Size &source_size) const;
 
     // score thresh

@@ -35,9 +35,6 @@ template <typename INPUT, typename OUTPUT> class SuperPoint : public mortred::mo
 
     StatusCode on_init(const toml::table &params) override;
 
-    const mortred::models::backend::NamedTensor *find_output(const std::vector<mortred::models::backend::NamedTensor> &outputs,
-                                                          const std::string &name) const;
-
     void decode_fp_location_and_score(const mortred::models::backend::NamedTensor &semi,
                                       double score_threshold, double nms_radius,
                                       mortred::models::io_define::feature_point::std_feature_point_output &key_points) const;

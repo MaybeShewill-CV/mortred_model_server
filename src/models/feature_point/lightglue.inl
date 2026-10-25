@@ -16,10 +16,13 @@
 
 #include "common/cv_utils.h"
 #include "models/backend/model_runtime.h"
+#include "models/backend/tensor_contract.h"
 
 namespace mortred {
 namespace models {
 namespace feature_point {
+
+using mortred::models::backend::find_output;
 
 using FeatureMatchOutput = mortred::models::io_define::feature_point::std_feature_point_match_output;
 using mortred::common::StatusCode;
@@ -57,16 +60,6 @@ template <typename INPUT, typename OUTPUT> StatusCode LightGlue<INPUT, OUTPUT>::
         return session_status;
     }
     return StatusCode::OK;
-}
-
-template <typename INPUT, typename OUTPUT>
-const NamedTensor *LightGlue<INPUT, OUTPUT>::find_output(const std::vector<NamedTensor> &outputs, const std::string &name) const {
-    for (const auto &item : outputs) {
-        if (item.name == name) {
-            return &item;
-        }
-    }
-    return nullptr;
 }
 
 template <typename INPUT, typename OUTPUT>
