@@ -61,8 +61,7 @@ inline mortred::common::StatusCode status_for_proxy_http(int http_status) {
 inline void reply_unified_error(WFHttpTask *task, int http_status, mortred::common::StatusCode status,
                                 const std::string &message, const std::string &pointer = {}) {
     mortred::common::UnifiedResponse unified;
-    unified.status = mortred::common::to_underlying(status);
-    unified.status_str = mortred::common::status_code_to_str(status);
+    mortred::common::set_status(&unified, status);
     if (!message.empty()) {
         mortred::common::ResponseError err;
         err.pointer = pointer;

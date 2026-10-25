@@ -121,8 +121,7 @@ inline mortred::common::UnifiedResponse inference_result_to_unified(
     mortred::common::UnifiedResponse unified;
     unified.task_id = task_id;
     unified.model_name = model_name;
-    unified.status = mortred::common::to_underlying(result.model_run_status);
-    unified.status_str = mortred::common::status_code_to_str(result.model_run_status);
+    mortred::common::set_status(&unified, result.model_run_status);
     unified.partial = result.partial;
     unified.server_time_ms =
         result.worker_run_time_consuming + result.find_worker_time_consuming;

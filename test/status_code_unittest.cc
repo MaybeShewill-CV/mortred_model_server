@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 
+#include "common/response_envelope.h"
 #include "common/status_code.h"
 
 using mortred::common::status_code_to_str;
@@ -41,6 +42,17 @@ TEST(status_code, sample_messages) {
     EXPECT_EQ(status_code_to_str(StatusCode::TRT_CONVERT_ONNX_MODEL_FAILED), "convert onnx model to trt failed");
     EXPECT_EQ(status_code_to_str(StatusCode::INVALID_REQUEST_PARAMETER), "invalid request parameter");
     EXPECT_EQ(status_code_to_str(StatusCode::DEADLINE_EXCEEDED_PARTIAL), "deadline exceeded, partial results");
+}
+
+TEST(status_code, set_status_pairs_number_and_wire_string) {
+    // status and status_str are one value on the wire; the helper exists so a
+    // reply site cannot update one and forget the other.
+    mortred::common::UnifiedResponse resp;
+    mortred::common::set_status(&resp, StatusCode::MODEL_INPUT_SIZE_REJECTED);
+    EXPECT_EQ(resp.status, to_underlying(StatusCode::MODEL_INPUT_SIZE_REJECTED));
+    EXPECT_EQ(resp.status_str, status_code_to_str(StatusCode::MODEL_INPUT_SIZE_REJECTED));
+    EXPECT_EQ(resp.status_str.find("256x256"), std::string::npos)
+        << "the shared table must not hardcode one model's input size";
 }
 
 int main(int argc, char **argv) {
