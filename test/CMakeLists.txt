@@ -564,6 +564,42 @@ set(MORTRED_VALGRIND_TEST_TARGETS
     session_io_unittest
 )
 
+# Request-path e2e suites and the stress loop: each one starts real servers and
+# listeners, so default `check` leaves them on labeled lanes (ctest -L e2e,
+# ctest -L stress). SSOT: test/CHECK_SSOT.md, enforced by
+# scripts/check_check_ssot.py. Workflow-only entries simply are not registered
+# in a tests-only build, hence the TEST guard.
+set(MORTRED_E2E_TESTS
+    gateway_e2e_test
+    gateway_multiinstance_test
+    server_e2e_contract_test
+    supervisor_malformed_e2e_test
+    supervisor_multiinstance_test
+)
+set(MORTRED_STRESS_TESTS
+    async_job_stress_test
+)
+
+foreach(_mortred_lane e2e stress)
+    if(_mortred_lane STREQUAL "e2e")
+        set(_mortred_lane_tests ${MORTRED_E2E_TESTS})
+    else()
+        set(_mortred_lane_tests ${MORTRED_STRESS_TESTS})
+    endif()
+    foreach(_mortred_test ${_mortred_lane_tests})
+        if(NOT TEST ${_mortred_test})
+            continue()
+        endif()
+        # append instead of overwrite: a test may already carry sanitizer
+        get_test_property(${_mortred_test} LABELS _mortred_labels)
+        if(_mortred_labels STREQUAL "NOTFOUND")
+            set(_mortred_labels "")
+        endif()
+        list(APPEND _mortred_labels ${_mortred_lane})
+        set_tests_properties(${_mortred_test} PROPERTIES LABELS "${_mortred_labels}")
+    endforeach()
+endforeach()
+
 if(MORTRED_ENABLE_VALGRIND_TESTS)
     if(NOT CMAKE_MEMORYCHECK_COMMAND)
         message(FATAL_ERROR

@@ -4,8 +4,9 @@
 # cmake -DCTEST=<ctest> -DTEST_DIR=<test binary dir> -DJUNIT=<path-or-empty>
 #       -P test/run_default_check.cmake
 #
-# MORTRED_CHECK_HEAVY=1 includes label heavy-golden.
-# Label valgrind stays excluded either way (ctest -L valgrind).
+# MORTRED_CHECK_HEAVY=1 runs everything except label valgrind.
+# Default runs unit + contract only: heavy-golden, e2e and stress stay on their
+# own lanes (MORTRED_CHECK_HEAVY=1, ctest -L e2e, ctest -L stress).
 
 if(NOT DEFINED CTEST OR CTEST STREQUAL "")
     message(FATAL_ERROR "run_default_check: -DCTEST= is required")
@@ -20,10 +21,10 @@ endif()
 set(_heavy "$ENV{MORTRED_CHECK_HEAVY}")
 if(_heavy STREQUAL "1")
     set(_exclude "valgrind")
-    message(STATUS "MORTRED_CHECK_HEAVY=1: check includes heavy-golden and still excludes valgrind")
+    message(STATUS "MORTRED_CHECK_HEAVY=1: check runs heavy-golden, e2e and stress, still excludes valgrind")
 else()
-    set(_exclude "valgrind|heavy-golden")
-    message(STATUS "check excludes labels valgrind and heavy-golden (MORTRED_CHECK_HEAVY=1 includes heavy-golden)")
+    set(_exclude "valgrind|heavy-golden|e2e|stress")
+    message(STATUS "check excludes labels valgrind, heavy-golden, e2e and stress (MORTRED_CHECK_HEAVY=1 for the first three, ctest -L e2e / -L stress for the last two)")
 endif()
 
 set(_cmd "${CTEST}" --output-on-failure -LE "${_exclude}")

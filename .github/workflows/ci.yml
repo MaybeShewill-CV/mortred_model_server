@@ -113,12 +113,20 @@ jobs:
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
-      # Default check excludes labels valgrind and heavy-golden (test/CHECK_SSOT.md).
-      # This tests-only configure does not register heavy-golden. Valgrind runs
-      # in the following step. CTEST_OUTPUT_ON_FAILURE=1 gives full failure output.
+      # Default check excludes labels valgrind, heavy-golden, e2e and stress
+      # (test/CHECK_SSOT.md). This tests-only configure does not register
+      # heavy-golden. E2e/stress run in their own step below, valgrind after
+      # that. CTEST_OUTPUT_ON_FAILURE=1 gives full failure output.
       - name: Build and run unit tests
         run: |
           LD_LIBRARY_PATH="$MORTRED_CI_LIB_DIR" CTEST_OUTPUT_ON_FAILURE=1 cmake --build build-ci --target check -j"$(nproc)"
+
+      # The e2e/stress lane is labeled, not part of default check: one aborting
+      # suite used to cut the default run short.
+      - name: Run e2e and stress tests
+        run: |
+          LD_LIBRARY_PATH="$MORTRED_CI_LIB_DIR" CTEST_OUTPUT_ON_FAILURE=1 \
+            ctest --test-dir build-ci -L 'e2e|stress' --output-on-failure
 
       # SKIP_RETURN_CODE 77 makes a test that proved nothing look like a pass in
       # ctest's summary. This job has no weights installed, so skips are expected
