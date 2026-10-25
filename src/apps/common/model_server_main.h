@@ -20,6 +20,9 @@
 #include <string>
 
 #include <glog/logging.h>
+
+#include "apps/common/exit_codes.h"
+#include "apps/common/listen_port.h"
 #include "toml/toml.hpp"
 
 #include "common/process_stop.h"
@@ -84,7 +87,7 @@ inline int run_model_server_main(
     if (argc != 2) {
         LOG(INFO) << "usage:";
         LOG(INFO) << "exe cfg_path";
-        return -1;
+        return kExitUsage;
     }
 
     std::string config_file_path = argv[1];
@@ -93,14 +96,14 @@ inline int run_model_server_main(
     if (!config_parsed) {
         LOG(ERROR) << "parse toml config file failed, error: "
                    << std::string(config_parsed.error().description());
-        return -1;
+        return kExitConfig;
     }
     auto config = std::move(config_parsed).table();
     std::string section_alias;
     const auto* server_cfg_ptr = find_section_ci(config, server_section, &section_alias);
     if (server_cfg_ptr == nullptr) {
         LOG(ERROR) << "server section [" << server_section << "] missing from " << config_file_path;
-        return -1;
+        return kExitConfig;
     }
     if (section_alias != server_section) {
         LOG(WARNING) << "config table [" << section_alias << "] matches server section ["
@@ -116,13 +119,19 @@ inline int run_model_server_main(
     }
     if (const char* env = std::getenv("MORTRED_LISTEN_PORT"); env != nullptr && *env != '\0') {
         try {
-            const int env_port = std::stoi(env);
-            if (env_port > 0 && env_port <= 65535) {
-                port = env_port;
-            }
+            port = std::stoll(env);
         } catch (...) {
-            LOG(WARNING) << "ignoring invalid MORTRED_LISTEN_PORT: " << env;
+            LOG(ERROR) << "MORTRED_LISTEN_PORT is not an integer: " << env;
+            return kExitConfig;
         }
+    }
+    // the port is narrowed to unsigned short for listen(), so reject what would
+    // silently wrap into a different port instead of failing at bind time
+    if (!valid_listen_port(port)) {
+        LOG(ERROR) << "invalid listen port " << port
+                   << " (expected 1..65535; set [" << server_section
+                   << "] port or MORTRED_LISTEN_PORT)";
+        return kExitConfig;
     }
     LOG(INFO) << "serve on port: " << port;
 
@@ -132,7 +141,7 @@ inline int run_model_server_main(
     if (status != StatusCode::OK) {
         LOG(ERROR) << "server init failed, status: "
                    << std::to_string(static_cast<int>(status));
-        return -1;
+        return kExitSoftware;
     }
     const int rc = server->start(host.c_str(), static_cast<unsigned short>(port));
     if (rc == 0) {
@@ -150,7 +159,7 @@ inline int run_model_server_main(
         LOG(ERROR) << "listen failed (port already in use is the usual cause; "
                    << "stop mortred-supervisor or another process on this port)";
     }
-    return -1;
+    return kExitSoftware;
 }
 
 }  // namespace apps

@@ -43,9 +43,17 @@ using mortred::apps::benchmark::run_image_family_benchmark;
 using mortred::factory::cv_catalog::CvModelEntry;
 using mortred::factory::model_catalog::ModelCatalogEntry;
 
+// Ids dropped by the dedupe below. A duplicate means one model silently
+// disappears from --list and from routing, so the entry points fail startup
+// with kExitConfig instead of serving a catalog that lost a row.
+std::vector<std::string> &duplicate_ids_sink() {
+    static std::vector<std::string> ids;
+    return ids;
+}
+
 void push_unique(std::vector<ProductEntry> *out, std::set<std::string> *seen, ProductEntry entry) {
     if (!seen->insert(entry.id).second) {
-        std::fprintf(stderr, "[product_index] duplicate catalog id ignored: %s\n", entry.id.c_str());
+        duplicate_ids_sink().push_back(entry.id);
         return;
     }
     out->push_back(std::move(entry));
@@ -212,6 +220,11 @@ std::vector<ProductEntry> build_index() {
 const std::vector<ProductEntry> &ProductIndex::all() {
     static const std::vector<ProductEntry> entries = build_index();
     return entries;
+}
+
+const std::vector<std::string> &ProductIndex::duplicate_ids() {
+    (void)all();  // build_index() is what records the duplicates
+    return duplicate_ids_sink();
 }
 
 const ProductEntry *ProductIndex::find(const std::string &id) {

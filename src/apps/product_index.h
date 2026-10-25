@@ -38,6 +38,10 @@ struct ProductEntry {
 class ProductIndex {
   public:
     static const std::vector<ProductEntry> &all();
+
+    /*** Catalog ids that collided while the index was built. Non-empty means the
+     * projection lost a row, so entry points must refuse to start. */
+    static const std::vector<std::string> &duplicate_ids();
     static const ProductEntry *find(const std::string &id);
     static void print_list(std::FILE *out);
 };
