@@ -108,9 +108,10 @@ def parse_ssot(text: str) -> tuple[list[dict[str, str]], list[str]]:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", name):
             errors.append(f"test/CHECK_SSOT.md:{lineno}: bad ctest name {name!r}")
             continue
-        if label not in {"heavy-golden", "valgrind"}:
+        if label not in {"heavy-golden", "valgrind", "e2e", "stress"}:
             errors.append(
-                f"test/CHECK_SSOT.md:{lineno}: label {label!r} is not heavy-golden or valgrind"
+                f"test/CHECK_SSOT.md:{lineno}: label {label!r} is not "
+                "heavy-golden, valgrind, e2e or stress"
             )
         if not why:
             errors.append(f"test/CHECK_SSOT.md:{lineno}: {name} is missing why")
@@ -126,6 +127,11 @@ def parse_ssot(text: str) -> tuple[list[dict[str, str]], list[str]]:
             errors.append(
                 f"test/CHECK_SSOT.md:{lineno}: {name} alternate gate must name "
                 "ctest -L valgrind"
+            )
+        elif label in {"e2e", "stress"} and f"ctest -L {label}" not in gate:
+            errors.append(
+                f"test/CHECK_SSOT.md:{lineno}: {name} alternate gate must name "
+                f"ctest -L {label}"
             )
         if name in seen:
             errors.append(f"test/CHECK_SSOT.md:{lineno}: duplicate ctest name {name}")
@@ -171,6 +177,17 @@ def check_labels(cmake: str, rows: list[dict[str, str]]) -> list[str]:
             "valgrind mismatch: "
             f"CMake {sorted(cmake_valgrind)} vs CHECK_SSOT {sorted(ssot_valgrind)}"
         )
+    e2e, e2e_err = cmake_string_list(cmake, "MORTRED_E2E_TESTS")
+    stress, stress_err = cmake_string_list(cmake, "MORTRED_STRESS_TESTS")
+    errors.extend(e2e_err)
+    errors.extend(stress_err)
+    for lane, cmake_names in (("e2e", e2e), ("stress", stress)):
+        ssot_names = [row["name"] for row in rows if row["label"] == lane]
+        if cmake_names and set(cmake_names) != set(ssot_names):
+            errors.append(
+                f"{lane} mismatch: "
+                f"CMake {sorted(cmake_names)} vs CHECK_SSOT {sorted(ssot_names)}"
+            )
     label_hits = re.findall(r'LABELS\s+"heavy-golden"', cmake)
     if len(label_hits) != 1:
         errors.append(
@@ -210,9 +227,10 @@ def check_labels(cmake: str, rows: list[dict[str, str]]) -> list[str]:
 
 def check_driver(text: str) -> list[str]:
     errors: list[str] = []
-    if 'set(_exclude "valgrind|heavy-golden")' not in text:
+    if 'set(_exclude "valgrind|heavy-golden|e2e|stress")' not in text:
         errors.append(
-            'run_default_check.cmake: default exclude must be set(_exclude "valgrind|heavy-golden")'
+            "run_default_check.cmake: default exclude must be "
+            'set(_exclude "valgrind|heavy-golden|e2e|stress")'
         )
     if 'set(_exclude "valgrind")' not in text:
         errors.append(
@@ -323,6 +341,8 @@ Default `check` excludes heavy-golden. See this file.
 | --- | --- | --- | --- |
 | model_golden_test | heavy-golden | oom | MORTRED_CI_REQUIRE_WEIGHTS and ci_assert_gtest_xml.py and MORTRED_CHECK_HEAVY |
 | status_code_unittest-memory-check | valgrind | curated | ctest -L valgrind |
+| gateway_e2e_test | e2e | listener | ctest -L e2e |
+| async_job_stress_test | stress | load loop | ctest -L stress |
 """
     cmake = """
 set(MORTRED_HEAVY_GOLDEN_TESTS
@@ -330,6 +350,12 @@ set(MORTRED_HEAVY_GOLDEN_TESTS
 )
 set(MORTRED_VALGRIND_TEST_TARGETS
     status_code_unittest
+)
+set(MORTRED_E2E_TESTS
+    gateway_e2e_test
+)
+set(MORTRED_STRESS_TESTS
+    async_job_stress_test
 )
 add_custom_target(check
     COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/run_default_check.cmake)
@@ -351,7 +377,7 @@ set(_heavy "$ENV{MORTRED_CHECK_HEAVY}")
 if(_heavy STREQUAL "1")
     set(_exclude "valgrind")
 else()
-    set(_exclude "valgrind|heavy-golden")
+    set(_exclude "valgrind|heavy-golden|e2e|stress")
 endif()
 set(_cmd "${CTEST}" --output-on-failure -LE "${_exclude}")
 """
@@ -508,7 +534,7 @@ def main() -> int:
             print(f"ERROR: {item}", file=sys.stderr)
         print("check SSOT drifted", file=sys.stderr)
         return 1
-    print("check SSOT agrees: default check excludes heavy-golden and valgrind")
+    print("check SSOT agrees: default check excludes heavy-golden, valgrind, e2e and stress")
     return 0
 
 
