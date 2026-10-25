@@ -24,6 +24,8 @@ namespace mortred {
 namespace models {
 namespace clip {
 
+using mortred::models::backend::find_output;
+
 using mortred::common::StatusCode;
 using mortred::models::backend::InferenceSession;
 using mortred::models::backend::NamedTensor;
@@ -89,12 +91,6 @@ const TensorInfo *OpenAiClip<INPUT, OUTPUT>::find_info(const InferenceSession &s
         return &*output_iter;
     }
     return nullptr;
-}
-
-template <typename INPUT, typename OUTPUT>
-const NamedTensor *OpenAiClip<INPUT, OUTPUT>::find_output(const std::vector<NamedTensor> &outputs, const std::string &name) const {
-    const auto iter = std::find_if(outputs.begin(), outputs.end(), [&name](const NamedTensor &item) { return item.name == name; });
-    return iter == outputs.end() ? nullptr : &*iter;
 }
 
 template <typename INPUT, typename OUTPUT> bool OpenAiClip<INPUT, OUTPUT>::normalize_embedding(std::vector<float> &embedding) {

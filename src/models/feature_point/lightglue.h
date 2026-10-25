@@ -64,9 +64,6 @@ class LightGlue : public mortred::models::backend::MultiSessionModel<LightGlue<I
     StatusCode match_feature_points(const FeaturePoints &src_features, const FeaturePoints &dst_features,
                                     mortred::models::io_define::feature_point::std_feature_point_match_output &matches) const;
 
-    const mortred::models::backend::NamedTensor *find_output(const std::vector<mortred::models::backend::NamedTensor> &outputs,
-                                                          const std::string &name) const;
-
     static std::vector<mortred::models::backend::SessionSpec> sessions();
 
     float _m_extract_score_threshold = 0.0f;

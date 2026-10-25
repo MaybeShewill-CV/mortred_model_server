@@ -20,6 +20,8 @@ namespace mortred {
 namespace models {
 namespace segment_anything {
 
+using mortred::models::backend::find_output;
+
 using mortred::common::CvUtils;
 using mortred::common::StatusCode;
 using mortred::models::backend::NamedTensor;
@@ -66,16 +68,6 @@ template <typename INPUT, typename OUTPUT> StatusCode FastSamSegmentor<INPUT, OU
         return StatusCode::MODEL_INIT_FAILED;
     }
     return StatusCode::OK;
-}
-
-template <typename INPUT, typename OUTPUT>
-const NamedTensor *FastSamSegmentor<INPUT, OUTPUT>::find_output(const std::vector<NamedTensor> &outputs, const std::string &name) const {
-    for (const auto &item : outputs) {
-        if (item.name == name) {
-            return &item;
-        }
-    }
-    return nullptr;
 }
 
 template <typename INPUT, typename OUTPUT>

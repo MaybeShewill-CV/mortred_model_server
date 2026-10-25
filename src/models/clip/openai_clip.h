@@ -80,9 +80,6 @@ class OpenAiClip : public mortred::models::backend::MultiSessionModel<OpenAiClip
 
     void tokenize(const std::string &input_text, std::vector<int32_t> &token_ids) const;
 
-    const mortred::models::backend::NamedTensor *find_output(const std::vector<mortred::models::backend::NamedTensor> &outputs,
-                                                          const std::string &name) const;
-
     static const mortred::models::backend::TensorInfo *find_info(const mortred::models::backend::InferenceSession &session,
                                                               const std::string &name);
 
