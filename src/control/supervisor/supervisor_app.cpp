@@ -1033,6 +1033,11 @@ int SupervisorApp::run() {
                  "expose=%s)\n",
                  cfg_.supervisor.api_host.c_str(), cfg_.supervisor.api_port,
                  catalog_.entries().size(), mortred::common::mortred_expose_mode().c_str());
+    // the stderr line stays for scripts; this one makes sure a successful start
+    // also leaves a log file (glog creates it on the first write)
+    LOG(INFO) << "mortred-supervisor started on " << cfg_.supervisor.api_host << ":"
+              << cfg_.supervisor.api_port << " (managed servers: " << catalog_.entries().size()
+              << ", expose=" << mortred::common::mortred_expose_mode() << ")";
 
     supervisor_->autostart_all();
 
