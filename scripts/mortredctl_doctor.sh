@@ -68,7 +68,10 @@ if [ -f "$CRED_FILE" ]; then
     else
         echo "  [FAIL] scrape credential is stale: Prometheus would get 401 on every scrape"
         echo "next: set -a && . $CRED_TRUST && set +a && ./scripts/write_prometheus_credentials.sh"
-        exit 1
+        # keep going: stopping here hid the engine/stamp diagnostics behind an
+        # unrelated credential problem, which is the opposite of this script's
+        # job. GATE_FAIL makes the exit code non-zero at the end.
+        GATE_FAIL=1
     fi
 fi
 
@@ -79,7 +82,7 @@ echo "== API keys =="
 if [ -f "$ROOT/conf/api_keys.toml" ]; then
     if ! bash "$ROOT/scripts/check_api_keys_hashing.sh" "$ROOT/conf/api_keys.toml"; then
         echo "next: ./scripts/mint_api_key.sh --name <client> --scope inference --append conf/api_keys.toml"
-        exit 1
+        GATE_FAIL=1
     fi
 else
     echo "  [ok] no conf/api_keys.toml (static tokens only)"
