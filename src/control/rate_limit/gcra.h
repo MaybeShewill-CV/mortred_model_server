@@ -83,17 +83,22 @@ struct GcraPolicy {
 
     bool enabled() const { return rate_per_sec > 0 && burst > 0; }
 
-    /*** emission interval in ms, rounded up so the effective rate is never
-     * more generous than the configured one */
-    int64_t interval_ms() const {
-        return (1000 + static_cast<int64_t>(rate_per_sec) - 1) / rate_per_sec;
+    /*** emission interval in microseconds, rounded up so the effective rate is
+     * never more generous than the configured one. Microseconds, not
+     * milliseconds: a 1 ms floor would cap every policy at 1000/s. */
+    int64_t interval_us() const {
+        return (1000000 + static_cast<int64_t>(rate_per_sec) - 1) / rate_per_sec;
     }
 
     /*** burst tolerance: (burst-1)*T, so `burst` is the exact instantaneous
      * capacity (burst instantaneous admissions conform, burst+1 rejects) */
-    int64_t burst_tolerance_ms() const {
-        return (static_cast<int64_t>(burst) - 1) * interval_ms();
+    int64_t burst_tolerance_us() const {
+        return (static_cast<int64_t>(burst) - 1) * interval_us();
     }
+
+    /*** millisecond views, rounded up: Retry-After and expiry speak ms */
+    int64_t interval_ms() const { return (interval_us() + 999) / 1000; }
+    int64_t burst_tolerance_ms() const { return (burst_tolerance_us() + 999) / 1000; }
 };
 
 struct GcraDecision {
@@ -105,21 +110,24 @@ struct GcraDecision {
  * CAS loop: safe under any interleaving (also fine under an external lock,
  * which is how ShardedIpLimiter uses it — the atomic keeps the free function
  * reusable for a future lock-free shard). */
-inline GcraDecision gcra_admit(std::atomic<int64_t>& tat_ms, const GcraPolicy& policy,
+inline GcraDecision gcra_admit(std::atomic<int64_t>& tat_us, const GcraPolicy& policy,
                                int64_t now_ms) {
     if (!policy.enabled()) {
         return {true, 0};
     }
-    const int64_t interval = policy.interval_ms();
-    const int64_t sigma = policy.burst_tolerance_ms();
-    int64_t tat = tat_ms.load(std::memory_order_relaxed);
+    const int64_t interval = policy.interval_us();
+    const int64_t sigma = policy.burst_tolerance_us();
+    const int64_t now_us = now_ms * 1000;
+    int64_t tat = tat_us.load(std::memory_order_relaxed);
     for (;;) {
-        const int64_t effective = std::max(tat, now_ms);
-        if (effective - now_ms > sigma) {
-            // rejected: next conforming time is TAT - sigma
-            return {false, effective - sigma - now_ms};
+        const int64_t effective = std::max(tat, now_us);
+        if (effective - now_us > sigma) {
+            // rejected: next conforming time is TAT - sigma, reported in ms and
+            // never below 1 (a sub-millisecond delay would read as "retry now")
+            const int64_t delay_us = effective - sigma - now_us;
+            return {false, std::max<int64_t>(1, (delay_us + 999) / 1000)};
         }
-        if (tat_ms.compare_exchange_weak(tat, effective + interval,
+        if (tat_us.compare_exchange_weak(tat, effective + interval,
                                          std::memory_order_relaxed)) {
             return {true, 0};
         }
@@ -193,7 +201,7 @@ class ShardedIpLimiter {
         auto it = map.find(key);
         if (it != map.end()) {
             it->second.last_seen_ms = now_ms;
-            const auto decision = gcra_admit(it->second.tat_ms, policy_, now_ms);
+            const auto decision = gcra_admit(it->second.tat_us, policy_, now_ms);
             if (!decision.allowed) {
                 rejects_.fetch_add(1, std::memory_order_relaxed);
             }
@@ -219,7 +227,7 @@ class ShardedIpLimiter {
             auto result = map.try_emplace(key);
             Entry& entry = result.first->second;
             entry.last_seen_ms = now_ms;
-            const auto decision = gcra_admit(entry.tat_ms, policy_, now_ms);
+            const auto decision = gcra_admit(entry.tat_us, policy_, now_ms);
             // a fresh cell (tat == 0) always conforms
             if (!decision.allowed) {
                 rejects_.fetch_add(1, std::memory_order_relaxed);
@@ -238,7 +246,7 @@ class ShardedIpLimiter {
         if (!policy_.enabled()) {
             return;
         }
-        const int64_t interval = policy_.interval_ms();
+        const int64_t interval = policy_.interval_us();
         const size_t shard_idx = SubjectHash{}(key) % kShards;
         Shard& shard = shards_[shard_idx];
         std::lock_guard<std::mutex> lock(shard.mu);
@@ -246,7 +254,7 @@ class ShardedIpLimiter {
         if (it == shard.map.end()) {
             return;
         }
-        it->second.tat_ms.fetch_sub(interval, std::memory_order_relaxed);
+        it->second.tat_us.fetch_sub(interval, std::memory_order_relaxed);
     }
 
     Stats stats() const {
@@ -266,7 +274,7 @@ class ShardedIpLimiter {
     struct Entry {
         // atomic for symmetry with the free gcra_admit(); all accesses of a
         // cell happen under its shard mutex
-        std::atomic<int64_t> tat_ms{0};
+        std::atomic<int64_t> tat_us{0};
         int64_t last_seen_ms = 0;
     };
 

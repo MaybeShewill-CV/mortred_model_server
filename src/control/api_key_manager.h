@@ -59,7 +59,7 @@ struct ApiKey {
     mutable std::atomic<uint64_t> total_requests{0};
     mutable std::atomic<uint64_t> total_rejected{0};
     // Per-key GCRA TAT (the gateway is the sole public QPS meter).
-    mutable std::atomic<int64_t> rate_tat_ms{0};
+    mutable std::atomic<int64_t> rate_tat_us{0};
 };
 
 /***
@@ -306,31 +306,25 @@ inline AuthResult ApiKeyManager::consume_rate_limit(const std::shared_ptr<const 
         key->total_rejected.fetch_add(1);
         key->reject_qps.fetch_add(1, std::memory_order_relaxed);
         out.reason = AuthReason::RATE_LIMITED;
-        // GCRA retry: TAT - sigma - now (recompute without mutating on reject path
-        // already performed by allow_rate_limit). Approximate with one interval.
-        const uint32_t configured = static_cast<uint32_t>(key->rate_limit_qps);
-        if (configured > 1000u) {
-            // GCRA's emission interval is whole milliseconds; anything faster
-            // than 1000/s is capped there. Warn rather than fail: this table is
-            // reloaded while the gateway serves traffic.
-            LOG(WARNING) << "api key '" << key->name << "' rate_limit_qps=" << configured
-                         << " is capped to 1000 by the millisecond GCRA interval";
-        }
-        const uint32_t rate = configured;
+        // GCRA retry: TAT - sigma - now, recomputed without mutating state (the
+        // reject path in allow_rate_limit already left it alone). Falls back to
+        // one emission interval when the cell was never created.
+        const uint32_t rate = static_cast<uint32_t>(key->rate_limit_qps);
         mortred::control::ratelimit::GcraPolicy policy{rate, rate};
         const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                    std::chrono::steady_clock::now().time_since_epoch())
                                    .count();
-        const int64_t tat = key->rate_tat_ms.load(std::memory_order_relaxed);
-        const int64_t sigma = policy.burst_tolerance_ms();
-        int64_t remaining = tat - sigma - now_ms;
-        if (remaining < 1) {
-            remaining = policy.interval_ms();
+        const int64_t now_us = now_ms * 1000;
+        const int64_t tat_us = key->rate_tat_us.load(std::memory_order_relaxed);
+        const int64_t sigma_us = policy.burst_tolerance_us();
+        int64_t remaining_ms = (tat_us - sigma_us - now_us + 999) / 1000;
+        if (remaining_ms < 1) {
+            remaining_ms = (policy.interval_us() + 999) / 1000;
         }
-        if (remaining < 1) {
-            remaining = 1;
+        if (remaining_ms < 1) {
+            remaining_ms = 1;
         }
-        out.retry_after_ms = static_cast<int32_t>(remaining);
+        out.retry_after_ms = static_cast<int32_t>(remaining_ms);
         return out;
     }
     out.reason = AuthReason::OK;
@@ -437,7 +431,7 @@ inline bool ApiKeyManager::allow_rate_limit(const ApiKey* key) {
                                .count();
     const uint32_t rate = static_cast<uint32_t>(key->rate_limit_qps);
     mortred::control::ratelimit::GcraPolicy policy{rate, rate};
-    const auto decision = mortred::control::ratelimit::gcra_admit(key->rate_tat_ms, policy, now_ms);
+    const auto decision = mortred::control::ratelimit::gcra_admit(key->rate_tat_us, policy, now_ms);
     return decision.allowed;
 }
 

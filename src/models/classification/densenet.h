@@ -39,7 +39,6 @@ template <typename INPUT, typename OUTPUT> class DenseNet : public mortred::mode
 
     StatusCode on_init(const toml::table &params) override;
 
-    // class id to names
     std::unordered_map<uint16_t, std::string> _m_class_id2names;
     // network input tensor size
     // center-crop square before the network input; part of this family's

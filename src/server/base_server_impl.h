@@ -125,14 +125,16 @@ public:
     }
 
 public:
-    // 1024: enterprise LBs hold long-lived keep-alive connections, and the
-    // shipped server tomls already run 500. Admission control (queue depth,
-    // worker checkout timeout) is what protects the model, not the socket cap.
-    int _m_max_connection_nums = 1024;
+    // These member values mirror ServerRuntimeConfig's defaults; a server toml
+    // (or the supervisor's env) overwrites them in apply_runtime_config. The
+    // shipped tomls raise max_connections to 500 for enterprise LBs — the cap
+    // that protects the model is admission control (queue depth, checkout
+    // timeout), not the socket count.
+    int _m_max_connection_nums = 200;
     int _m_peer_resp_timeout = 15 * 1000;
     int _m_receive_timeout = 60 * 1000;
     int _m_compute_threads = -1;
-    int _m_handler_threads = 50;
+    int _m_handler_threads = 8;
     size_t _m_request_size_limit = k_default_request_size_limit_mb;
 
 protected:

@@ -59,19 +59,21 @@ class RefGcra {
         if (!policy_.enabled()) {
             return {true, 0};
         }
-        const int64_t interval = policy_.interval_ms();
-        const int64_t sigma = policy_.burst_tolerance_ms();
-        const int64_t effective = std::max(tat_ms_, now_ms);
-        if (effective - now_ms > sigma) {
-            return {false, effective - sigma - now_ms};
+        const int64_t interval = policy_.interval_us();
+        const int64_t sigma = policy_.burst_tolerance_us();
+        const int64_t now_us = now_ms * 1000;
+        const int64_t effective = std::max(tat_us_, now_us);
+        if (effective - now_us > sigma) {
+            const int64_t delay_us = effective - sigma - now_us;
+            return {false, std::max<int64_t>(1, (delay_us + 999) / 1000)};
         }
-        tat_ms_ = effective + interval;
+        tat_us_ = effective + interval;
         return {true, 0};
     }
 
   private:
     GcraPolicy policy_;
-    int64_t tat_ms_ = 0;
+    int64_t tat_us_ = 0;
 };
 
 constexpr GcraPolicy kRate10Burst5{10, 5};  // T=100ms, sigma=400ms
@@ -104,6 +106,24 @@ TEST(GcraAdmit, DisabledPolicyAllowsWithoutTouchingState) {
 TEST(GcraAdmit, FreshCellAlwaysConforms) {
     std::atomic<int64_t> tat{0};
     EXPECT_TRUE(gcra_admit(tat, kRate10Burst5, 1'000'000).allowed);
+}
+
+TEST(GcraPolicy, SubMillisecondIntervalsRepresentFastRates) {
+    // 5000/s is a 200 microsecond interval; a millisecond-based interval could
+    // only ever express 1000/s, which is why fast policies used to be capped.
+    GcraPolicy fast{5000, 5};
+    EXPECT_EQ(fast.interval_us(), 200);
+    EXPECT_EQ(fast.interval_ms(), 1);  // rounded up, for Retry-After
+
+    std::atomic<int64_t> tat{0};
+    for (int i = 0; i < 5; ++i) {
+        EXPECT_TRUE(gcra_admit(tat, fast, 0).allowed) << "instant #" << i;
+    }
+    const auto rejected = gcra_admit(tat, fast, 0);
+    EXPECT_FALSE(rejected.allowed);
+    // TAT = 5*200us = 1000us, sigma = 4*200us = 800us, so the exact wait is
+    // 200us and the reported millisecond value rounds up to 1.
+    EXPECT_EQ(rejected.retry_after_ms, 1);
 }
 
 TEST(GcraAdmit, BurstCapacityIsExact) {

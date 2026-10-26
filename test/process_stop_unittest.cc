@@ -45,11 +45,16 @@ TEST(process_stop, request_stop_unblocks_wait) {
 }
 
 TEST(process_stop, request_stop_is_idempotent) {
+    // Two stop requests must both return promptly and leave wait() a no-op once
+    // the signal thread has already been asked to exit.
+    const auto t0 = std::chrono::steady_clock::now();
     ProcessStop stop;
     stop.arm();
     stop.request_stop();
     stop.request_stop();
     stop.wait();
+    EXPECT_LT(elapsed_ms(t0), 1000)
+        << "request_stop/wait must not block on the second request";
 }
 
 TEST(process_stop, destructor_without_wait_joins) {
