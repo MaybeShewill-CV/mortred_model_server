@@ -54,23 +54,6 @@ inline std::string generate_req_id() {
     return std::string(buf);
 }
 
-inline std::string peer_ip_of(const WFHttpTask* task) {
-    struct sockaddr_storage peer_addr;
-    socklen_t addr_len = sizeof(peer_addr);
-    if (task->get_peer_addr(reinterpret_cast<struct sockaddr*>(&peer_addr), &addr_len) != 0) {
-        return "";
-    }
-    char ip_buf[INET6_ADDRSTRLEN] = {0};
-    if (peer_addr.ss_family == AF_INET) {
-        auto* ipv4 = reinterpret_cast<const struct sockaddr_in*>(&peer_addr);
-        inet_ntop(AF_INET, &ipv4->sin_addr, ip_buf, sizeof(ip_buf));
-    } else if (peer_addr.ss_family == AF_INET6) {
-        auto* ipv6 = reinterpret_cast<const struct sockaddr_in6*>(&peer_addr);
-        inet_ntop(AF_INET6, &ipv6->sin6_addr, ip_buf, sizeof(ip_buf));
-    }
-    return std::string(ip_buf);
-}
-
 inline std::string header_value_of(const protocol::HttpRequest* req,
                                    const std::string& target_name) {
     protocol::HttpHeaderCursor cursor(req);
@@ -93,10 +76,6 @@ inline std::string header_value_of(const protocol::HttpRequest* req,
 
 inline std::string authorization_header_of(const protocol::HttpRequest* req) {
     return header_value_of(req, "authorization");
-}
-
-inline bool is_json_content_type(const std::string& content_type) {
-    return content_type_kind(content_type) == ContentTypeKind::Json;
 }
 
 inline bool is_raw_body_content_type(const std::string& content_type) {

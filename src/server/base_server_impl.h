@@ -140,15 +140,12 @@ protected:
     // begin_drain() sets this before stop(): /ready answers 503 and new
     // admissions are rejected while in-flight work finishes in the drain
     std::atomic<bool> _m_draining{false};
-    std::atomic<size_t> _m_received_jobs{0};
     std::atomic<size_t> _m_finished_jobs{0};
     std::atomic<size_t> _m_waiting_jobs{0};
     WorkerPool<WORKER> _m_workers;
     int _m_model_run_timeout = 500;
     std::string _m_server_uri;
     std::string _m_auth_token;
-    // rate_limit_qps retained from config for metrics/compat only (gateway is sole limiter).
-    int _m_rate_limit_qps = 0;
     PrometheusMetrics _m_metrics;
     int _m_max_queue_depth = 0;
     int _m_max_batch_size = 1;
@@ -229,7 +226,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::apply_runtime_config(const ServerRu
     _m_request_size_limit = cfg.request_size_limit;
     _m_model_run_timeout = cfg.model_run_timeout;
     _m_auth_token = cfg.auth_token;
-    _m_rate_limit_qps = cfg.rate_limit_qps;
     _m_max_queue_depth = cfg.max_queue_depth;
     _m_max_batch_size = cfg.max_batch_size;
     _m_max_request_items = cfg.max_request_items;
@@ -382,10 +378,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         reply_status(task, StatusCode::NOT_READY, _m_model_name);
         return;
     }
-    // Gateway is the sole public limiter (GCRA). Model toml rate_limit_qps is
-    // ignored for admission (retained for compatibility / metrics only).
-    (void)_m_rate_limit_qps;
-
     if (is_async_endpoint) {
         _m_async_eps.handle(task);
         return;
@@ -529,7 +521,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         }
         _m_metrics.set_queue_depth(_m_waiting_jobs.load());
         _m_metrics.set_waiting_jobs(_m_waiting_jobs.load());
-        _m_received_jobs += n_items;
         _m_metrics.inc_received_jobs(n_items);
         task_req.trace = stage_trace;
         if (stage_trace != nullptr) {
