@@ -83,7 +83,9 @@ bool ImagePipeline::require_private_float(const char *step) {
     // The constructor shares the caller's buffer. to_float() is the step that
     // replaces it with a private one, so the in-place steps below are only safe
     // after it; anything else would write through to the caller's image.
-    if (image_.type() == CV_32F) {
+    // depth() not type(): the working image is CV_32FC3, whose type() encodes
+    // the channel count as well.
+    if (image_.depth() == CV_32F) {
         return true;
     }
     set_error(status_, error_,
