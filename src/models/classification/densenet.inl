@@ -67,7 +67,11 @@ template <typename INPUT, typename OUTPUT> StatusCode DenseNet<INPUT, OUTPUT>::o
             }
         }
     }
-    this->set_image_decode_hint(cv::Size(256, 256), mortred::models::cv_input::parse_image_decode_upscale(params, "densenet"));
+    // The pre-crop square is part of this model's geometry (center crop then
+    // the network input), not a tunable: both the decode hint and the crop use
+    // it, so it lives in one place.
+    this->set_image_decode_hint(cv::Size(k_pre_crop_side, k_pre_crop_side),
+                                mortred::models::cv_input::parse_image_decode_upscale(params, "densenet"));
     this->set_gpu_preprocess({
         .resize = mortred::models::backend::GpuPreprocessDescriptor::Resize::CENTER_CROP,
         // CPU path subtracts caffe-style 0-255 means after to_float, no /255:
@@ -78,7 +82,7 @@ template <typename INPUT, typename OUTPUT> StatusCode DenseNet<INPUT, OUTPUT>::o
         .pad_value = 114,
         .output_dtype = input_info.value.dtype,
         .output_nhwc = true,
-        .pre_crop_size = cv::Size(256, 256),
+        .pre_crop_size = cv::Size(k_pre_crop_side, k_pre_crop_side),
     });
 
     return StatusCode::OK;
@@ -87,9 +91,9 @@ template <typename INPUT, typename OUTPUT> StatusCode DenseNet<INPUT, OUTPUT>::o
 template <typename INPUT, typename OUTPUT> std::vector<NamedTensor> DenseNet<INPUT, OUTPUT>::preprocess(const cv::Mat &input_image) {
     // resize -> center crop -> rgb -> per channel normalize (f32 nhwc)
     cv::Mat tmp;
-    cv::resize(input_image, tmp, cv::Size(256, 256));
-    const auto dw = static_cast<int>(std::floor((256 - _m_input_tensor_size.width) / 2));
-    const auto dh = static_cast<int>(std::floor((256 - _m_input_tensor_size.height) / 2));
+    cv::resize(input_image, tmp, cv::Size(k_pre_crop_side, k_pre_crop_side));
+    const auto dw = (k_pre_crop_side - _m_input_tensor_size.width) / 2;
+    const auto dh = (k_pre_crop_side - _m_input_tensor_size.height) / 2;
     tmp = tmp(cv::Rect(dw, dh, _m_input_tensor_size.width, _m_input_tensor_size.height));
 
     cv::cvtColor(tmp, tmp, cv::COLOR_BGR2RGB);
