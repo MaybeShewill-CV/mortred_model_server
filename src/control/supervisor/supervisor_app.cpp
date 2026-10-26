@@ -40,6 +40,8 @@
 #include <workflow/WFTaskFactory.h>
 #include <workflow/Workflow.h>
 
+#include <glog/logging.h>
+
 #include "common/auth_token.h"
 #include "common/listen_policy.h"
 #include "common/mortred_version.h"
@@ -764,10 +766,9 @@ bool SupervisorApp::init(const SupervisorInitOptions& options) {
 
     // fail-closed: management API always requires a token, including loopback
     if (auth_token_.empty()) {
-        std::fprintf(stderr,
-                     "mortred-supervisor: refusing to start without MORTRED_API_TOKEN "
-                     "(loopback is not an anonymous management plane). "
-                     "Generate with: mortredctl init-trust\n");
+        LOG(ERROR) << "mortred-supervisor: refusing to start without MORTRED_API_TOKEN "
+                      "(loopback is not an anonymous management plane). "
+                      "Generate with: mortredctl init-trust";
         return false;
     }
     if (!mortred::common::listen_host_permitted(cfg_.supervisor.api_host)) {
@@ -921,6 +922,27 @@ int SupervisorApp::run() {
 
     SupervisorInitOptions options;
     options.project_root = resolve_project_root();
+    // Before anything can refuse to start: a missing token or a bad config is
+    // exactly the event that must land in a file, so glog is initialised here
+    // with the schema's default log dir and re-pointed below once the config is
+    // known. stderr keeps its copy (systemd/journald), and the failure handler
+    // leaves a stack trace next to those files.
+    const std::filesystem::path boot_log_dir =
+        std::filesystem::path(options.project_root) / "logs";
+    {
+        std::error_code log_ec;
+        std::filesystem::create_directories(boot_log_dir, log_ec);
+        if (log_ec) {
+            std::fprintf(stderr, "mortred-supervisor: cannot create log dir %s: %s\n",
+                         boot_log_dir.string().c_str(), log_ec.message().c_str());
+        } else {
+            FLAGS_log_dir = boot_log_dir.string();
+            FLAGS_alsologtostderr = true;
+            google::InitGoogleLogging("mortred-supervisor");
+            google::InstallFailureSignalHandler();
+        }
+    }
+
     if (const char* env = std::getenv("MORTRED_CONTROL_CONFIG");
         env != nullptr && *env != '\0') {
         std::filesystem::path cfg_path(env);
@@ -963,8 +985,26 @@ int SupervisorApp::run() {
         options.pack_path = env;
     }
     if (!init(options)) {
+        LOG(ERROR) << "mortred-supervisor: init failed (project_root=" << options.project_root
+                   << "); the reason is on stderr above";
         return 1;
     }
+
+    // The config may name a different log dir than the boot default; glog reads
+    // FLAGS_log_dir per write, so pointing it here is enough for later lines.
+    if (!cfg_.supervisor.log_dir.empty() && cfg_.supervisor.log_dir != "logs") {
+        const std::filesystem::path configured =
+            std::filesystem::path(options.project_root) / cfg_.supervisor.log_dir;
+        std::error_code ec;
+        std::filesystem::create_directories(configured, ec);
+        if (ec) {
+            std::fprintf(stderr, "mortred-supervisor: cannot create log dir %s: %s\n",
+                         configured.string().c_str(), ec.message().c_str());
+        } else {
+            FLAGS_log_dir = configured.string();
+        }
+    }
+
 
     // Gateway reads MORTRED_GATEWAY_CORS_ORIGINS at startup. Inject before
     // autostart so the child inherits it: the origins let the :8787 UI call
@@ -993,6 +1033,11 @@ int SupervisorApp::run() {
                  "expose=%s)\n",
                  cfg_.supervisor.api_host.c_str(), cfg_.supervisor.api_port,
                  catalog_.entries().size(), mortred::common::mortred_expose_mode().c_str());
+    // the stderr line stays for scripts; this one makes sure a successful start
+    // also leaves a log file (glog creates it on the first write)
+    LOG(INFO) << "mortred-supervisor started on " << cfg_.supervisor.api_host << ":"
+              << cfg_.supervisor.api_port << " (managed servers: " << catalog_.entries().size()
+              << ", expose=" << mortred::common::mortred_expose_mode() << ")";
 
     supervisor_->autostart_all();
 
