@@ -6,8 +6,8 @@
 ************************************************/
 
 // Client-side decode of the unified envelope. Production only encodes responses;
-// this exists for tests and tooling that must read one back, so it stays out of
-// the header every server translation unit includes.
+// this decoder exists for tests and tooling that must read one back, so it lives
+// here instead of next to the production (encode-only) envelope header.
 
 #ifndef MORTRED_COMMON_RESPONSE_ENVELOPE_TESTING_H
 #define MORTRED_COMMON_RESPONSE_ENVELOPE_TESTING_H
