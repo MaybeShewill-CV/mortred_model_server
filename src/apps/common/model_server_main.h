@@ -22,6 +22,7 @@
 #include <glog/logging.h>
 
 #include "apps/common/exit_codes.h"
+#include "common/file_path_util.h"
 #include "apps/common/listen_port.h"
 #include "toml/toml.hpp"
 
@@ -99,6 +100,32 @@ inline int run_model_server_main(
         return kExitConfig;
     }
     auto config = std::move(config_parsed).table();
+    // A configured weight path that does not exist is a config error, not a
+    // model-init failure: report it here, before any session is built, naming
+    // the table it came from. Relative paths resolve against the working
+    // directory, exactly as the backends resolve them.
+    for (const auto &[table_key, table_node] : config) {
+        if (!table_node.is_table()) {
+            continue;
+        }
+        const auto *backend = table_node.as_table()->get("backend");
+        if (backend == nullptr || !backend->is_table()) {
+            continue;
+        }
+        const auto *path_node = backend->as_table()->get("model_file_path");
+        if (path_node == nullptr) {
+            continue;  // the backend parser reports the missing key with a status
+        }
+        const std::string weight_path = path_node->value_or<std::string>("");
+        if (weight_path.empty()) {
+            continue;
+        }
+        if (!mortred::common::FilePathUtil::is_file_exist(weight_path)) {
+            LOG(ERROR) << "model_file_path does not exist: " << weight_path << " (["
+                       << table_key.str() << ".backend])";
+            return kExitConfig;
+        }
+    }
     std::string section_alias;
     const auto* server_cfg_ptr = find_section_ci(config, server_section, &section_alias);
     if (server_cfg_ptr == nullptr) {

@@ -10,6 +10,7 @@
 // share/mortred/ui, logs) and the embedded web UI. Inference goes through
 // the gateway. All state is instance-local (SupervisorApp).
 
+#include <sys/resource.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -940,6 +941,22 @@ int SupervisorApp::run() {
             FLAGS_alsologtostderr = true;
             google::InitGoogleLogging("mortred-supervisor");
             google::InstallFailureSignalHandler();
+        }
+    }
+
+    // Optional core dumps: the failure handler leaves a stack trace, a core lets
+    // a debugger see the state. Off by default — a core of a model process can be
+    // gigabytes — and inherited by every child.
+    if (const char* core_env = std::getenv("MORTRED_CORE_DUMPS");
+        core_env != nullptr && std::strcmp(core_env, "1") == 0) {
+        struct rlimit core_limit {
+            RLIM_INFINITY, RLIM_INFINITY
+        };
+        if (::setrlimit(RLIMIT_CORE, &core_limit) != 0) {
+            LOG(WARNING) << "MORTRED_CORE_DUMPS=1 but setrlimit(RLIMIT_CORE) failed: "
+                         << std::strerror(errno);
+        } else {
+            LOG(INFO) << "core dumps enabled for the supervisor and its children";
         }
     }
 

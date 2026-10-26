@@ -18,6 +18,8 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+
+#include <glog/logging.h>
 #include <vector>
 
 #include "control/mini_toml.h"
@@ -306,7 +308,15 @@ inline AuthResult ApiKeyManager::consume_rate_limit(const std::shared_ptr<const 
         out.reason = AuthReason::RATE_LIMITED;
         // GCRA retry: TAT - sigma - now (recompute without mutating on reject path
         // already performed by allow_rate_limit). Approximate with one interval.
-        const uint32_t rate = static_cast<uint32_t>(key->rate_limit_qps);
+        const uint32_t configured = static_cast<uint32_t>(key->rate_limit_qps);
+        if (configured > 1000u) {
+            // GCRA's emission interval is whole milliseconds; anything faster
+            // than 1000/s is capped there. Warn rather than fail: this table is
+            // reloaded while the gateway serves traffic.
+            LOG(WARNING) << "api key '" << key->name << "' rate_limit_qps=" << configured
+                         << " is capped to 1000 by the millisecond GCRA interval";
+        }
+        const uint32_t rate = configured;
         mortred::control::ratelimit::GcraPolicy policy{rate, rate};
         const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                    std::chrono::steady_clock::now().time_since_epoch())

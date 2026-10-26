@@ -14,7 +14,7 @@
 #include <gtest/gtest.h>
 
 #include "common/request_envelope.h"
-#include "common/response_envelope.h"
+#include "common/response_envelope_testing.h"
 #include "common/status_code.h"
 
 using mortred::common::StatusCode;
