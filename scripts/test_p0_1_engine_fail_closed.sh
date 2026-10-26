@@ -110,11 +110,16 @@ fi
 echo "-- AC4 doctor missing stamp --"
 mkdir -p "$(dirname "$ROOT/$AC1_ENGINE")"
 printf 'dummy\n' > "$ROOT/$AC1_ENGINE"
+# The shipped pack carries a seed gpu_mem_mib, so it can never exercise the
+# missing-stamp path. Strip the stamp keys into a temp pack inside the project
+# (so the pack's relative model paths still resolve) and run doctor on that.
+AC4_PACK="$ROOT/conf/packs/.ac4_stamp_missing.toml"
+grep -vE '^[[:space:]]*(gpu_mem_mib|gpu_mem_at_workers|gpu_mem_source)[[:space:]]*=' "$PACK" > "$AC4_PACK"
 set +e
-DOC_OUT="$(MORTRED_PACK="$PACK" bash scripts/mortredctl_doctor.sh 2>&1)"
+DOC_OUT="$(MORTRED_PACK="$AC4_PACK" bash scripts/mortredctl_doctor.sh 2>&1)"
 DOC_RC=$?
 set -e
-rm -f "$ROOT/$AC1_ENGINE"
+rm -f "$ROOT/$AC1_ENGINE" "$AC4_PACK"
 if [ "$DOC_RC" -ne 0 ] && printf '%s\n' "$DOC_OUT" | grep -E 'gpu_mem_mib|calibrate' >/dev/null; then
   pass "AC4 doctor exit=$DOC_RC points at stamp/calibrate"
 else
