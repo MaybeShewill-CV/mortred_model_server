@@ -66,7 +66,7 @@ struct ServerRuntimeConfig {
 /***
  * Parse and validate the worker count.
  * Missing (value_or falls back to 0), zero or negative are config errors —
- * an empty worker queue would hang do_work's unbounded wait_dequeue forever, so
+ * an empty worker queue would hang a request's unbounded wait_dequeue forever, so
  * return -1 and let the caller refuse to start.
  */
 inline int parse_worker_nums(const toml::table& server_section) {

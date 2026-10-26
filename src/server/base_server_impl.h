@@ -67,7 +67,7 @@ class BaseAiServerImpl {
 public:
     /***
      * drain in-flight go tasks before members are destroyed: wait until every
-     * worker is back in the queue (a running do_work or sync-graph item holds
+     * worker is back in the queue (a running sync-graph item holds
      * exactly one worker; metrics/EWMA are written before that enqueue, so
      * this wait is enough to keep _m_metrics and the pool EWMA alive. After
      * HTTP has replied, a detached go may still hold the lease until its
@@ -140,15 +140,12 @@ protected:
     // begin_drain() sets this before stop(): /ready answers 503 and new
     // admissions are rejected while in-flight work finishes in the drain
     std::atomic<bool> _m_draining{false};
-    std::atomic<size_t> _m_received_jobs{0};
     std::atomic<size_t> _m_finished_jobs{0};
     std::atomic<size_t> _m_waiting_jobs{0};
     WorkerPool<WORKER> _m_workers;
     int _m_model_run_timeout = 500;
     std::string _m_server_uri;
     std::string _m_auth_token;
-    // rate_limit_qps retained from config for metrics/compat only (gateway is sole limiter).
-    int _m_rate_limit_qps = 0;
     PrometheusMetrics _m_metrics;
     int _m_max_queue_depth = 0;
     int _m_max_batch_size = 1;
@@ -204,7 +201,6 @@ protected:
 
     void async_run_job(const std::string& job_id);
     void schedule_async_job(const std::string& job_id);
-    void do_work(InferenceTask* req, InferenceResult* result);
     void schedule_sync_request(WFHttpTask* http_task, InferenceTask req, size_t n_items);
     void start_sync_item(std::shared_ptr<SyncState> state, size_t k);
     void start_sync_batch(std::shared_ptr<SyncState> state);
@@ -229,7 +225,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::apply_runtime_config(const ServerRu
     _m_request_size_limit = cfg.request_size_limit;
     _m_model_run_timeout = cfg.model_run_timeout;
     _m_auth_token = cfg.auth_token;
-    _m_rate_limit_qps = cfg.rate_limit_qps;
     _m_max_queue_depth = cfg.max_queue_depth;
     _m_max_batch_size = cfg.max_batch_size;
     _m_max_request_items = cfg.max_request_items;
@@ -382,10 +377,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         reply_status(task, StatusCode::NOT_READY, _m_model_name);
         return;
     }
-    // Gateway is the sole public limiter (GCRA). Model toml rate_limit_qps is
-    // ignored for admission (retained for compatibility / metrics only).
-    (void)_m_rate_limit_qps;
-
     if (is_async_endpoint) {
         _m_async_eps.handle(task);
         return;
@@ -529,7 +520,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         }
         _m_metrics.set_queue_depth(_m_waiting_jobs.load());
         _m_metrics.set_waiting_jobs(_m_waiting_jobs.load());
-        _m_received_jobs += n_items;
         _m_metrics.inc_received_jobs(n_items);
         task_req.trace = stage_trace;
         if (stage_trace != nullptr) {
@@ -543,45 +533,6 @@ void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::serve_process(WFHttpTask* task) {
         reply_status(task, StatusCode::NOT_FOUND, _m_model_name);
         return;
     }
-}
-
-template<typename WORKER, typename MODEL_OUTPUT>
-void BaseAiServerImpl<WORKER, MODEL_OUTPUT>::do_work(
-    InferenceTask* req, InferenceResult* result) {
-    // Batching is only via schedule_sync_request -> start_sync_batch.
-    // do_work always uses the single-worker path so async_run_job (and any
-    // direct callers) keep working when max_batch_size > 1.
-    WORKER worker;
-    const bool has_deadline = req->deadline != std::chrono::steady_clock::time_point::max();
-    std::chrono::milliseconds wait{-1};
-    if (has_deadline) {
-        auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
-                             req->deadline - std::chrono::steady_clock::now()).count();
-        if (remaining < 0) {
-            remaining = 0;
-        }
-        wait = std::chrono::milliseconds(remaining);
-    }
-    const auto ck = _m_workers.checkout(worker, wait);
-    if (!ck.ok) {
-        result->model_run_status = StatusCode::MODEL_RUN_TIMEOUT;
-        result->task_finished_ts = Timestamp::now().to_format_str();
-        result->item_status.assign(req->item_count(), StatusCode::MODEL_RUN_TIMEOUT);
-        result->item_outputs.assign(req->item_count(), MODEL_OUTPUT{});
-        return;
-    }
-    result->find_worker_time_consuming = ck.wait_ms;
-    _m_metrics.observe_queue_wait_ms(ck.wait_ms);
-
-    const auto task_receive_ts = Timestamp::now();
-    run_items(worker, *req, result);
-
-    const auto task_finish_ts = Timestamp::now();
-    result->task_finished_ts = task_finish_ts.to_format_str();
-    result->worker_run_time_consuming = (task_finish_ts - task_receive_ts) * 1000;
-    _m_metrics.observe_inference_duration_ms(result->worker_run_time_consuming);
-    _m_workers.observe_run_ms(static_cast<int64_t>(result->worker_run_time_consuming));
-    _m_workers.checkin(std::move(worker));
 }
 
 template<typename WORKER, typename MODEL_OUTPUT>

@@ -599,8 +599,8 @@ bool GatewayApp::admit_source_limit(
     if (!enabled || limiter == nullptr || method == "OPTIONS") {
         return true;
     }
-    // peer address from the TCP endpoint (same shape as the model-server
-    // peer_ip_of; workflow gives sockaddr storage directly)
+    // peer address from the TCP endpoint; workflow hands out sockaddr storage
+    // directly, so the address is formatted here
     struct sockaddr_storage peer_addr;
     socklen_t addr_len = sizeof(peer_addr);
     char ip_buf[INET6_ADDRSTRLEN] = {0};
