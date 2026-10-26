@@ -40,6 +40,8 @@
 #include <workflow/WFTaskFactory.h>
 #include <workflow/Workflow.h>
 
+#include <glog/logging.h>
+
 #include "common/auth_token.h"
 #include "common/listen_policy.h"
 #include "common/mortred_version.h"
@@ -964,6 +966,27 @@ int SupervisorApp::run() {
     }
     if (!init(options)) {
         return 1;
+    }
+
+    // The daemon never initialised glog, so its own LOG(...) lines only reached
+    // stderr: the journal under systemd, nothing at all when a script redirected
+    // stderr to /dev/null. Send them to the same log dir the children use, keep
+    // them on stderr too, and install the failure handler so a crash leaves a
+    // stack trace next to those files.
+    {
+        const std::filesystem::path log_dir =
+            std::filesystem::path(options.project_root) / cfg_.supervisor.log_dir;
+        std::error_code ec;
+        std::filesystem::create_directories(log_dir, ec);
+        if (ec) {
+            std::fprintf(stderr, "mortred-supervisor: cannot create log dir %s: %s\n",
+                         log_dir.string().c_str(), ec.message().c_str());
+        } else {
+            FLAGS_log_dir = log_dir.string();
+            FLAGS_alsologtostderr = true;
+            google::InitGoogleLogging("mortred-supervisor");
+            google::InstallFailureSignalHandler();
+        }
     }
 
     // Gateway reads MORTRED_GATEWAY_CORS_ORIGINS at startup. Inject before
