@@ -69,10 +69,26 @@ inline std::uint16_t f32_to_f16_bits(float value) {
 
 } // namespace
 
-ImagePipeline::ImagePipeline(const cv::Mat &image) : image_(image.clone()) {
+// Shallow, refcounted copy: no step writes into image_, so the only reason to
+// deep-copy here was ownership, and cv::Mat already has that. Measured share
+// of the preprocess chain is 13% (640x640), 21% (1080p), 30% (4K) — see
+// scripts/microbench/clone_bench.cc.
+ImagePipeline::ImagePipeline(const cv::Mat &image) : image_(image) {
     if (image.empty()) {
         set_error(status_, error_, invalid_image("constructor", "input image is empty"));
     }
+}
+
+bool ImagePipeline::require_private_float(const char *step) {
+    // The constructor shares the caller's buffer. to_float() is the step that
+    // replaces it with a private one, so the in-place steps below are only safe
+    // after it; anything else would write through to the caller's image.
+    if (image_.type() == CV_32F) {
+        return true;
+    }
+    set_error(status_, error_,
+              invalid_image(step, std::string("call to_float() before ") + step + "()"));
+    return false;
 }
 
 ImagePipeline &ImagePipeline::bgr_to_rgb() {
@@ -203,6 +219,9 @@ ImagePipeline &ImagePipeline::scale(float factor) {
     if (status_ != StatusCode::OK) {
         return *this;
     }
+    if (!require_private_float("scale")) {
+        return *this;
+    }
     image_ *= factor;
     return *this;
 }
@@ -215,6 +234,9 @@ ImagePipeline &ImagePipeline::subtract(const std::array<float, 3> &values) {
         set_error(status_, error_, invalid_image("subtract", "expected a 3-channel image"));
         return *this;
     }
+    if (!require_private_float("subtract")) {
+        return *this;
+    }
     cv::subtract(image_, cv::Scalar(values[0], values[1], values[2]), image_);
     return *this;
 }
@@ -225,6 +247,9 @@ ImagePipeline &ImagePipeline::divide(const std::array<float, 3> &values) {
     }
     if (image_.channels() != 3) {
         set_error(status_, error_, invalid_image("divide", "expected a 3-channel image"));
+        return *this;
+    }
+    if (!require_private_float("divide")) {
         return *this;
     }
     cv::divide(image_, cv::Scalar(values[0], values[1], values[2]), image_);
