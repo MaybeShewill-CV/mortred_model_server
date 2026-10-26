@@ -53,8 +53,16 @@ TEST(process_stop, request_stop_is_idempotent) {
 }
 
 TEST(process_stop, destructor_without_wait_joins) {
-    ProcessStop stop;
-    stop.arm();
+    // The destructor must join the signal thread instead of leaving it running
+    // or blocking; an armed-and-never-stopped instance is the path main() takes
+    // when it returns early.
+    const auto t0 = std::chrono::steady_clock::now();
+    {
+        ProcessStop stop;
+        stop.arm();
+    }
+    EXPECT_LT(elapsed_ms(t0), 1000)
+        << "destructor must join the signal thread promptly, not wait for a signal";
 }
 
 TEST(process_stop, sigterm_unblocks_wait) {

@@ -24,7 +24,9 @@ upstream_recv_timeout_ms = 180000
 [gateway.rate_limit]
 enabled = true
 shadow = false
-rate_per_sec = 100000
+# 1000/s is the fastest the millisecond GCRA interval can represent; asking for
+# more used to be silently capped to this value, and is now a config error.
+rate_per_sec = 1000
 burst = 200000
 trusted_proxies = "127.0.0.1,::1"
 

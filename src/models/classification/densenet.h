@@ -42,6 +42,9 @@ template <typename INPUT, typename OUTPUT> class DenseNet : public mortred::mode
     // class id to names
     std::unordered_map<uint16_t, std::string> _m_class_id2names;
     // network input tensor size
+    // center-crop square before the network input; part of this family's
+    // geometry, so it is one constant instead of the same literal five times
+    static constexpr int k_pre_crop_side = 256;
     cv::Size _m_input_tensor_size = cv::Size(224, 224);
 };
 

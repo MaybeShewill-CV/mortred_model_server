@@ -252,6 +252,16 @@ TEST_F(ControlConfigTest, rejects_invalid_restart_policy) {
     EXPECT_NE(err.find("restart_policy"), std::string::npos);
 }
 
+TEST_F(ControlConfigTest, rejects_rate_above_the_millisecond_ceiling) {
+    // GCRA's emission interval is whole milliseconds, so 1000/s is the fastest
+    // sustained rate it can represent; a larger value used to be silently capped.
+    write("[gateway.rate_limit]\nenabled = true\nrate_per_sec = 2000\n");
+    ControlConfig cfg;
+    std::string err;
+    EXPECT_FALSE(ControlConfig::load(path_.string(), &cfg, &err));
+    EXPECT_NE(err.find("1000/s"), std::string::npos) << err;
+}
+
 TEST_F(ControlConfigTest, rejects_out_of_range_port) {
     write("[gateway]\nport = 70000\n");
     ControlConfig cfg;
