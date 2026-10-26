@@ -12,7 +12,7 @@
 
 set -uo pipefail
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # script lives in scripts/
 LOG="$REPO/p2_closeout_test.log"
 TESTS="$REPO/build/p2-verify-tests"
 WERR="$REPO/build/p2-verify-werror"
