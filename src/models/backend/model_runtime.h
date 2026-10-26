@@ -42,8 +42,11 @@ template <typename T> RuntimeResult<T> runtime_ok(T value) { return {StatusCode:
 inline RuntimeStatus runtime_error(StatusCode status, std::string error) { return {status, std::move(error)}; }
 
 /***
- * Fluent preprocessing pipeline for ordinary image models. The pipeline owns a
- * private working Mat and never mutates the caller's source image.
+ * Fluent preprocessing pipeline for ordinary image models. The constructor
+ * shares the caller's buffer (cv::Mat is refcounted) instead of cloning it.
+ * to_float() replaces that shared buffer with a private one, which is what makes
+ * the later in-place steps (scale/subtract/divide) safe; calling them first is
+ * rejected instead of writing through to the caller's image.
  */
 class ImagePipeline {
   public:
@@ -73,6 +76,9 @@ class ImagePipeline {
 
   private:
     RuntimeResult<NamedTensor> pack(const std::string &name, bool nchw) const;
+    /*** In-place steps (scale/subtract/divide) may only run after to_float()
+     * replaced the shared source buffer with a private one. */
+    bool require_private_float(const char *step);
 
     cv::Mat image_;
     StatusCode status_ = StatusCode::OK;

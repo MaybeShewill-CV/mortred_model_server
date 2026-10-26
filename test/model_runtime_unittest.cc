@@ -82,6 +82,32 @@ TEST(ImagePipeline, ProducesNchwAndPreservesSourceImage) {
     EXPECT_FLOAT_EQ(cv::norm(source, source_copy, cv::NORM_INF), 0.0f);
 }
 
+TEST(ImagePipeline, NormalisationStepsLeaveTheSourceUntouched) {
+    // The constructor shares the source buffer instead of cloning it, so the
+    // in-place scale/subtract/divide must not write through to the caller.
+    const cv::Mat source(2, 3, CV_8UC3, cv::Scalar(10, 20, 30));
+    const cv::Mat source_copy = source.clone();
+    auto result = ImagePipeline(source)
+                      .bgr_to_rgb()
+                      .to_float()
+                      .scale(1.0f / 255.0f)
+                      .subtract({0.5f, 0.5f, 0.5f})
+                      .divide({0.5f, 0.5f, 0.5f})
+                      .nchw("images");
+    ASSERT_TRUE(result.ok()) << result.error;
+    EXPECT_FLOAT_EQ(cv::norm(source, source_copy, cv::NORM_INF), 0.0f);
+}
+
+TEST(ImagePipeline, MutatingBeforeToFloatIsRejected) {
+    // Without to_float() the pipeline still shares the caller's buffer, so an
+    // in-place step must fail instead of overwriting it.
+    const cv::Mat source(2, 3, CV_8UC3, cv::Scalar(1, 2, 3));
+    auto result = ImagePipeline(source).scale(0.5f).nchw("images");
+    EXPECT_FALSE(result.ok());
+    EXPECT_EQ(result.status, StatusCode::MODEL_EMPTY_INPUT_IMAGE);
+    EXPECT_NE(result.error.find("to_float()"), std::string::npos) << result.error;
+}
+
 TEST(ImagePipeline, PacksSessionDtypeF16) {
     const cv::Mat source(1, 1, CV_8UC3, cv::Scalar(0, 0, 255));
     TensorInfo info;
