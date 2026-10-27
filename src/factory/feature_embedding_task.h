@@ -24,11 +24,6 @@ using mortred::models::BaseAiModel;
 
 using mortred::models::feature_embedding::Dinov2;
 
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_dinov2_feature_extractor() {
-    return std::make_unique<Dinov2<INPUT, OUTPUT>>();
-}
-
 using Output = mortred::models::io_define::feature_embedding::std_feature_embedding_output;
 using mortred::server::ImageInput;
 using Entry = mortred::factory::cv_catalog::CvModelEntry<Output>;
@@ -54,13 +49,13 @@ inline const std::vector<mortred::models::backend::ParamSpec> &feature_embedding
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
         Entry{"dinov2_vits14", "DINOv2 ViT-S/14 feature embedding", "DINOV2_FEATURE_EMBEDDING_SERVER",
-              &create_dinov2_feature_extractor<ImageInput, Output>, &mortred::server::response::fill_feature_embedding,
+              [] { return std::make_unique<Dinov2<ImageInput, Output>>(); }, &mortred::server::response::fill_feature_embedding,
               feature_embedding_param_specs(), "dinov2"},
         Entry{"dinov2_vitb14", "DINOv2 ViT-B/14 feature embedding", "DINOV2_FEATURE_EMBEDDING_SERVER",
-              &create_dinov2_feature_extractor<ImageInput, Output>, &mortred::server::response::fill_feature_embedding,
+              [] { return std::make_unique<Dinov2<ImageInput, Output>>(); }, &mortred::server::response::fill_feature_embedding,
               feature_embedding_param_specs(), "dinov2"},
         Entry{"dinov2_vitl14", "DINOv2 ViT-L/14 feature embedding", "DINOV2_FEATURE_EMBEDDING_SERVER",
-              &create_dinov2_feature_extractor<ImageInput, Output>, &mortred::server::response::fill_feature_embedding,
+              [] { return std::make_unique<Dinov2<ImageInput, Output>>(); }, &mortred::server::response::fill_feature_embedding,
               feature_embedding_param_specs(), "dinov2"},
     };
     return entries;

@@ -20,16 +20,6 @@ using mortred::models::BaseAiModel;
 using mortred::models::feature_point::LightGlue;
 using mortred::models::feature_point::SuperPoint;
 
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_superpoint_extractor() {
-    return std::make_unique<SuperPoint<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_lightglue_matcher() {
-    return std::make_unique<LightGlue<INPUT, OUTPUT>>();
-}
-
 using Output = mortred::models::io_define::feature_point::std_feature_point_output;
 using mortred::server::ImageInput;
 using Entry = mortred::factory::cv_catalog::CvModelEntry<Output>;
@@ -48,7 +38,7 @@ inline const std::vector<mortred::models::backend::ParamSpec> &feature_point_par
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
         Entry{"superpoint", "SuperPoint feature detection", "SUPERPOINT_FP_SERVER",
-              &create_superpoint_extractor<ImageInput, Output>, &mortred::server::response::fill_feature_points,
+              [] { return std::make_unique<SuperPoint<ImageInput, Output>>(); }, &mortred::server::response::fill_feature_points,
               feature_point_param_specs(), "superpoint"},
     };
     return entries;
@@ -60,7 +50,7 @@ using MatchEntry = mortred::factory::model_catalog::ModelCatalogEntry<MatchInput
 
 inline const std::vector<MatchEntry> &match_catalog() {
     static const std::vector<MatchEntry> entries = {
-        MatchEntry{"LIGHTGLUE", "LightGlue feature matcher", &create_lightglue_matcher<MatchInput, MatchOutput>},
+        MatchEntry{"LIGHTGLUE", "LightGlue feature matcher", [] { return std::make_unique<LightGlue<MatchInput, MatchOutput>>(); }},
     };
     return entries;
 }

@@ -22,9 +22,11 @@ namespace apps {
 /***
  * Runtime projection of the factory `*_task.h::catalog()` tables. There is no
  * handwritten product list here: every row is copied from a catalog entry at
- * process start. `id` is the catalog `model_section`, which is lowercase
- * (`yolov8s`, `mobilenetv2`) — `--model` matches it exactly, while the TOML
- * table it reads is `server_section` (uppercase, e.g. `YOLOV8_DETECTION_SERVER`).
+ * process start. `id` is the catalog `model_section` and `--model` matches it
+ * exactly — casing is whatever the catalog declares, which is lowercase for the
+ * CV families (`yolov8s`, `mobilenetv2`) and uppercase for the diffusion rows
+ * (`DDIM`, `CLS_COND_DDIM`). The TOML table it reads is `server_section`, a
+ * separate name (e.g. `YOLOV8_DETECTION_SERVER`).
  */
 struct ProductEntry {
     std::string id;
