@@ -12,6 +12,7 @@
 #include <toml/toml.hpp>
 
 #include "apps/cli_flags.h"
+#include "common/mortred_version.h"
 #include "apps/common/exit_codes.h"
 #include "apps/common/model_server_main.h"
 #include "apps/product_index.h"
@@ -41,6 +42,10 @@ int main(int argc, char **argv) {
     }
     if (cli.help) {
         print_usage(argv[0]);
+        return 0;
+    }
+    if (cli.version) {
+        std::printf("mortred_model_server %s\n", MORTRED_VERSION);
         return 0;
     }
     const auto &duplicate_ids = mortred::apps::ProductIndex::duplicate_ids();

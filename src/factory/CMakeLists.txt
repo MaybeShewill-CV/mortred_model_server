@@ -1,23 +1,10 @@
 # build factory libs
 
-set(FACTORY_LIB_SRC
-    ${CMAKE_CURRENT_LIST_DIR}/classification_task.h
-    ${CMAKE_CURRENT_LIST_DIR}/clip_task.h
-    ${CMAKE_CURRENT_LIST_DIR}/cv_catalog.h
-    ${CMAKE_CURRENT_LIST_DIR}/diffusion_model_adapter.h
-    ${CMAKE_CURRENT_LIST_DIR}/diffusion_task.h
-    ${CMAKE_CURRENT_LIST_DIR}/enhancement_task.h
-    ${CMAKE_CURRENT_LIST_DIR}/feature_embedding_task.h
-    ${CMAKE_CURRENT_LIST_DIR}/feature_point_task.h
-    ${CMAKE_CURRENT_LIST_DIR}/matting_task.h
-    ${CMAKE_CURRENT_LIST_DIR}/model_catalog.h
-    ${CMAKE_CURRENT_LIST_DIR}/mono_depth_estimate_task.h
-    ${CMAKE_CURRENT_LIST_DIR}/obj_detection_task.h
-    ${CMAKE_CURRENT_LIST_DIR}/ocr_task.h
-    ${CMAKE_CURRENT_LIST_DIR}/sam_task.h
-    ${CMAKE_CURRENT_LIST_DIR}/scene_segmentation_task.h
-)
-add_library(factory SHARED ${FACTORY_LIB_SRC})
+# Every row of every catalog lives in a *_task.h; the library compiles no
+# sources, so the header list is globbed (CONFIGURE_DEPENDS re-globs when a new
+# family header appears instead of requiring a manual edit).
+file(GLOB FACTORY_HEADERS CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/*.h)
+add_library(factory SHARED ${FACTORY_HEADERS})
 target_include_directories(
     factory PUBLIC
     ${PROJECT_ROOT_DIR}/src

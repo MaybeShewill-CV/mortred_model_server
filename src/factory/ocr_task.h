@@ -16,11 +16,6 @@ using mortred::models::BaseAiModel;
 
 using mortred::models::ocr::DBTextDetector;
 
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_dbtext_detector() {
-    return std::make_unique<DBTextDetector<INPUT, OUTPUT>>();
-}
-
 using Output = mortred::models::io_define::ocr::std_text_regions_output;
 using mortred::server::ImageInput;
 using Entry = mortred::factory::cv_catalog::CvModelEntry<Output>;
@@ -36,7 +31,7 @@ inline const std::vector<mortred::models::backend::ParamSpec> &ocr_param_specs()
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
-        Entry{"dbnet", "DBNet text detection", "DBNET_SERVER", &create_dbtext_detector<ImageInput, Output>,
+        Entry{"dbnet", "DBNet text detection", "DBNET_SERVER", [] { return std::make_unique<DBTextDetector<ImageInput, Output>>(); },
               &mortred::server::response::fill_text_regions, ocr_param_specs(), "dbnet"},
     };
     return entries;

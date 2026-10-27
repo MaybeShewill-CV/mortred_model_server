@@ -20,21 +20,6 @@ using mortred::models::classification::DenseNet;
 using mortred::models::classification::MobileNetv2;
 using mortred::models::classification::ResNet;
 
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_mobilenetv2_classifier() {
-    return std::make_unique<MobileNetv2<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_resnet_classifier() {
-    return std::make_unique<ResNet<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_densenet_classifier() {
-    return std::make_unique<DenseNet<INPUT, OUTPUT>>();
-}
-
 using Output = mortred::models::io_define::classification::std_classification_output;
 using mortred::server::ImageInput;
 using Entry = mortred::factory::cv_catalog::CvModelEntry<Output>;
@@ -52,11 +37,11 @@ inline const std::vector<mortred::models::backend::ParamSpec> &classification_pa
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
         Entry{"mobilenetv2", "Mobilenetv2 classification", "MOBILENETV2_CLASSIFICATION_SERVER",
-              &create_mobilenetv2_classifier<ImageInput, Output>, &mortred::server::response::fill_classification,
+              [] { return std::make_unique<MobileNetv2<ImageInput, Output>>(); }, &mortred::server::response::fill_classification,
               classification_param_specs(), "mobilenetv2"},
-        Entry{"resnet", "Resnet classification", "RESNET_CLASSIFICATION_SERVER", &create_resnet_classifier<ImageInput, Output>,
+        Entry{"resnet", "Resnet classification", "RESNET_CLASSIFICATION_SERVER", [] { return std::make_unique<ResNet<ImageInput, Output>>(); },
               &mortred::server::response::fill_classification, classification_param_specs(), "resnet"},
-        Entry{"densenet", "Densenet classification", "DENSENET_CLASSIFICATION_SERVER", &create_densenet_classifier<ImageInput, Output>,
+        Entry{"densenet", "Densenet classification", "DENSENET_CLASSIFICATION_SERVER", [] { return std::make_unique<DenseNet<ImageInput, Output>>(); },
               &mortred::server::response::fill_classification, classification_param_specs(), "densenet"},
     };
     return entries;

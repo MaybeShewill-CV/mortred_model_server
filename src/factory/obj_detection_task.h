@@ -28,41 +28,6 @@ using mortred::models::object_detection::YoloV6Detector;
 using mortred::models::object_detection::YoloV7Detector;
 using mortred::models::object_detection::YoloV8Detector;
 
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov5_detector() {
-    return std::make_unique<YoloV5Detector<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov6_detector() {
-    return std::make_unique<YoloV6Detector<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_nanodet_detector() {
-    return std::make_unique<NanoDetector<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_libface_detector() {
-    return std::make_unique<LibFaceDetector<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov7_detector() {
-    return std::make_unique<YoloV7Detector<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_yolov8_detector() {
-    return std::make_unique<YoloV8Detector<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_centerface_detector() {
-    return std::make_unique<CenterFaceDetector<INPUT, OUTPUT>>();
-}
-
 // object detection and face detection have different output contracts, so they
 // keep two typed catalogs instead of one type-erased list
 using ObjectOutput = mortred::models::io_define::object_detection::std_object_detection_output;
@@ -85,27 +50,27 @@ inline const std::vector<mortred::models::backend::ParamSpec> &detection_param_s
 
 inline const std::vector<ObjectEntry> &catalog() {
     static const std::vector<ObjectEntry> entries = {
-        ObjectEntry{"yolov5l", "YOLOv5l object detection", "YOLOV5_DETECTION_SERVER", &create_yolov5_detector<ImageInput, ObjectOutput>,
+        ObjectEntry{"yolov5l", "YOLOv5l object detection", "YOLOV5_DETECTION_SERVER", [] { return std::make_unique<YoloV5Detector<ImageInput, ObjectOutput>>(); },
                     &mortred::server::response::fill_object_detection, detection_param_specs(), "yolov5"},
-        ObjectEntry{"yolov6s", "YOLOv6s object detection", "YOLOV6_DETECTION_SERVER", &create_yolov6_detector<ImageInput, ObjectOutput>,
+        ObjectEntry{"yolov6s", "YOLOv6s object detection", "YOLOV6_DETECTION_SERVER", [] { return std::make_unique<YoloV6Detector<ImageInput, ObjectOutput>>(); },
                     &mortred::server::response::fill_object_detection, detection_param_specs(), "yolov6"},
         ObjectEntry{"nanodet_1x5", "NanoDet 1.5x object detection", "NANODET_DETECTION_SERVER",
-                    &create_nanodet_detector<ImageInput, ObjectOutput>, &mortred::server::response::fill_object_detection,
+                    [] { return std::make_unique<NanoDetector<ImageInput, ObjectOutput>>(); }, &mortred::server::response::fill_object_detection,
                     detection_param_specs(), "nanodet"},
         ObjectEntry{"nanodet_416", "NanoDet 416 object detection", "NANODET_DETECTION_SERVER",
-                    &create_nanodet_detector<ImageInput, ObjectOutput>, &mortred::server::response::fill_object_detection,
+                    [] { return std::make_unique<NanoDetector<ImageInput, ObjectOutput>>(); }, &mortred::server::response::fill_object_detection,
                     detection_param_specs(), "nanodet"},
-        ObjectEntry{"yolov7", "YOLOv7 object detection", "YOLOV7_DETECTION_SERVER", &create_yolov7_detector<ImageInput, ObjectOutput>,
+        ObjectEntry{"yolov7", "YOLOv7 object detection", "YOLOV7_DETECTION_SERVER", [] { return std::make_unique<YoloV7Detector<ImageInput, ObjectOutput>>(); },
                     &mortred::server::response::fill_object_detection, detection_param_specs(), "yolov7"},
-        ObjectEntry{"yolov7x", "YOLOv7x object detection", "YOLOV7_DETECTION_SERVER", &create_yolov7_detector<ImageInput, ObjectOutput>,
+        ObjectEntry{"yolov7x", "YOLOv7x object detection", "YOLOV7_DETECTION_SERVER", [] { return std::make_unique<YoloV7Detector<ImageInput, ObjectOutput>>(); },
                     &mortred::server::response::fill_object_detection, detection_param_specs(), "yolov7"},
-        ObjectEntry{"yolov8n", "YOLOv8n object detection", "YOLOV8_DETECTION_SERVER", &create_yolov8_detector<ImageInput, ObjectOutput>,
+        ObjectEntry{"yolov8n", "YOLOv8n object detection", "YOLOV8_DETECTION_SERVER", [] { return std::make_unique<YoloV8Detector<ImageInput, ObjectOutput>>(); },
                     &mortred::server::response::fill_object_detection, detection_param_specs(), "yolov8"},
-        ObjectEntry{"yolov8s", "YOLOv8s object detection", "YOLOV8_DETECTION_SERVER", &create_yolov8_detector<ImageInput, ObjectOutput>,
+        ObjectEntry{"yolov8s", "YOLOv8s object detection", "YOLOV8_DETECTION_SERVER", [] { return std::make_unique<YoloV8Detector<ImageInput, ObjectOutput>>(); },
                     &mortred::server::response::fill_object_detection, detection_param_specs(), "yolov8"},
-        ObjectEntry{"yolov8l", "YOLOv8l object detection", "YOLOV8_DETECTION_SERVER", &create_yolov8_detector<ImageInput, ObjectOutput>,
+        ObjectEntry{"yolov8l", "YOLOv8l object detection", "YOLOV8_DETECTION_SERVER", [] { return std::make_unique<YoloV8Detector<ImageInput, ObjectOutput>>(); },
                     &mortred::server::response::fill_object_detection, detection_param_specs(), "yolov8"},
-        ObjectEntry{"yolov8x", "YOLOv8x object detection", "YOLOV8_DETECTION_SERVER", &create_yolov8_detector<ImageInput, ObjectOutput>,
+        ObjectEntry{"yolov8x", "YOLOv8x object detection", "YOLOV8_DETECTION_SERVER", [] { return std::make_unique<YoloV8Detector<ImageInput, ObjectOutput>>(); },
                     &mortred::server::response::fill_object_detection, detection_param_specs(), "yolov8"},
     };
     return entries;
@@ -113,10 +78,10 @@ inline const std::vector<ObjectEntry> &catalog() {
 
 inline const std::vector<FaceEntry> &face_catalog() {
     static const std::vector<FaceEntry> entries = {
-        FaceEntry{"libface", "YuNet face detection", "LIBFACE_DETECTION_SERVER", &create_libface_detector<ImageInput, FaceOutput>,
+        FaceEntry{"libface", "YuNet face detection", "LIBFACE_DETECTION_SERVER", [] { return std::make_unique<LibFaceDetector<ImageInput, FaceOutput>>(); },
                   &mortred::server::response::fill_face_detection, detection_param_specs(), "libface"},
         FaceEntry{"centerface", "CenterFace detection", "CENTER_FACE_DETECTION_SERVER",
-                  &create_centerface_detector<ImageInput, FaceOutput>, &mortred::server::response::fill_face_detection,
+                  [] { return std::make_unique<CenterFaceDetector<ImageInput, FaceOutput>>(); }, &mortred::server::response::fill_face_detection,
                   detection_param_specs(), "centerface"},
     };
     return entries;

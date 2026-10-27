@@ -27,16 +27,6 @@ template <typename INPUT, typename OUTPUT> std::unique_ptr<BaseAiModel<INPUT, OU
     return std::make_unique<SamPredictor<INPUT, OUTPUT>>();
 }
 
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_sam_auto_mask_generator() {
-    return std::make_unique<SamAutoMaskGenerator<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_fast_sam_segmentor() {
-    return std::make_unique<FastSamSegmentor<INPUT, OUTPUT>>();
-}
-
 // SAM families have distinct IO contracts: the prompt predictor and fast-sam
 // are consumed directly by benchmarks, while the auto mask generator is served
 // over HTTP. Each family therefore keeps its own typed catalog.
@@ -74,7 +64,7 @@ inline const std::vector<PredictorEntry> &predictor_catalog() {
 
 inline const std::vector<FastSamEntry> &fast_sam_catalog() {
     static const std::vector<FastSamEntry> entries = {
-        FastSamEntry{"FAST_SAM", "FastSAM everything segmentation", &create_fast_sam_segmentor<MatInput, FastSamOutput>},
+        FastSamEntry{"FAST_SAM", "FastSAM everything segmentation", [] { return std::make_unique<FastSamSegmentor<MatInput, FastSamOutput>>(); }},
     };
     return entries;
 }
@@ -82,7 +72,7 @@ inline const std::vector<FastSamEntry> &fast_sam_catalog() {
 inline const std::vector<AmgEntry> &amg_catalog() {
     static const std::vector<AmgEntry> entries = {
         // Empty family keeps the benchmark weight name as the model section.
-        AmgEntry{"SAM_AMG", "SAM automatic mask generator", "SAM_AMG_SERVER", &create_sam_auto_mask_generator<ImageInput, AmgOutput>,
+        AmgEntry{"SAM_AMG", "SAM automatic mask generator", "SAM_AMG_SERVER", [] { return std::make_unique<SamAutoMaskGenerator<ImageInput, AmgOutput>>(); },
                  &mortred::server::response::fill_sam_amg, sam_amg_param_specs(), ""},
     };
     return entries;

@@ -23,43 +23,23 @@ using mortred::models::scene_segmentation::HRNetSegmentation;
 using mortred::models::scene_segmentation::MsOcrNet;
 using mortred::models::scene_segmentation::PPHumanSeg;
 
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_bisenetv2_segmentor() {
-    return std::make_unique<BiseNetV2<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_pphuman_segmentor() {
-    return std::make_unique<PPHumanSeg<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_msocrnet_segmentor() {
-    return std::make_unique<MsOcrNet<INPUT, OUTPUT>>();
-}
-
-template <typename INPUT, typename OUTPUT>
-std::unique_ptr<BaseAiModel<INPUT, OUTPUT>> create_hrnet_segmentor() {
-    return std::make_unique<HRNetSegmentation<INPUT, OUTPUT>>();
-}
-
 using Output = mortred::models::io_define::scene_segmentation::std_scene_segmentation_output;
 using mortred::server::ImageInput;
 using Entry = mortred::factory::cv_catalog::CvModelEntry<Output>;
 
 inline const std::vector<Entry> &catalog() {
     static const std::vector<Entry> entries = {
-        Entry{"bisenetv2", "BiSeNetV2 segmentation", "BISENETV2_SERVER", &create_bisenetv2_segmentor<ImageInput, Output>,
+        Entry{"bisenetv2", "BiSeNetV2 segmentation", "BISENETV2_SERVER", [] { return std::make_unique<BiseNetV2<ImageInput, Output>>(); },
               &mortred::server::response::fill_scene_segmentation, {}, "bisenetv2"},
         Entry{"pphuman_mobile", "PP-HumanSeg mobile segmentation", "PPHUMAN_SEG_SERVER",
-              &create_pphuman_segmentor<ImageInput, Output>, &mortred::server::response::fill_scene_segmentation, {}, "pphuman"},
-        Entry{"pphuman_lite", "PP-HumanSeg lite segmentation", "PPHUMAN_SEG_SERVER", &create_pphuman_segmentor<ImageInput, Output>,
+              [] { return std::make_unique<PPHumanSeg<ImageInput, Output>>(); }, &mortred::server::response::fill_scene_segmentation, {}, "pphuman"},
+        Entry{"pphuman_lite", "PP-HumanSeg lite segmentation", "PPHUMAN_SEG_SERVER", [] { return std::make_unique<PPHumanSeg<ImageInput, Output>>(); },
               &mortred::server::response::fill_scene_segmentation, {}, "pphuman"},
         Entry{"pphuman_server", "PP-HumanSeg server segmentation", "PPHUMAN_SEG_SERVER",
-              &create_pphuman_segmentor<ImageInput, Output>, &mortred::server::response::fill_scene_segmentation, {}, "pphuman"},
-        Entry{"hrnet", "HRNet segmentation", "HRNET_SERVER", &create_hrnet_segmentor<ImageInput, Output>,
+              [] { return std::make_unique<PPHumanSeg<ImageInput, Output>>(); }, &mortred::server::response::fill_scene_segmentation, {}, "pphuman"},
+        Entry{"hrnet", "HRNet segmentation", "HRNET_SERVER", [] { return std::make_unique<HRNetSegmentation<ImageInput, Output>>(); },
               &mortred::server::response::fill_scene_segmentation, {}, "hrnet"},
-        Entry{"msocrnet", "MSOCRNet segmentation", "MSOCRNET_SERVER", &create_msocrnet_segmentor<ImageInput, Output>,
+        Entry{"msocrnet", "MSOCRNet segmentation", "MSOCRNET_SERVER", [] { return std::make_unique<MsOcrNet<ImageInput, Output>>(); },
               &mortred::server::response::fill_scene_segmentation, {}, "msocrnet"},
     };
     return entries;

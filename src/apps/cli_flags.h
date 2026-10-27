@@ -26,6 +26,7 @@ namespace apps {
 struct ModelCli {
     bool list = false;
     bool help = false;
+    bool version = false;
     std::string model;
     std::vector<char *> rest;
 
@@ -33,6 +34,25 @@ struct ModelCli {
         return static_cast<int>(rest.size());
     }
 };
+
+/*** One catalog id, given exactly once: an empty value is a typo, and two
+ * different ids mean the operator expected the last one to win. */
+inline bool set_model(const std::string &value, ModelCli *out, std::string *err) {
+    if (value.empty()) {
+        if (err != nullptr) {
+            *err = "--model requires a non-empty catalog id (see --list)";
+        }
+        return false;
+    }
+    if (!out->model.empty() && out->model != value) {
+        if (err != nullptr) {
+            *err = "--model given twice ('" + out->model + "' then '" + value + "')";
+        }
+        return false;
+    }
+    out->model = value;
+    return true;
+}
 
 inline bool parse_model_cli(int argc, char **argv, ModelCli *out, std::string *err) {
     if (out == nullptr) {
@@ -48,12 +68,24 @@ inline bool parse_model_cli(int argc, char **argv, ModelCli *out, std::string *e
     out->rest.push_back(argv[0]);
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
+        if (arg == "--") {
+            // everything after the separator belongs to the family driver
+            // verbatim, even if it looks like a flag we know
+            for (++i; i < argc; ++i) {
+                out->rest.push_back(argv[i]);
+            }
+            break;
+        }
         if (arg == "--list") {
             out->list = true;
             continue;
         }
         if (arg == "--help" || arg == "-h") {
             out->help = true;
+            continue;
+        }
+        if (arg == "--version" || arg == "-v") {
+            out->version = true;
             continue;
         }
         if (arg == "--model") {
@@ -63,11 +95,15 @@ inline bool parse_model_cli(int argc, char **argv, ModelCli *out, std::string *e
                 }
                 return false;
             }
-            out->model = argv[++i];
+            if (!set_model(argv[++i], out, err)) {
+                return false;
+            }
             continue;
         }
         if (arg.rfind("--model=", 0) == 0) {
-            out->model = arg.substr(std::string("--model=").size());
+            if (!set_model(arg.substr(std::string("--model=").size()), out, err)) {
+                return false;
+            }
             continue;
         }
         out->rest.push_back(argv[i]);
