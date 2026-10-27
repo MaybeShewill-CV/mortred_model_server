@@ -52,10 +52,10 @@ inline const std::vector<Entry> &catalog() {
               [] { return std::make_unique<Dinov2<ImageInput, Output>>(); }, &mortred::server::response::fill_feature_embedding,
               feature_embedding_param_specs(), "dinov2"},
         Entry{"dinov2_vitb14", "DINOv2 ViT-B/14 feature embedding", "DINOV2_FEATURE_EMBEDDING_SERVER",
-              &create_dinov2_feature_extractor<ImageInput, Output>, &mortred::server::response::fill_feature_embedding,
+              [] { return std::make_unique<Dinov2<ImageInput, Output>>(); }, &mortred::server::response::fill_feature_embedding,
               feature_embedding_param_specs(), "dinov2"},
         Entry{"dinov2_vitl14", "DINOv2 ViT-L/14 feature embedding", "DINOV2_FEATURE_EMBEDDING_SERVER",
-              &create_dinov2_feature_extractor<ImageInput, Output>, &mortred::server::response::fill_feature_embedding,
+              [] { return std::make_unique<Dinov2<ImageInput, Output>>(); }, &mortred::server::response::fill_feature_embedding,
               feature_embedding_param_specs(), "dinov2"},
     };
     return entries;
