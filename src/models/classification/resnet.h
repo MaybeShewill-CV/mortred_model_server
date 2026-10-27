@@ -42,9 +42,7 @@ template <typename INPUT, typename OUTPUT> class ResNet : public mortred::models
 
     StatusCode on_init(const toml::table &params) override;
 
-    // class id to names
     std::unordered_map<uint16_t, std::string> _m_class_id2names;
-    // network input tensor size
     cv::Size _m_input_tensor_size = cv::Size(224, 224);
 };
 

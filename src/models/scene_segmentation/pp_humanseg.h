@@ -37,7 +37,6 @@ template <typename INPUT, typename OUTPUT> class PPHumanSeg : public mortred::mo
 
     StatusCode on_init(const toml::table &params) override;
 
-    // model input tensor size
     cv::Size _m_input_size_host = cv::Size();
 };
 

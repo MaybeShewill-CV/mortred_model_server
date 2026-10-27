@@ -45,7 +45,6 @@ template <typename INPUT, typename OUTPUT> class Dinov2 : public mortred::models
 
     StatusCode on_init(const toml::table &params) override;
 
-    // network input tensor size
     cv::Size _m_input_tensor_size = cv::Size(224, 224);
     // token pooling strategy; "mean" requires an all-token export ([1,T,D])
     std::string _m_default_pooling = "cls";

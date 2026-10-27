@@ -50,7 +50,6 @@ template <typename INPUT, typename OUTPUT> class DBTextDetector : public mortred
     float _m_sside_threshold = 3;
     // top_k keep thresh
     long _m_keep_topk = 250;
-    // input tensor size
     cv::Size _m_input_size_host = cv::Size();
     // model io names
     std::string _m_input_name;

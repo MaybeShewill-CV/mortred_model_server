@@ -127,14 +127,6 @@ bool apply_gateway_limit(const mini_toml::Table& kv, const std::string& ctx,
         !read_int(kv, "max_tracked", &rl->max_tracked, 0, 16777216, ctx, err)) {
         return false;
     }
-    // GCRA stores the emission interval in whole milliseconds, so anything above
-    // 1000/s is capped to 1 ms and silently runs slower than configured. Refuse
-    // the config instead of shipping a limiter that lies about its rate.
-    if (rl->rate_per_sec > 1000) {
-        *err = ctx + " rate_per_sec " + std::to_string(rl->rate_per_sec) +
-               ": millisecond emission intervals cannot represent more than 1000/s";
-        return false;
-    }
     // trusted_proxies is deliberately NOT read_str: the empty string is a
     // valid configuration (trust nobody -> headers never honored), while
     // read_str rejects empty values
