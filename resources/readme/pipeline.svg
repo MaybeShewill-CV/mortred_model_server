@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320" width="1280" height="320" role="img" aria-label="one request pipeline with measured stage times">
+  <defs>
+    <linearGradient id="pbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a0f1e"/><stop offset="100%" stop-color="#121a30"/>
+    </linearGradient>
+    <linearGradient id="fill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.55"/><stop offset="100%" stop-color="#f472b6" stop-opacity="0.55"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="320" fill="url(#pbg)"/>
+  <g font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+    <text x="60" y="52" fill="#e8eeff" font-size="22" font-weight="700">one request, end to end</text>
+    <text x="60" y="78" fill="#8391b8" font-size="14">max_batch_size = 1 · yolov8s · RTX 2070 SUPER · p50 12.89 ms (measured, 6531 samples)</text>
+    <text x="1220" y="78" fill="#ffa8d0" font-size="14" text-anchor="end">decode + pre + h2d = 6.97 ms (54%) before the GPU sees a pixel</text>
+
+    <!-- lanes -->
+    <text x="60" y="116" fill="#5f6d96" font-size="12">HTTP handler thread</text>
+    <text x="284" y="116" fill="#5f6d96" font-size="12">workflow compute thread</text>
+    <text x="1148" y="116" fill="#5f6d96" font-size="12">reply</text>
+
+    <line x1="60" y1="252" x2="1236" y2="252" stroke="#22305a" stroke-width="3"/>
+    <line x1="60" y1="252" x2="60" y2="252" stroke="url(#fill)" stroke-width="3">
+      <animate attributeName="x2" values="60;1236" dur="11s" repeatCount="indefinite"/>
+    </line>
+
+    <g font-size="12" fill="#c3cbe6" text-anchor="middle">
+      <g><rect x="60" y="140" width="96" height="56" rx="10" fill="#111b31" stroke="#2b3a63"/><text x="108" y="174">envelope</text></g>
+      <g><rect x="168" y="140" width="96" height="56" rx="10" fill="#111b31" stroke="#2b3a63"/><text x="216" y="174">admit</text></g>
+      <g><rect x="276" y="140" width="96" height="56" rx="10" fill="#111b31" stroke="#2b3a63"/><text x="324" y="174">go</text></g>
+      <g><rect x="384" y="140" width="96" height="56" rx="10" fill="#111b31" stroke="#2b3a63"/><text x="432" y="174">worker</text></g>
+      <g><rect x="492" y="140" width="96" height="56" rx="10" fill="#1b2f4d" stroke="#22d3ee" stroke-opacity="0.5"/><text x="540" y="174">decode</text></g>
+      <g><rect x="600" y="140" width="96" height="56" rx="10" fill="#1b2f4d" stroke="#22d3ee" stroke-opacity="0.5"/><text x="648" y="174">pre</text></g>
+      <g><rect x="708" y="140" width="96" height="56" rx="10" fill="#1b2f4d" stroke="#22d3ee" stroke-opacity="0.5"/><text x="756" y="174">h2d</text></g>
+      <g><rect x="816" y="140" width="96" height="56" rx="10" fill="#241a3a" stroke="#f472b6" stroke-opacity="0.55"/><text x="864" y="174">exec</text></g>
+      <g><rect x="924" y="140" width="96" height="56" rx="10" fill="#1b2f4d" stroke="#22d3ee" stroke-opacity="0.5"/><text x="972" y="174">d2h</text></g>
+      <g><rect x="1032" y="140" width="96" height="56" rx="10" fill="#1b2f4d" stroke="#22d3ee" stroke-opacity="0.5"/><text x="1080" y="174">post</text></g>
+      <g><rect x="1140" y="140" width="96" height="56" rx="10" fill="#111b31" stroke="#2b3a63"/><text x="1188" y="174">reply</text></g>
+    </g>
+
+    <!-- moving highlight -->
+    <rect x="60" y="140" width="96" height="56" rx="10" fill="none" stroke="#e8eeff" stroke-width="2" opacity="0.9">
+      <animate attributeName="x" values="60;168;276;384;492;600;708;816;924;1032;1140;60"
+               keyTimes="0;0.09;0.18;0.27;0.36;0.45;0.54;0.63;0.72;0.81;0.9;1"
+               calcMode="discrete" dur="11s" repeatCount="indefinite"/>
+    </rect>
+
+    <!-- measured stage costs -->
+    <g font-size="12" fill="#7ce8fa" text-anchor="middle">
+      <text x="540" y="222">4.99 ms</text>
+      <text x="648" y="222">1.24</text>
+      <text x="756" y="222">0.74</text>
+      <text x="864" y="222" fill="#ffa8d0">3.64</text>
+      <text x="972" y="222">0.80</text>
+      <text x="1080" y="222">0.80</text>
+    </g>
+
+    <g font-size="13" fill="#8391b8">
+      <text x="60" y="290">gateway + framework shell ≈ 1.46 ms</text>
+      <text x="420" y="290">exec is 28% of the request — the rest is decode, preprocess and copies</text>
+      <text x="1148" y="290" fill="#e8eeff" font-weight="700">p50 12.89 ms</text>
+    </g>
+  </g>
+</svg>

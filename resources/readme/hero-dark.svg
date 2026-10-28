@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 340" width="1280" height="340" role="img" aria-label="mortred model server">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a0f1e"/>
+      <stop offset="55%" stop-color="#111a33"/>
+      <stop offset="100%" stop-color="#0a0f1e"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0"/>
+      <stop offset="45%" stop-color="#22d3ee" stop-opacity="0.95"/>
+      <stop offset="55%" stop-color="#f472b6" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#f472b6" stop-opacity="0"/>
+      <animate attributeName="x1" values="-0.6;1" dur="5s" repeatCount="indefinite"/>
+      <animate attributeName="x2" values="-0.2;1.4" dur="5s" repeatCount="indefinite"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.1" r="0.8">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="340" fill="url(#bg)"/>
+  <rect width="1280" height="340" fill="url(#glow)"/>
+  <g font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+    <text x="80" y="132" fill="#e8eeff" font-size="64" font-weight="700" letter-spacing="-1.5">mortred model server</text>
+    <text x="80" y="132" fill="url(#sheen)" font-size="64" font-weight="700" letter-spacing="-1.5">mortred model server</text>
+    <text x="80" y="178" fill="#9aa6cc" font-size="24">one model · one process · MNN / ONNX Runtime / TensorRT</text>
+    <g font-size="17" font-weight="600">
+      <g>
+        <rect x="80" y="214" width="128" height="40" rx="20" fill="#10203a" stroke="#22d3ee" stroke-opacity="0.55"/>
+        <text x="144" y="240" fill="#7ce8fa" text-anchor="middle">process-per-model</text>
+      </g>
+      <g>
+        <rect x="222" y="214" width="120" height="40" rx="20" fill="#10203a" stroke="#f472b6" stroke-opacity="0.55"/>
+        <text x="282" y="240" fill="#ffa8d0" text-anchor="middle">3 backends</text>
+      </g>
+      <g>
+        <rect x="356" y="214" width="150" height="40" rx="20" fill="#10203a" stroke="#8b94b8" stroke-opacity="0.5"/>
+        <text x="431" y="240" fill="#c3cbe6" text-anchor="middle">supervisor + gateway</text>
+      </g>
+    </g>
+    <g transform="translate(80,286)">
+      <line x1="0" y1="0" x2="1120" y2="0" stroke="#22305a"/>
+      <circle r="4" cy="0" fill="#22d3ee">
+        <animate attributeName="cx" values="0;1120" dur="6s" repeatCount="indefinite"/>
+      </circle>
+      <circle r="3" cy="0" fill="#f472b6" opacity="0.8">
+        <animate attributeName="cx" values="1120;0" dur="6s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+  </g>
+</svg>

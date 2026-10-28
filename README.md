@@ -1,354 +1,164 @@
-<div id="top" align="center">
+<div align="center">
 
-  <h1 align="center">
-    <img src="./resources/images/icon.png" alt='icon.png' height="180px" width="180px"/>
-  </h1>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="resources/readme/hero-dark.svg">
+  <img src="resources/readme/hero-light.svg" width="100%" alt="mortred model server — one model, one process">
+</picture>
 
-  ![icon](./resources/images/iconv4.png)
+[![CI](https://github.com/MaybeShewill-CV/mortred_model_server/actions/workflows/ci.yml/badge.svg)](https://github.com/MaybeShewill-CV/mortred_model_server/actions/workflows/ci.yml)
+![version](https://img.shields.io/badge/version-1.1.0-22d3ee)
+![models](https://img.shields.io/badge/HTTP%20models-44-7ce8fa)
+![license](https://img.shields.io/badge/license-MIT-f472b6)
+![platform](https://img.shields.io/badge/platform-Linux%20x64-8b94b8)
 
-   Mortred-AI-Web-Server: A Noob Web Server for AI Models
-
-   | [English](README.md) | [中文](README.zh-cn.md) |
-
-   [![CI](https://github.com/MaybeShewill-CV/mortred_model_server/actions/workflows/ci.yml/badge.svg)](https://github.com/MaybeShewill-CV/mortred_model_server/actions/workflows/ci.yml)
+[English](README.md) · [中文](README.zh-cn.md) · [Deployment](docs/deployment.md) · [API contract](docs/api-contract.md)
 
 </div>
 
-   Mortred is a Linux process-per-model CV inference appliance: one catalog id is one OS process. Clients talk to **mortred-gateway** (`:8080`); the supervisor (`:8787`) owns the process tree. Inference backends are [MNN](https://github.com/alibaba/MNN), ONNX Runtime, and TensorRT, served over [workflow](https://github.com/sogou/workflow). Weights are trained elsewhere (`tensorflow` / `pytorch`).
+**One catalog id is one OS process.** A model cannot take its neighbour down, its VRAM is
+accounted for before it starts, and the same request envelope works across MNN, ONNX Runtime and
+TensorRT. A supervisor owns the process tree; a gateway is the only public listener.
 
-Do not hesitate to let me know if you find bugs here cause I'm a c-with-struct noob :upside_down_face:
+<div align="center">
 
-The three major components are illustrated on the architecture picture below.
+| **44** HTTP model ids | **3** inference backends | **12.89 ms** p50, yolov8s end-to-end | **96/96** gate, no skips |
+|:---:|:---:|:---:|:---:|
 
-<p align="center">
-  <img src='./resources/images/simple_architecture.png' alt='simple_architecture' height="400px" width="500px">
-</p>
+</div>
 
-A quick overview and examples for both serving and model benchmarking are provided below. Detailed documentation and examples will be provided in the docs folder.
+## How a request moves
 
-You're welcomed to ask questions and help me to make it better!
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="resources/readme/pipeline.svg">
+  <img src="resources/readme/pipeline.svg" width="100%" alt="request pipeline with measured stage times">
+</picture>
 
-Weights: `python3 scripts/fetch_weights.py` from
-[Hugging Face](https://huggingface.co/MaybeShewill-CV/mortred_model_server).
-HF is the ONNX interchange store (some `.mnn` copies remain during cutover).
-Product configs stay `mnn` / `tensorrt` except already-ONNX ids and LIBFACE
-(YuNet); build engines on this GPU with `mortredctl prepare`. Per-id contract:
-`conf/onnx_sources.json`. Dual-file export: [docs/onnx-interchange.md](./docs/onnx-interchange.md).
+Every stage is instrumented (`stage_timing`); the numbers above are the p50 of a 6531-sample run,
+not an estimate. The point is not that inference is fast — it is that **72% of an end-to-end
+request is decode, preprocess and copies**, which is why the optimisation work targeted those
+stages first. Iteration log: [docs/perf/latency_iterations.md](docs/perf/latency_iterations.md).
 
-# `Contents of this document`
+## Architecture
 
-* [Quick Start](#quick-start)
-* [Benchmark](#benchmark)
-* [Tutorials](#tutorials)
-* [How To](#how-to)
-* [Web Server Configuration](#web-server-configuration)
-* [HTTP API Contract](./docs/api-contract.md)
-* [Long-task `/jobs` customer test](./docs/async-jobs-customer-test.md)
-* [Model Zoo](#model-zoo)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="resources/readme/architecture.svg">
+  <img src="resources/readme/architecture.svg" width="100%" alt="client, gateway, supervisor and one process per model">
+</picture>
 
-# `Quick Start`
+- **mortred-gateway** (`:8080`) — the only public listener: routing, bearer auth, GCRA rate limiting, `/metrics`.
+- **mortred-supervisor** (`:8787`) — management API, restart policy, autostart, VRAM occupancy admission.
+- **model processes** — one per catalog id, loopback only, holding exactly the workers you configured.
 
-**First-hour path:** pick an install entry below, then run `mortredctl next`
-repeatedly (tokens → loopback listen → start → GPU pack calibrate if needed →
-`doctor --strict`). Full walkthrough: [docs/deployment.md](docs/deployment.md).
-**Out of scope:** [unsupported boundaries](docs/unsupported-boundaries.md).
+Two deployment profiles, one switch (build, dependencies, catalog and weights all follow it):
 
-> Linux is the only supported platform. Two deployment profiles exist and one
-> switch drives everything (build, dependencies, model catalog, weight subset):
->
-> | | `gpu` (default) | `cpu` |
-> |---|---|---|
-> | backends | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU |
-> | hardware | NVIDIA GPU + CUDA 12 / TensorRT 10 | any x64 machine |
-> | models | full zoo | curated set (mobilenetv2, resnet) |
->
-> Three entries, one core (`mortredctl`): pick whichever fits; they all end at
-> the same `mortredctl doctor` acceptance gate.
+| | `gpu` (default) | `cpu` |
+|---|---|---|
+| backends | MNN-CUDA / ORT-CUDA / TensorRT | MNN-CPU / ORT-CPU |
+| hardware | NVIDIA GPU + CUDA 12 / TensorRT 10 | any x64 machine |
 
-### Entry 1: one-line bootstrap (fastest)
+## 60-second demo
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/MaybeShewill-CV/mortred_model_server/main/scripts/bootstrap.sh | bash
+docker compose --profile gpu up -d          # or --profile cpu
+mortredctl next                             # tokens → loopback → start → verify
+mortredctl doctor --strict                  # fail-closed on anything that would 401 later
 ```
 
-Detects your hardware (NVIDIA GPU → `gpu`, otherwise `cpu`). With Docker it
-prints the compose track. Without Docker it resolves the latest GitHub
-**release tag** and downloads
-`mortred_model_server-<version>-<profile>-linux-x64.tar.gz` (there is no
-`...-latest-...` tarball filename). If no Release exists yet, it warns and
-prints the source-build path.
-
-### Entry 2: docker compose
+One inference through the gateway:
 
 ```bash
-git clone https://github.com/MaybeShewill-CV/mortred_model_server.git
-cd mortred_model_server
-python3 scripts/fetch_weights.py --profile cpu        # or: gpu
-./scripts/mortredctl_init-trust.sh                    # three distinct tokens
 set -a && . conf/local/trust.env && set +a
-docker compose --profile cpu up -d                    # or: --profile gpu
-curl -fs http://localhost:8787/api/v1/health
+curl -s localhost:8080/v1/models/yolov8s/infer \
+  -H "Authorization: Bearer $MORTRED_GATEWAY_AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"images\":[\"$(base64 -w0 demo_data/model_test_input/mot/2.jpg)\"]}" | jq -c
 ```
 
-### Entry 3: release tarball + systemd (bare metal)
-
-Download `mortred_model_server-<version>-<profile>-linux-x64.tar.gz` from
-[Releases](https://github.com/MaybeShewill-CV/mortred_model_server/releases),
-verify its `.sha256`, then:
-
-```bash
-mkdir unpack && tar -xzf mortred_model_server-*-linux-x64.tar.gz -C unpack
-cd unpack                                          # archive is flat: install.sh, opt/, deploy/
-sudo ./install.sh                                  # runtime deps + /opt/mortred + systemd
-# install.sh writes a comment-only placeholder; --force fills real secrets
-sudo /opt/mortred/bin/mortredctl.out init-trust --force --out /etc/mortred/supervisor.env
-cd /opt/mortred && python3 scripts/fetch_weights.py --profile cpu
-sudo systemctl start mortred-supervisor
+```json
+{"status":0,"status_str":"OK","task_id":"...","model":{"name":"yolov8s","version":""},
+ "results":[{"status":0,"data":{"detections":[{"bbox":[x1,y1,x2,y2],"score":0.91,"class_id":0,"category":"person"}]}}],
+ "server_time_ms":12.9,"partial":false}
 ```
 
-### First-hour core: mortredctl
+The UI at `http://localhost:8787` renders the same process tree the supervisor owns. Other install
+entries (bootstrap script, release tarball + systemd) are in [deployment.md](docs/deployment.md).
+
+## Throughput
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="resources/readme/benchmark.svg">
+  <img src="resources/readme/benchmark.svg" width="100%" alt="HTTP requests per second per model">
+</picture>
+
+All 39 product models, CPU and GPU, with p99: [docs/benchmark-set-a.md](docs/benchmark-set-a.md).
+How many models fit on one card: [docs/capacity-single-gpu.md](docs/capacity-single-gpu.md).
+
+## Model zoo
+
+| Family | ids | Notes |
+|---|---:|---|
+| Detection | 10 | yolov5 / 6 / 7 / 8, nanodet |
+| Face | 2 | libface (YuNet), centerface |
+| Segmentation | 6 | bisenetv2, pphuman ×3, hrnet, msocrnet |
+| Matting | 5 | modnet, ppmatting ×4 |
+| Enhancement | 3 | enlightengan, attentive-gan, real-esrgan |
+| Classification | 3 | mobilenetv2, resnet, densenet |
+| Feature / embedding / depth | 8 | superpoint, dinov2 ×3, depth-anything ×3, metric3d ×2 |
+| SAM / diffusion | 5 | SAM_AMG, DDPM, DDIM, CLS_COND_DDIM, LDM |
+| OCR | 1 | dbnet (detection only) |
+| Bench-only | 4 | CLIP, LightGlue, SAM predictor, FastSAM |
+
+`mortred-model-server.out --list` is the authoritative list (ids are matched exactly; the catalog
+uses lowercase for the CV families and uppercase for the diffusion rows). Weights are fetched, not
+committed: `python3 scripts/fetch_weights.py` from
+[Hugging Face](https://huggingface.co/MaybeShewill-CV/mortred_model_server).
+
+## Operations
 
 ```bash
-mortredctl next                       # ONE next OOB command (see docs/deployment.md)
-mortredctl init [--profile cpu|gpu]   # detect hw, fetch weight subset, verify
-mortredctl init-trust                 # write conf/local/trust.env (gitignored)
-mortredctl init-edge --mode lan       # optional Nginx TLS on the host network
-mortredctl prepare [--pack FILE]      # GPU: pack TensorRT engines on this card
-mortredctl calibrate [--pack FILE]    # worker_nums report; --write-pack is opt-in
-mortredctl doctor                     # live acceptance + non-fatal security warnings
-mortredctl doctor --strict            # engines, occupancy stamps, and security warnings fail the gate
-mortredctl status | catalog           # runtime introspection
+mortredctl status                 # process tree, states, restarts, pids
+mortredctl doctor --strict        # config + tokens + engine + occupancy gates
+curl -s localhost:8080/metrics -H "Authorization: Bearer $MORTRED_METRICS_TOKEN"
+mortredctl upgrade                # release tarball → conf backup → restart → doctor
 ```
 
-After `cmake --build --preset full`, the control binary is
-`_bin/mortredctl.out` (not `mortredctl` on `PATH`). Source-tree start:
+Supervisor and model logs land under `logs/`; the crash handler is always on, and
+`MORTRED_CORE_DUMPS=1` adds core dumps on top.
+
+## Build from source
 
 ```bash
-export PATH="$PWD/_bin:$PATH"
-export LD_LIBRARY_PATH="$PWD/_lib:$PWD/3rd_party/libs:${LD_LIBRARY_PATH:-}"
-mortredctl next
-```
-
-WSL2 Ubuntu and native Ubuntu use these same commands. On WSL2, `libcuda`
-comes from `/usr/lib/wsl/lib` via `LD_LIBRARY_PATH` when the loader does not
-find it on its own. Do not use a second CUDA code path.
-
-### Building from source
-
-Cpu source build: `install_deps.sh --cpu --all && --cpu --check`, then
-`cmake --preset full-cpu` (details: [docs/deployment.md](docs/deployment.md) §7).
-
-```bash
-# dependencies (version matrix + sha256 pinned + idempotent stamps)
-./scripts/install_deps.sh --all              # gpu line (CUDA 12 / TensorRT 10.3)
-sudo ./scripts/install_deps.sh --nvidia     # needs root; non-root --all exits 3 until this line installs CUDA 12 / TensorRT 10.x / cuDNN
-./scripts/install_deps.sh --cpu --all        # cpu line (no NVIDIA/TRT at all)
-./scripts/install_deps.sh --check            # gpu: verify 3rd_party before cmake
-./scripts/install_deps.sh --cpu --check      # cpu: same
-
-# configure + build (presets carry the profile). Configure is fail-closed on
-# missing workflow/crypto, wrong ORT headers (ORT_API_VERSION), leftover ORT 1.18 /
-# TRT 8 — stderr prints the matching install_deps fix line.
-cmake --preset full && cmake --build --preset full            # gpu
-cmake --preset full-cpu && cmake --build --preset full-cpu    # cpu
-
-# verify
+sudo ./scripts/install_deps.sh --all         # CUDA 12 / TensorRT 10; --nvidia for driver bits
+cmake --preset full && cmake --build --preset full
 ./scripts/verify_deployment.sh --basic
 ```
 
-Unit tests only (no engines needed; apt system packages plus the vendored
-header-only libs — note `libssl-dev` is required for the API-key hashing path,
-and `3rd_party/` is generated by `install_deps.sh`, never tracked in git):
+`tests-only` / `full-cpu` presets cover machines without a GPU; the default target is `check`
+(unit + contract; e2e and stress run on their own lanes — the authoritative list of what `check`
+does **not** run is [test/CHECK_SSOT.md](test/CHECK_SSOT.md)). The build is fail-closed on missing
+workflow/crypto, wrong ORT headers or leftover TRT 8, and the error names the fix.
 
-```bash
-./scripts/install_deps.sh --headers
-cmake --preset tests-only && cmake --build --preset tests-only
-# buildPreset default target is `check` (EXCLUDE_FROM_ALL tests + ctest)
-```
+## Docs
 
-Default `check` excludes ctest labels `valgrind` and `heavy-golden`.
-The excluded names are `model_golden_test`, `Yolov8TrtDetection`, and
-`yolov8_detection`, plus the curated `*-memory-check` tests. Reasons and
-alternate gates are in `test/CHECK_SSOT.md`. A green `check` does not run
-those names. `MORTRED_CHECK_HEAVY=1` includes `heavy-golden` and still
-excludes `valgrind`. Numerical proof stays on the hosted / GPU path
-(`MORTRED_CI_REQUIRE_WEIGHTS=1`, `scripts/ci_assert_gtest_xml.py`); see
-`docs/ci-golden-regression.md`.
-
-> The complete operations manual - architecture diagrams, per-track walkthroughs,
-> security checklist, upgrades, troubleshooting - lives in
-> [docs/deployment.md](docs/deployment.md) / [中文版](docs/deployment.zh-cn.md).
-
-
-# `Benchmark`
-
-The benchmark test environment is as follows：
-
-**OS:** Ubuntu 20.04.5 LTS / 5.15.0-87-generic
-
-**MEMORY:** 32G DIMM DDR4 Synchronous 2666 MHz
-
-**CPU:** Intel(R) Core(TM) i5-10400 CPU @ 2.90GHz
-
-**GCC:** gcc (Ubuntu 9.4.0-1ubuntu1~20.04.2) 9.4.0
-
-**GPU:** GeForce RTX 3080
-
-**CUDA:** CUDA Version: 11.5
-
-**GPU Driver:** Driver Version: 495.29.05
-
-### Model Inference Benchmark
-
-All models loop several times to avoid the influence of gpu's warmup and only model's inference time has been counted.
-
-`Benchmark Code Snappit`
-![benchmakr_code_snappit](./resources/images/benchmark_code_snappit.png)
-
-* [About Model Configuration](./docs/about_model_configuration.md)
-
-# `Tutorials`
-
-* [Model Server Tutorials (classification / detection / segmentation / enhancement / feature point)](./docs/tutorials_of_model_servers.md)
-
-# `How To`
-
-* [Model Developer Guide (add model / contract / golden / debug)](./docs/model-developer-guide.md) :fire::fire:
-* [How To Add New Server](./docs/how_to_add_new_server.md) :fire::fire:
-* [Inference CI (hosted MNN smoke vs maintainer GPU golden)](./docs/ci-golden-regression.md)
-* [ONNX interchange export (dual files, remaining gaps)](./docs/onnx-interchange.md)
-
-# `Model Zoo`
-
-HTTP-served (`mortred-model-server.out --list` / catalog id):
-
-HTTP catalog ids are lowercase. Old names such as `YOLOV8` and `PPHUMAN_SEG` are gone; use `/v1/models/yolov8s/infer`. One weight file is one id. `msocrnet` is HTTP. `SAM_AMG` and the diffusion ids stay as they are.
-
-| Task | Catalog id |
+| Start here | |
 |---|---|
-| Classification | `mobilenetv2` `resnet` `densenet` |
-| Detection | `yolov5l` `yolov6s` `yolov7` `yolov7x` `yolov8n` `yolov8s` `yolov8l` `yolov8x` `nanodet_1x5` `nanodet_416` |
-| Face | `libface` `centerface` |
-| OCR (text detection only; no recognition / recognizer) | `dbnet` |
-| Segmentation | `bisenetv2` `pphuman_mobile` `pphuman_lite` `pphuman_server` `hrnet` `msocrnet` |
-| Matting | `modnet` `ppmatting_512` `ppmatting_1024` `ppmatting_resnet34` `ppmatting_v2` |
-| Enhancement | `enlightengan` `attentive_gan` `realesrgan` |
-| Feature points | `superpoint` |
-| Embedding | `dinov2_vits14` `dinov2_vitb14` `dinov2_vitl14` |
-| Depth | `depth_vits14` `depth_vitb14` `depth_vitl14` `metric3d_512` `metric3d_1088` |
-| SAM | `SAM_AMG` |
-| Diffusion | `DDPM` `DDIM` `CLS_COND_DDIM` `LDM` |
+| [deployment.md](docs/deployment.md) | three install entries, systemd, docker, TRT engine regeneration |
+| [api-contract.md](docs/api-contract.md) | request envelope, status codes, `/jobs`, `/metrics` |
+| [model-developer-guide.md](docs/model-developer-guide.md) | add a model, contract tests, golden gate |
+| [how_to_add_new_server.md](docs/how_to_add_new_server.md) | add a whole family |
+| [tutorials_of_model_servers.md](docs/tutorials_of_model_servers.md) | per-family request/response walkthroughs |
+| [about_model_server_configuration.md](docs/about_model_server_configuration.md) | every server knob explained |
+| [unsupported-boundaries.md](docs/unsupported-boundaries.md) | what this project deliberately is not |
+| [ci-golden-regression.md](docs/ci-golden-regression.md) | which gate runs where, and why |
 
-Bench-only (no HTTP catalog): `OPENAI_CLIP`, `LIGHTGLUE`, `SAM_PREDICTOR`, `FAST_SAM`.
+## Contributing
 
-Scaffold / not served: `RTDETR`. There is no MOT.
+Pull requests run the gates you can run locally: `cmake --build --preset tests-only-werror` plus
+`python3 scripts/check_consistency.py`; GPU-touching changes also need the golden smoke on a CUDA
+machine. Per-iteration measurements and design notes are expected to land in `docs/`.
 
-Product ONNX fetch, then a machine pack, then prepare and calibrate:
+## License
 
-```bash
-python3 scripts/fetch_weights.py --kind onnx
-cp conf/packs/yolov8.toml /tmp/pack.toml
-mortredctl prepare --pack /tmp/pack.toml
-mortredctl calibrate --pack /tmp/pack.toml --write-pack
-python3 scripts/server/http_infer_rps.py --model yolov8s -c 8 -d 30s --raw
-```
+MIT — see [LICENSE](LICENSE). Standing on [MNN](https://github.com/alibaba/MNN), [ONNX Runtime](https://github.com/microsoft/onnxruntime), [TensorRT](https://developer.nvidia.com/tensorrt) and [workflow](https://github.com/sogou/workflow).
 
-HTTP RPS evidence for the nine coverage-set ids is
-[docs/perf/coverage_set_http_rps.md](docs/perf/coverage_set_http_rps.md). The
-full 39-id product catalog (`conf/product_static_bs1.json`) is driven by
-`python3 scripts/coverage_http_report.py --catalog product_static` and recorded
-in [docs/perf/product_static_http_rps.md](docs/perf/product_static_http_rps.md).
-That catalog file is a skeleton until a GPU host fills it; `--check` stays
-non-zero while any id is blocked. See [docs/deployment.md](docs/deployment.md) §10.8.
-One id is prepared and loaded at a time (`mortredctl prepare --id`, or
-`conf/packs/<id>.toml` when that solo pack exists).
-
-**Unsupported boundaries** (Linux-only, RTDETR scaffold, TensorRT 10.x only,
-engines must rebuild on this GPU): [docs/unsupported-boundaries.md](docs/unsupported-boundaries.md) / [中文摘要](docs/unsupported-boundaries.zh-cn.md).
-
-# `Web Server Configuration`
-
-* [Description About Model Server](./docs/about_model_server_configuration.md)
-* [HTTP API Contract (topology, auth, status mapping, overload behaviour)](./docs/api-contract.md)
-
-# `Deployment`
-
-## One-command dependency install
-
-Build and install all third-party dependencies (MNN / WORKFLOW / ONNXRUNTIME /
-TensorRT / CUDA / fmt / header-only libs) into `3rd_party/{include,libs}` with
-a single script — no manual compilation or copying:
-
-```bash
-./scripts/install_deps.sh --all     # CUDA 12 / TensorRT 10.3 / MNN 3.6.1 / ORT 1.29 cuda12
-./scripts/install_deps.sh --check   # verify integrity and print versions
-```
-
-## Docker (fully automated build)
-
-```bash
-docker build -t mortred_model_server:gpu .
-docker run --gpus all -p 127.0.0.1:8080:8080 -p 127.0.0.1:8787:8787 \
-  -v $PWD/weights:/opt/mortred/weights \
-  -e MORTRED_GATEWAY_AUTH_TOKEN=your-inference-token \
-  -e MORTRED_API_TOKEN=your-management-token \
-  -e MORTRED_METRICS_TOKEN=your-scrape-token \
-  mortred_model_server:gpu
-# or: docker compose --profile gpu up -d   (CPU: --profile cpu; see docker-compose.yml)
-```
-
-The image builds all deps + the full project, runs the unit/e2e tests, and
-ships the control plane. In-container topology: `mortred-supervisor`
-(management :8787, embedded web UI + REST API) supervises `mortred-gateway`
-(data plane :8080, the single inference entry) and all model servers; model
-processes bind loopback only and are no longer exposed port by port. The
-compose and `docker run` examples bind 8080/8787 to `127.0.0.1` on the host.
-External exposure must terminate TLS at Nginx on the host network
-(`mortredctl init-edge`, [deploy/nginx](deploy/nginx)); do not publish
-those ports on `0.0.0.0` without it (Bearer tokens would travel in the
-clear). Gateway `GET /metrics` always requires `MORTRED_METRICS_TOKEN`,
-including on loopback. Fail-closed also refuses a listener with no
-inference/management auth, a missing scrape token, a scrape token that
-matches those, and a wildcard bind unless `MORTRED_EXPOSE=docker` (containers)
-or `unsafe` (plaintext on metal). `mortredctl doctor` warns about non-loopback
-listeners, missing scrape token, and weak/identical tokens; `doctor --strict`
-fails on those warnings. TLS stays at Nginx.
-
-## TensorRT engine regeneration (hardware-adapted)
-
-Engines are bound to this GPU / TensorRT. Day-to-day, convert **the current
-pack** ([deployment guide §10](docs/deployment.md)):
-
-```bash
-mortredctl prepare --pack conf/packs/yolov8.toml
-```
-
-Zoo-wide convert remains `scripts/convert_trt_engines.sh` (`trtexec` via
-`sudo ./scripts/install_deps.sh --nvidia`). `MORTRED_AUTO_BUILD_ENGINES=true`
-converts every engine and stays off by default.
-
-# `TODO`
-
-* [ ] Add more model into model zoo
-
-# `Repo-Status`
-
-![repo-status](https://repobeats.axiom.co/api/embed/b8c3f964c5afc4776f62a12bcd1e76c57ac554ca.svg "Repobeats analytics image")
-
-# `Star History`
-
-[![Star History Chart](https://api.star-history.com/svg?repos=MaybeShewill-CV/mortred_model_server&type=Date)](https://star-history.com/#MaybeShewill-CV/mortred_model_server&Date)
-
-## Visitor Count
-
-![Visitor Count](https://profile-counter.glitch.me/15725187_mortred_model_server/count.svg)
-
-# `Acknowledgement`
-
-mortred_model_server refers to the following projects:
-
-* <https://github.com/sogou/workflow>
-* <https://github.com/alibaba/MNN>
-* <https://github.com/PaddlePaddle/PaddleSeg>
-* <https://github.com/Tencent/rapidjson>
-* <https://github.com/ToruNiina/toml11>
+<div align="center"><sub>Built for the people who have to keep it running at 3 a.m.</sub></div>
