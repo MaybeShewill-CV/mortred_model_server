@@ -33,10 +33,11 @@ TensorRT. A supervisor owns the process tree; a gateway is the only public liste
   <img src="resources/readme/pipeline.svg" width="100%" alt="request pipeline with measured stage times">
 </picture>
 
-Every stage is instrumented (`stage_timing`); the numbers above are the p50 of a 6531-sample run,
-not an estimate. The point is not that inference is fast — it is that **72% of an end-to-end
-request is decode, preprocess and copies**, which is why the optimisation work targeted those
-stages first. Iteration log: [docs/perf/latency_iterations.md](docs/perf/latency_iterations.md).
+Every stage is instrumented (`stage_timing`); the numbers are the p50 of a 10672-sample run, not
+an estimate. **The GPU kernel is 3.04 ms of 12.89 — two thirds of a request is decode, preprocess,
+copies and the framework shell.** That is why the optimisation work targeted those stages first,
+and why each one has a number attached. Iteration log:
+[docs/perf/latency_iterations.md](docs/perf/latency_iterations.md).
 
 ## Architecture
 
@@ -97,18 +98,13 @@ How many models fit on one card: [docs/capacity-single-gpu.md](docs/capacity-sin
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="resources/readme/model-zoo.svg">
-  <img src="resources/readme/model-zoo.svg" width="100%" alt="48 catalog ids by family, 44 served over HTTP">
+  <img src="resources/readme/model-zoo.svg" width="100%" alt="48 catalog ids grouped by task: detection, face, segmentation, matting, enhancement, depth, classification, embedding, SAM, feature points, diffusion, OCR">
 </picture>
 
-| Highlights | |
-|---|---|
-| Detection | yolov5l · yolov6s · yolov7 / 7x · yolov8 n/s/l/x · nanodet ×2 |
-| Face | libface (YuNet) · centerface |
-| Dense prediction | bisenetv2 · pphuman ×3 · hrnet · msocrnet · modnet · ppmatting ×4 |
-| Enhancement | enlightengan · attentive-gan · real-esrgan |
-| Feature / depth | superpoint · dinov2 ×3 · depth-anything ×3 · metric3d ×2 |
-| Generative | SAM_AMG · DDPM · DDIM · CLS_COND_DDIM · LDM |
-| Bench-only | CLIP · LightGlue · SAM predictor · FastSAM (no HTTP route) |
+Twelve task families, one request envelope. Detection and segmentation return per-pixel or
+per-object geometry; matting and depth return dense maps; enhancement returns an image; embedding
+and feature points return vectors; diffusion returns generated frames. Bench-only ids (CLIP,
+LightGlue, SAM predictor, FastSAM) ship weights and drivers but no HTTP route.
 
 `mortred-model-server.out --list` is the authoritative list (ids match exactly; lowercase for the
 CV families, uppercase for the diffusion rows). Weights are fetched, not committed:

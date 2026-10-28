@@ -1,103 +1,73 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 440" width="1280" height="440" role="img" aria-label="architecture: client, gateway, supervisor, model processes">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 430" width="1280" height="430" role="img">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0a0f1e"/><stop offset="100%" stop-color="#121a30"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#0b0d10"/><stop offset="100%" stop-color="#15191f"/>
     </linearGradient>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#3d4a72"/>
-    </marker>
-    <marker id="arrowBack" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#5b3d5f"/>
-    </marker>
-    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#1b2742"/></pattern>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8ad7ff" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#8ad7ff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#8ad7ff" stop-opacity="0"/>
+      <animate attributeName="x1" values="-0.4;1.1" dur="7s" repeatCount="indefinite"/>
+      <animate attributeName="x2" values="0;1.5" dur="7s" repeatCount="indefinite"/>
+    </linearGradient>
   </defs>
-  <rect width="1280" height="440" fill="url(#bg)"/>
-  <rect width="100%" height="100%" fill="url(#dots)" opacity="0.35"/>
+  <rect width="1280" height="430" fill="url(#bg)"/>
+  <rect x="56" y="150" width="210" height="150" rx="16" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
+  <rect x="56" y="150" width="210" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="11" fill="#98a2b3" letter-spacing="2">
+    <text x="80" y="180">01</text></g>
   <g font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
-    <!-- client -->
-    <rect x="48" y="178" width="150" height="84" rx="14" fill="#101a30" stroke="#2b3a63"/>
-    <text x="123" y="212" fill="#e8eeff" font-size="18" font-weight="600" text-anchor="middle">client</text>
-    <text x="123" y="238" fill="#8391b8" font-size="14" text-anchor="middle">HTTP / JSON</text>
-
-    <!-- gateway -->
-    <rect x="270" y="178" width="176" height="84" rx="14" fill="#10203a" stroke="#22d3ee" stroke-opacity="0.7"/>
-    <text x="358" y="208" fill="#7ce8fa" font-size="18" font-weight="700" text-anchor="middle">mortred-gateway</text>
-    <text x="358" y="232" fill="#9fb4d8" font-size="14" text-anchor="middle">:8080 · auth · GCRA</text>
-    <text x="358" y="250" fill="#9fb4d8" font-size="14" text-anchor="middle">rate limit · /metrics</text>
-
-    <!-- supervisor frame -->
-    <rect x="520" y="64" width="712" height="336" rx="18" fill="#0d1526" stroke="#f472b6" stroke-opacity="0.45" stroke-dasharray="7 6"/>
-    <text x="548" y="98" fill="#ffa8d0" font-size="17" font-weight="700">mortred-supervisor · :8787</text>
-    <text x="548" y="120" fill="#8391b8" font-size="13">owns the process tree · restart policy · autostart · occupancy</text>
-
-    <!-- model processes -->
-    <g>
-      <rect x="548" y="142" width="196" height="232" rx="12" fill="#111b31" stroke="#2b3a63"/>
-      <text x="646" y="170" fill="#e8eeff" font-size="15" font-weight="600" text-anchor="middle">yolov8s</text>
-      <text x="646" y="190" fill="#8391b8" font-size="12" text-anchor="middle">process #1 · TensorRT</text>
-      <g font-size="11" fill="#b9c4e2">
-        <rect x="566" y="206" width="160" height="26" rx="6" fill="#16233d"/><text x="646" y="223" text-anchor="middle">decode  JPEG → pixels</text>
-        <rect x="566" y="240" width="160" height="26" rx="6" fill="#16233d"/><text x="646" y="257" text-anchor="middle">pre     resize · norm</text>
-        <rect x="566" y="274" width="160" height="26" rx="6" fill="#1b2f4d" stroke="#22d3ee" stroke-opacity="0.5"/><text x="646" y="291" text-anchor="middle">exec    GPU kernel</text>
-        <rect x="566" y="308" width="160" height="26" rx="6" fill="#16233d"/><text x="646" y="325" text-anchor="middle">post    NMS · decode</text>
-        <rect x="566" y="342" width="160" height="22" rx="6" fill="#0f1a2e"/><text x="646" y="357" text-anchor="middle">/healthz /ready /metrics</text>
-      </g>
-    </g>
-    <g>
-      <rect x="764" y="142" width="196" height="232" rx="12" fill="#111b31" stroke="#2b3a63"/>
-      <text x="862" y="170" fill="#e8eeff" font-size="15" font-weight="600" text-anchor="middle">mobilenetv2</text>
-      <text x="862" y="190" fill="#8391b8" font-size="12" text-anchor="middle">process #2 · MNN</text>
-      <g font-size="11" fill="#b9c4e2">
-        <rect x="782" y="206" width="160" height="26" rx="6" fill="#16233d"/><text x="862" y="223" text-anchor="middle">decode</text>
-        <rect x="782" y="240" width="160" height="26" rx="6" fill="#16233d"/><text x="862" y="257" text-anchor="middle">pre</text>
-        <rect x="782" y="274" width="160" height="26" rx="6" fill="#1b2f4d" stroke="#22d3ee" stroke-opacity="0.5"/><text x="862" y="291" text-anchor="middle">exec</text>
-        <rect x="782" y="308" width="160" height="26" rx="6" fill="#16233d"/><text x="862" y="325" text-anchor="middle">post</text>
-        <rect x="782" y="342" width="160" height="22" rx="6" fill="#0f1a2e"/><text x="862" y="357" text-anchor="middle">/healthz /ready /metrics</text>
-      </g>
-    </g>
-    <g>
-      <rect x="980" y="142" width="234" height="232" rx="12" fill="#111b31" stroke="#2b3a63"/>
-      <text x="1097" y="170" fill="#e8eeff" font-size="15" font-weight="600" text-anchor="middle">realesrgan</text>
-      <text x="1097" y="190" fill="#8391b8" font-size="12" text-anchor="middle">process #3 · ONNX Runtime</text>
-      <g font-size="11" fill="#b9c4e2">
-        <rect x="998" y="206" width="198" height="26" rx="6" fill="#16233d"/><text x="1097" y="223" text-anchor="middle">decode</text>
-        <rect x="998" y="240" width="198" height="26" rx="6" fill="#16233d"/><text x="1097" y="257" text-anchor="middle">pre</text>
-        <rect x="998" y="274" width="198" height="26" rx="6" fill="#1b2f4d" stroke="#22d3ee" stroke-opacity="0.5"/><text x="1097" y="291" text-anchor="middle">exec</text>
-        <rect x="998" y="308" width="198" height="26" rx="6" fill="#16233d"/><text x="1097" y="325" text-anchor="middle">post</text>
-        <rect x="998" y="342" width="198" height="22" rx="6" fill="#0f1a2e"/><text x="1097" y="357" text-anchor="middle">/healthz /ready /metrics</text>
-      </g>
-    </g>
-
-    <!-- links -->
-    <path id="c2g" d="M198,220 L266,220" stroke="#3d4a72" stroke-width="2" marker-end="url(#arrow)"/>
-    <path id="g2m1" d="M446,204 C486,204 512,200 544,200" stroke="#3d4a72" stroke-width="2" marker-end="url(#arrow)"/>
-    <path id="g2m2" d="M446,220 C700,220 700,240 760,240" stroke="#3d4a72" stroke-width="2" marker-end="url(#arrow)" opacity="0.75"/>
-    <path id="g2m3" d="M446,236 C760,236 900,268 976,268" stroke="#3d4a72" stroke-width="2" marker-end="url(#arrow)" opacity="0.55"/>
-    <path id="m2g" d="M976,330 C760,330 700,320 450,320" stroke="#5b3d5f" stroke-width="2" stroke-dasharray="6 6" marker-end="url(#arrowBack)"/>
-    <path id="g2c" d="M266,262 L202,262" stroke="#5b3d5f" stroke-width="2" stroke-dasharray="6 6" marker-end="url(#arrowBack)"/>
-    <text x="232" y="206" fill="#5f6d96" font-size="12" text-anchor="middle">req</text>
-    <text x="232" y="286" fill="#8a5f86" font-size="12" text-anchor="middle">resp</text>
-
-    <!-- travelling packets -->
-    <circle r="5" fill="#22d3ee">
-      <animateMotion dur="3.2s" repeatCount="indefinite" keyPoints="0;0.28;1" keyTimes="0;0.3;1" calcMode="linear">
-        <mpath href="#c2g"/>
-      </animateMotion>
-    </circle>
-    <circle r="5" fill="#22d3ee" opacity="0.9">
-      <animateMotion dur="3.2s" begin="0.9s" repeatCount="indefinite">
-        <mpath href="#g2m1"/>
-      </animateMotion>
-    </circle>
-    <circle r="4" fill="#f472b6" opacity="0.9">
-      <animateMotion dur="3.4s" begin="1.6s" repeatCount="indefinite">
-        <mpath href="#m2g"/>
-      </animateMotion>
-    </circle>
-    <circle r="4" fill="#f472b6" opacity="0.8">
-      <animateMotion dur="3.4s" begin="2.3s" repeatCount="indefinite">
-        <mpath href="#g2c"/>
-      </animateMotion>
-    </circle>
+    <text x="80" y="214" fill="#f4f7fb" font-size="20" font-weight="600">client</text>
+    <text x="80" y="242" fill="#98a2b3" font-size="13" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">HTTP/1.1</text>
+    <text x="80" y="262" fill="#98a2b3" font-size="13" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">JSON envelope</text>
+  </g>
+  <rect x="330" y="150" width="250" height="150" rx="16" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
+  <rect x="330" y="150" width="250" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="11" fill="#98a2b3" letter-spacing="2">
+    <text x="354" y="180">02</text></g>
+  <g font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+    <text x="354" y="214" fill="#8ad7ff" font-size="20" font-weight="600">mortred-gateway</text>
+    <text x="354" y="242" fill="#98a2b3" font-size="13" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">:8080</text>
+    <text x="354" y="262" fill="#98a2b3" font-size="13" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">auth · GCRA · /metrics</text>
+  </g>
+  <rect x="650" y="88" width="574" height="292" rx="16" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
+  <rect x="650" y="88" width="574" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="11" fill="#98a2b3" letter-spacing="2">
+    <text x="674" y="118">03</text></g>
+  <g font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+    <text x="674" y="152" fill="#f4f7fb" font-size="20" font-weight="600">mortred-supervisor</text>
+    <text x="674" y="180" fill="#98a2b3" font-size="13" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">:8787 · restart policy · occupancy</text>
+  </g>
+  <rect x="678" y="172" width="518" height="52" rx="10" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
+  <rect x="678" y="172" width="518" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="13">
+    <text x="700" y="204" fill="#f4f7fb">yolov8s</text>
+    <text x="880" y="204" fill="#98a2b3">TensorRT</text>
+    <text x="1170" y="204" fill="#8ad7ff" text-anchor="end">12.9 ms</text>
+  </g>
+  <rect x="678" y="238" width="518" height="52" rx="10" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
+  <rect x="678" y="238" width="518" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="13">
+    <text x="700" y="270" fill="#f4f7fb">mobilenetv2</text>
+    <text x="880" y="270" fill="#98a2b3">MNN</text>
+    <text x="1170" y="270" fill="#8ad7ff" text-anchor="end">1.8 ms</text>
+  </g>
+  <rect x="678" y="304" width="518" height="52" rx="10" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
+  <rect x="678" y="304" width="518" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="13">
+    <text x="700" y="336" fill="#f4f7fb">realesrgan</text>
+    <text x="880" y="336" fill="#98a2b3">ONNX Runtime</text>
+    <text x="1170" y="336" fill="#8ad7ff" text-anchor="end">166 ms</text>
+  </g>
+  <g stroke="#ffffff" stroke-opacity="0.22" stroke-width="1.5">
+    <line x1="266" y1="225" x2="326" y2="225"/>
+    <line x1="580" y1="225" x2="646" y2="225"/>
+  </g>
+  <g fill="#8ad7ff">
+    <circle r="3.5" cy="225"><animate attributeName="cx" values="266;326" dur="2.6s" repeatCount="indefinite"/></circle>
+    <circle r="3.5" cy="225"><animate attributeName="cx" values="580;646" dur="2.6s" begin="0.7s" repeatCount="indefinite"/></circle>
+  </g>
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="11" fill="#98a2b3">
+    <text x="56" y="404">ONE PROCESS PER CATALOG ID — A CRASH OR AN OOM KILLS EXACTLY ONE MODEL</text>
   </g>
 </svg>

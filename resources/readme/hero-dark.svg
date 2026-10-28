@@ -1,54 +1,48 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 340" width="1280" height="340" role="img" aria-label="mortred model server">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 340" width="1280" height="340" role="img">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0a0f1e"/>
-      <stop offset="55%" stop-color="#111a33"/>
-      <stop offset="100%" stop-color="#0a0f1e"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0%" stop-color="#0b0d10"/><stop offset="100%" stop-color="#15191f"/>
     </linearGradient>
     <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0"/>
-      <stop offset="45%" stop-color="#22d3ee" stop-opacity="0.95"/>
-      <stop offset="55%" stop-color="#f472b6" stop-opacity="0.95"/>
-      <stop offset="100%" stop-color="#f472b6" stop-opacity="0"/>
-      <animate attributeName="x1" values="-0.6;1" dur="5s" repeatCount="indefinite"/>
-      <animate attributeName="x2" values="-0.2;1.4" dur="5s" repeatCount="indefinite"/>
+      <stop offset="0%" stop-color="#8ad7ff" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#8ad7ff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#8ad7ff" stop-opacity="0"/>
+      <animate attributeName="x1" values="-0.4;1.1" dur="7s" repeatCount="indefinite"/>
+      <animate attributeName="x2" values="0;1.5" dur="7s" repeatCount="indefinite"/>
     </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.1" r="0.8">
-      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.22"/>
-      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
-    </radialGradient>
-    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#1b2742"/></pattern>
   </defs>
   <rect width="1280" height="340" fill="url(#bg)"/>
-  <rect width="100%" height="100%" fill="url(#dots)" opacity="0.35"/>
-  <rect width="1280" height="340" fill="url(#glow)"/>
   <g font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
-    <text x="80" y="132" fill="#e8eeff" font-size="64" font-weight="700" letter-spacing="-1.5">mortred model server</text>
-    <text x="80" y="132" fill="url(#sheen)" font-size="64" font-weight="700" letter-spacing="-1.5">mortred model server</text>
-    <text x="80" y="178" fill="#9aa6cc" font-size="24">one model · one process · MNN / ONNX Runtime / TensorRT</text>
-    <rect x="80" y="150" width="0" height="3" rx="1.5" fill="url(#sheen)"><animate attributeName="width" values="0;620" dur="1.6s" fill="freeze"/></rect>
-    <g font-size="17" font-weight="600">
-      <g>
-        <rect x="80" y="214" width="128" height="40" rx="20" fill="#10203a" stroke="#22d3ee" stroke-opacity="0.55"/>
-        <text x="144" y="240" fill="#7ce8fa" text-anchor="middle">process-per-model</text>
-      </g>
-      <g>
-        <rect x="222" y="214" width="120" height="40" rx="20" fill="#10203a" stroke="#f472b6" stroke-opacity="0.55"/>
-        <text x="282" y="240" fill="#ffa8d0" text-anchor="middle">3 backends</text>
-      </g>
-      <g>
-        <rect x="356" y="214" width="150" height="40" rx="20" fill="#10203a" stroke="#8b94b8" stroke-opacity="0.5"/>
-        <text x="431" y="240" fill="#c3cbe6" text-anchor="middle">supervisor + gateway</text>
-      </g>
+    <text x="72" y="92" fill="#98a2b3" font-size="12" letter-spacing="4" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">PROCESS-PER-MODEL INFERENCE SERVER</text>
+    <text x="72" y="170" fill="#f4f7fb" font-size="74" font-weight="700" letter-spacing="-2.4">mortred</text>
+    <text x="380" y="170" fill="#98a2b3" font-size="74" font-weight="500" letter-spacing="-2.4">model server</text>
+    <rect x="72" y="196" width="0" height="2" fill="#8ad7ff"><animate attributeName="width" values="0;220" dur="1.2s" fill="freeze"/></rect>
+    <text x="72" y="238" fill="#98a2b3" font-size="21">One catalog id, one OS process. MNN, ONNX Runtime, TensorRT — one request envelope.</text>
+    <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="13" fill="#98a2b3">
+      <text x="72" y="288">44 HTTP IDs</text>
+      <text x="196" y="288">·</text>
+      <text x="216" y="288">3 BACKENDS</text>
+      <text x="340" y="288">·</text>
+      <text x="360" y="288">12.89 MS P50</text>
+      <text x="500" y="288">·</text>
+      <text x="520" y="288">96/96 GATE</text>
     </g>
-    <g transform="translate(80,286)">
-      <line x1="0" y1="0" x2="1120" y2="0" stroke="#22305a"/>
-      <circle r="4" cy="0" fill="#22d3ee">
-        <animate attributeName="cx" values="0;1120" dur="6s" repeatCount="indefinite"/>
-      </circle>
-      <circle r="3" cy="0" fill="#f472b6" opacity="0.8">
-        <animate attributeName="cx" values="1120;0" dur="6s" repeatCount="indefinite"/>
-      </circle>
+  </g>
+  <g>
+    <g transform="translate(792,96)">
+        <rect x="0" y="0" width="416" height="156" rx="18" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
+  <rect x="0" y="0" width="416" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
+
+      <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="13" fill="#98a2b3">
+        <text x="26" y="38">POST /v1/models/yolov8s/infer</text>
+        <line x1="26" y1="54" x2="390" y2="54" stroke="#252b34"/>
+        <text x="26" y="82" fill="#f4f7fb" font-size="15">200 OK</text>
+        <text x="96" y="82" fill="#8ad7ff">12.9 ms</text>
+        <text x="26" y="112">decode 4.90 · pre 0.88 · exec 3.04</text>
+        <text x="26" y="134">d2h 0.77 · post 0.78 · shell 1.27</text>
+      </g>
+      <rect x="0" y="0" width="416" height="156" rx="18" fill="url(#sheen)" opacity="0.05"/>
+      <animateTransform attributeName="transform" type="translate" values="792,96;792,90;792,96" dur="6s" repeatCount="indefinite"/>
     </g>
   </g>
 </svg>
