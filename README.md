@@ -95,22 +95,24 @@ How many models fit on one card: [docs/capacity-single-gpu.md](docs/capacity-sin
 
 ## Model zoo
 
-| Family | ids | Notes |
-|---|---:|---|
-| Detection | 10 | yolov5 / 6 / 7 / 8, nanodet |
-| Face | 2 | libface (YuNet), centerface |
-| Segmentation | 6 | bisenetv2, pphuman ×3, hrnet, msocrnet |
-| Matting | 5 | modnet, ppmatting ×4 |
-| Enhancement | 3 | enlightengan, attentive-gan, real-esrgan |
-| Classification | 3 | mobilenetv2, resnet, densenet |
-| Feature / embedding / depth | 8 | superpoint, dinov2 ×3, depth-anything ×3, metric3d ×2 |
-| SAM / diffusion | 5 | SAM_AMG, DDPM, DDIM, CLS_COND_DDIM, LDM |
-| OCR | 1 | dbnet (detection only) |
-| Bench-only | 4 | CLIP, LightGlue, SAM predictor, FastSAM |
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="resources/readme/model-zoo.svg">
+  <img src="resources/readme/model-zoo.svg" width="100%" alt="48 catalog ids by family, 44 served over HTTP">
+</picture>
 
-`mortred-model-server.out --list` is the authoritative list (ids are matched exactly; the catalog
-uses lowercase for the CV families and uppercase for the diffusion rows). Weights are fetched, not
-committed: `python3 scripts/fetch_weights.py` from
+| Highlights | |
+|---|---|
+| Detection | yolov5l · yolov6s · yolov7 / 7x · yolov8 n/s/l/x · nanodet ×2 |
+| Face | libface (YuNet) · centerface |
+| Dense prediction | bisenetv2 · pphuman ×3 · hrnet · msocrnet · modnet · ppmatting ×4 |
+| Enhancement | enlightengan · attentive-gan · real-esrgan |
+| Feature / depth | superpoint · dinov2 ×3 · depth-anything ×3 · metric3d ×2 |
+| Generative | SAM_AMG · DDPM · DDIM · CLS_COND_DDIM · LDM |
+| Bench-only | CLIP · LightGlue · SAM predictor · FastSAM (no HTTP route) |
+
+`mortred-model-server.out --list` is the authoritative list (ids match exactly; lowercase for the
+CV families, uppercase for the diffusion rows). Weights are fetched, not committed:
+`python3 scripts/fetch_weights.py` from
 [Hugging Face](https://huggingface.co/MaybeShewill-CV/mortred_model_server).
 
 ## Operations

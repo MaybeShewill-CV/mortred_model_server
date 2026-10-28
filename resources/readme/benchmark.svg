@@ -6,12 +6,19 @@
     <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#22d3ee"/><stop offset="100%" stop-color="#f472b6"/>
     </linearGradient>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#1b2742"/></pattern>
   </defs>
   <rect width="1120" height="380" fill="url(#bbg)"/>
+  <rect width="100%" height="100%" fill="url(#dots)" opacity="0.35"/>
   <g font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
     <text x="50" y="48" fill="#e8eeff" font-size="22" font-weight="700">real HTTP throughput</text>
     <text x="50" y="74" fill="#8391b8" font-size="14">RTX 2070 SUPER · one model per process · closed loop, 16 concurrent clients · 2026-09</text>
 
+    <line x1="220" y1="96" x2="220" y2="336" stroke="#16213b"/>
+    <line x1="375" y1="96" x2="375" y2="336" stroke="#16213b"/>
+    <line x1="530" y1="96" x2="530" y2="336" stroke="#16213b"/>
+    <line x1="685" y1="96" x2="685" y2="336" stroke="#16213b"/>
+    <line x1="840" y1="96" x2="840" y2="336" stroke="#16213b"/>
     <g font-size="14" fill="#c3cbe6">
       <text x="50" y="120">superpoint</text>       <text x="900" y="120" fill="#7ce8fa">1011 rps</text><text x="1000" y="120" fill="#5f6d96">p99 27 ms</text>
       <text x="50" y="160">mobilenetv2</text>      <text x="900" y="160" fill="#7ce8fa">568 rps</text><text x="1000" y="160" fill="#5f6d96">p99 29 ms</text>

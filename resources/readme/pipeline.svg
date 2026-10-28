@@ -6,8 +6,10 @@
     <linearGradient id="fill" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.55"/><stop offset="100%" stop-color="#f472b6" stop-opacity="0.55"/>
     </linearGradient>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#1b2742"/></pattern>
   </defs>
   <rect width="1280" height="320" fill="url(#pbg)"/>
+  <rect width="100%" height="100%" fill="url(#dots)" opacity="0.35"/>
   <g font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
     <text x="60" y="52" fill="#e8eeff" font-size="22" font-weight="700">one request, end to end</text>
     <text x="60" y="78" fill="#8391b8" font-size="14">max_batch_size = 1 · yolov8s · RTX 2070 SUPER · p50 12.89 ms (measured, 6531 samples)</text>
@@ -37,6 +39,28 @@
       <g><rect x="1140" y="140" width="96" height="56" rx="10" fill="#111b31" stroke="#2b3a63"/><text x="1188" y="174">reply</text></g>
     </g>
 
+    <path d="M158,166 L164,168 L158,170" fill="none" stroke="#3d4a72" stroke-width="1.6"/>
+    <path d="M266,166 L272,168 L266,170" fill="none" stroke="#3d4a72" stroke-width="1.6"/>
+    <path d="M374,166 L380,168 L374,170" fill="none" stroke="#3d4a72" stroke-width="1.6"/>
+    <path d="M482,166 L488,168 L482,170" fill="none" stroke="#3d4a72" stroke-width="1.6"/>
+    <path d="M590,166 L596,168 L590,170" fill="none" stroke="#3d4a72" stroke-width="1.6"/>
+    <path d="M698,166 L704,168 L698,170" fill="none" stroke="#3d4a72" stroke-width="1.6"/>
+    <path d="M806,166 L812,168 L806,170" fill="none" stroke="#3d4a72" stroke-width="1.6"/>
+    <path d="M914,166 L920,168 L914,170" fill="none" stroke="#3d4a72" stroke-width="1.6"/>
+    <path d="M1022,166 L1028,168 L1022,170" fill="none" stroke="#3d4a72" stroke-width="1.6"/>
+    <path d="M1130,166 L1136,168 L1130,170" fill="none" stroke="#3d4a72" stroke-width="1.6"/>
+    <line x1="60" y1="256" x2="60" y2="262" stroke="#22305a"/>
+    <line x1="168" y1="256" x2="168" y2="262" stroke="#22305a"/>
+    <line x1="276" y1="256" x2="276" y2="262" stroke="#22305a"/>
+    <line x1="384" y1="256" x2="384" y2="262" stroke="#22305a"/>
+    <line x1="492" y1="256" x2="492" y2="262" stroke="#22305a"/>
+    <line x1="600" y1="256" x2="600" y2="262" stroke="#22305a"/>
+    <line x1="708" y1="256" x2="708" y2="262" stroke="#22305a"/>
+    <line x1="816" y1="256" x2="816" y2="262" stroke="#22305a"/>
+    <line x1="924" y1="256" x2="924" y2="262" stroke="#22305a"/>
+    <line x1="1032" y1="256" x2="1032" y2="262" stroke="#22305a"/>
+    <line x1="1140" y1="256" x2="1140" y2="262" stroke="#22305a"/>
+    <line x1="1248" y1="256" x2="1248" y2="262" stroke="#22305a"/>
     <!-- moving highlight -->
     <rect x="60" y="140" width="96" height="56" rx="10" fill="none" stroke="#e8eeff" stroke-width="2" opacity="0.9">
       <animate attributeName="x" values="60;168;276;384;492;600;708;816;924;1032;1140;60"
