@@ -2,6 +2,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="resources/readme/hero-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="resources/readme/hero-light.svg">
   <img src="resources/readme/hero-light.svg" width="100%" alt="mortred model server — one model, one process">
 </picture>
 
@@ -28,10 +29,7 @@ TensorRT. A supervisor owns the process tree; a gateway is the only public liste
 
 ## How a request moves
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="resources/readme/pipeline.svg">
-  <img src="resources/readme/pipeline.svg" width="100%" alt="request pipeline with measured stage times">
-</picture>
+<img src="resources/readme/pipeline.svg" width="100%" alt="request pipeline with measured stage times">
 
 Every stage is instrumented (`stage_timing`); the numbers are the p50 of a 10672-sample run, not
 an estimate. **The GPU kernel is 3.04 ms of 12.89 — two thirds of a request is decode, preprocess,
@@ -41,14 +39,17 @@ and why each one has a number attached. Iteration log:
 
 ## Architecture
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="resources/readme/architecture.svg">
-  <img src="resources/readme/architecture.svg" width="100%" alt="client, gateway, supervisor and one process per model">
-</picture>
+<img src="resources/readme/architecture.svg" width="100%" alt="client, gateway, supervisor and one process per model">
 
 - **mortred-gateway** (`:8080`) — the only public listener: routing, bearer auth, GCRA rate limiting, `/metrics`.
 - **mortred-supervisor** (`:8787`) — management API, restart policy, autostart, VRAM occupancy admission.
 - **model processes** — one per catalog id, loopback only, holding exactly the workers you configured.
+
+<img src="resources/readme/supervision.svg" width="100%" alt="a model process is killed by the OOM killer, the supervisor backs off, respawns it, and its siblings keep serving">
+
+The second row is the point of the whole design: an OOM kill, a crash loop or a bad engine takes
+down exactly one catalog id. The supervisor reaps it, applies the restart policy, and respawns it
+while every sibling keeps answering.
 
 Two deployment profiles, one switch (build, dependencies, catalog and weights all follow it):
 
@@ -58,6 +59,8 @@ Two deployment profiles, one switch (build, dependencies, catalog and weights al
 | hardware | NVIDIA GPU + CUDA 12 / TensorRT 10 | any x64 machine |
 
 ## 60-second demo
+
+<img src="resources/readme/terminal.svg" width="100%" alt="first run: trust tokens, loopback listen, gateway and one model up, doctor green, then one inference">
 
 ```bash
 docker compose --profile gpu up -d          # or --profile cpu
@@ -86,20 +89,14 @@ entries (bootstrap script, release tarball + systemd) are in [deployment.md](doc
 
 ## Throughput
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="resources/readme/benchmark.svg">
-  <img src="resources/readme/benchmark.svg" width="100%" alt="HTTP requests per second per model">
-</picture>
+<img src="resources/readme/benchmark.svg" width="100%" alt="HTTP requests per second per model">
 
 All 39 product models, CPU and GPU, with p99: [docs/benchmark-set-a.md](docs/benchmark-set-a.md).
 How many models fit on one card: [docs/capacity-single-gpu.md](docs/capacity-single-gpu.md).
 
 ## Model zoo
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="resources/readme/model-zoo.svg">
-  <img src="resources/readme/model-zoo.svg" width="100%" alt="48 catalog ids grouped by task: detection, face, segmentation, matting, enhancement, depth, classification, embedding, SAM, feature points, diffusion, OCR">
-</picture>
+<img src="resources/readme/model-zoo.svg" width="100%" alt="48 catalog ids grouped by task: detection, face, segmentation, matting, enhancement, depth, classification, embedding, SAM, feature points, diffusion, OCR">
 
 Twelve task families, one request envelope. Detection and segmentation return per-pixel or
 per-object geometry; matting and depth return dense maps; enhancement returns an image; embedding

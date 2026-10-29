@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 400" width="1120" height="400" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400" role="img">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0.9" y2="1">
       <stop offset="0%" stop-color="#0b0d10"/><stop offset="100%" stop-color="#15191f"/>
@@ -11,7 +11,7 @@
       <animate attributeName="x2" values="0;1.5" dur="7s" repeatCount="indefinite"/>
     </linearGradient>
   </defs>
-  <rect width="1120" height="400" fill="url(#bg)"/>
+  <rect width="1200" height="400" fill="url(#bg)"/>
   <g font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
     <text x="56" y="72" fill="#f4f7fb" font-size="30" font-weight="700" letter-spacing="-0.6">HTTP throughput, one process per model</text>
     <text x="56" y="104" fill="#98a2b3" font-size="16">RTX 2070 SUPER · 16 concurrent clients · closed loop · docs/benchmark-set-a.md, 2026-09</text>
@@ -19,28 +19,28 @@
   <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="14">
     <text x="56" y="166" fill="#f4f7fb">superpoint</text>
     <rect x="270" y="148" width="0" height="16" rx="8" fill="#8ad7ff" fill-opacity="0.9"><animate attributeName="width" values="0;660.0" dur="1s" begin="0.0s" fill="freeze"/></rect>
-    <text x="960" y="162" fill="#8ad7ff">1011 rps</text>
-    <text x="1064" y="162" fill="#98a2b3">p99 27 ms</text>
+    <text x="944" y="162" fill="#8ad7ff">1011 rps</text>
+    <text x="1032" y="162" fill="#98a2b3">p99 27 ms</text>
     <text x="56" y="206" fill="#f4f7fb">mobilenetv2</text>
     <rect x="270" y="188" width="0" height="16" rx="8" fill="#8ad7ff" fill-opacity="0.9"><animate attributeName="width" values="0;370.8" dur="1s" begin="0.1s" fill="freeze"/></rect>
-    <text x="960" y="202" fill="#8ad7ff">568 rps</text>
-    <text x="1064" y="202" fill="#98a2b3">p99 29 ms</text>
+    <text x="944" y="202" fill="#8ad7ff">568 rps</text>
+    <text x="1032" y="202" fill="#98a2b3">p99 29 ms</text>
     <text x="56" y="246" fill="#f4f7fb">centerface</text>
     <rect x="270" y="228" width="0" height="16" rx="8" fill="#8ad7ff" fill-opacity="0.9"><animate attributeName="width" values="0;301.6" dur="1s" begin="0.2s" fill="freeze"/></rect>
-    <text x="960" y="242" fill="#8ad7ff">462 rps</text>
-    <text x="1064" y="242" fill="#98a2b3">p99 54 ms</text>
+    <text x="944" y="242" fill="#8ad7ff">462 rps</text>
+    <text x="1032" y="242" fill="#98a2b3">p99 54 ms</text>
     <text x="56" y="286" fill="#f4f7fb">pphuman_mobile</text>
     <rect x="270" y="268" width="0" height="16" rx="8" fill="#8ad7ff" fill-opacity="0.9"><animate attributeName="width" values="0;267.7" dur="1s" begin="0.3s" fill="freeze"/></rect>
-    <text x="960" y="282" fill="#8ad7ff">410 rps</text>
-    <text x="1064" y="282" fill="#98a2b3">p99 56 ms</text>
+    <text x="944" y="282" fill="#8ad7ff">410 rps</text>
+    <text x="1032" y="282" fill="#98a2b3">p99 56 ms</text>
     <text x="56" y="326" fill="#f4f7fb">yolov8s</text>
     <rect x="270" y="308" width="0" height="16" rx="8" fill="#8ad7ff" fill-opacity="0.9"><animate attributeName="width" values="0;194.5" dur="1s" begin="0.4s" fill="freeze"/></rect>
-    <text x="960" y="322" fill="#8ad7ff">298 rps</text>
-    <text x="1064" y="322" fill="#98a2b3">p99 139 ms</text>
+    <text x="944" y="322" fill="#8ad7ff">298 rps</text>
+    <text x="1032" y="322" fill="#98a2b3">p99 139 ms</text>
     <text x="56" y="366" fill="#f4f7fb">realesrgan</text>
     <rect x="270" y="348" width="0" height="16" rx="8" fill="#ffb877" fill-opacity="0.9"><animate attributeName="width" values="0;3.9" dur="1s" begin="0.5s" fill="freeze"/></rect>
-    <text x="960" y="362" fill="#ffb877">6 rps</text>
-    <text x="1064" y="362" fill="#98a2b3">p99 4356 ms</text>
+    <text x="944" y="362" fill="#ffb877">6 rps</text>
+    <text x="1032" y="362" fill="#98a2b3">p99 4356 ms</text>
   </g>
   <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="12" fill="#98a2b3">
     <text x="56" y="384">realesrgan in orange: GPU-compute bound (p99 4.4 s). The rest are decode/preprocess bound.</text>
