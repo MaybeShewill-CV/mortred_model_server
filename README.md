@@ -16,9 +16,12 @@
 
 </div>
 
+<img src="resources/readme/demo-loop.svg" width="100%" alt="one request loop: a photo goes in, the gateway routes it to the yolov8s process, decode 4.90 ms, preprocess 0.88 ms, infer 3.04 ms, postprocess 0.78 ms, and the model's real golden boxes come back with 200 OK in 12.9 ms">
+
 **One catalog id is one OS process.** A model cannot take its neighbour down, its VRAM is
-accounted for before it starts, and the same request envelope works across MNN, ONNX Runtime and
-TensorRT. A supervisor owns the process tree; a gateway is the only public listener.
+accounted for before it starts, and that same request envelope works for all 44 ids across MNN,
+ONNX Runtime and TensorRT. A supervisor owns the process tree; a gateway is the only public
+listener.
 
 <div align="center">
 
