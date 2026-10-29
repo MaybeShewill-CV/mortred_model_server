@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catalog constellation · WebGL</title>
+<style>
+  :root { --bg:#080b10; --fg:#e8eeff; --muted:#8b96b8; --line:#1e2739; --accent:#8ad7ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }
+  header { display:flex; align-items:baseline; gap:14px; padding:18px 26px 10px; }
+  header h1 { margin:0; font-size:19px; letter-spacing:-0.2px; }
+  header span { color:var(--muted); font-size:12px; font-family:ui-monospace,Menlo,monospace; }
+  header a { margin-left:auto; color:var(--accent); text-decoration:none; font-size:12px; }
+  #stage { position:relative; margin:6px 26px 0; height:min(70vh, 660px);
+           border:1px solid var(--line); border-radius:16px; overflow:hidden; background:#080b10; }
+  #gl, #ov { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  #ov { pointer-events:none; }
+  #info { display:flex; align-items:baseline; gap:12px; padding:14px 26px; min-height:44px;
+          font-family:ui-monospace,Menlo,monospace; font-size:12.5px; }
+  #info b { color:var(--accent); font-weight:600; }
+  #info .fam { color:#f0b7d8; }
+  #info .dim { color:var(--muted); }
+  #info .route { margin-left:auto; color:#5f6d96; }
+  #legend { display:flex; flex-wrap:wrap; gap:7px; padding:0 26px 30px; }
+  .chip { display:inline-flex; align-items:center; gap:6px; cursor:default;
+          background:rgba(255,255,255,0.035); border:1px solid var(--line); border-radius:999px;
+          padding:4px 10px; font-size:11.5px; color:var(--muted); }
+  .chip i { width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .chip em { font-style:normal; color:#5f6d96; }
+  .chip:hover { border-color:var(--accent); color:var(--fg); }
+  #fallback { margin:40px 26px; color:#f0b7d8; font-family:ui-monospace,Menlo,monospace; }
+</style>
+</head>
+<body>
+<header>
+  <h1>catalog constellation</h1>
+  <span id="status">initialising WebGL2 (v5)…</span>
+  <span style="color:#5f6d96;font-size:12px;font-family:ui-monospace,Menlo,monospace">docs/catalog · self-contained</span>
+</header>
+
+<div id="stage">
+  <canvas id="gl"></canvas>
+  <canvas id="ov"></canvas>
+</div>
+<div id="fallback" hidden>this browser reports no WebGL2 — the README keeps the SVG version.</div>
+
+<div id="info"></div>
+<div id="legend"></div>
+
+<script>
+/* Catalog constellation: 44 ids on the GPU.
+   WebGL2 for the glow + signal pulses, a 2D overlay for text. No libraries. */
+(() => {
+  const FAM = {
+    detection:      { cn: '目标检测',   color: [0.42, 0.84, 0.99] },
+    face:           { cn: '人脸检测',   color: [0.46, 0.90, 0.97] },
+    segmentation:   { cn: '语义分割',   color: [0.55, 0.72, 0.99] },
+    matting:        { cn: '人像抠图',   color: [0.69, 0.60, 0.99] },
+    enhancement:    { cn: '图像增强',   color: [0.98, 0.60, 0.82] },
+    classification: { cn: '图像分类',   color: [0.99, 0.76, 0.36] },
+    embedding:      { cn: '特征嵌入',   color: [0.36, 0.88, 0.66] },
+    depth:          { cn: '单目深度',   color: [0.62, 0.64, 0.99] },
+    feature:        { cn: '特征点',     color: [0.95, 0.85, 0.35] },
+    sam:            { cn: '可提示分割', color: [0.79, 0.55, 0.99] },
+    diffusion:      { cn: '扩散生成',   color: [0.98, 0.50, 0.70] },
+    ocr:            { cn: '文本检测',   color: [0.95, 0.55, 0.95] },
+  };
+  const MODELS = [
+    ['yolov5l', 'detection', 'YOLOv5l detection'], ['yolov6s', 'detection', 'YOLOv6s detection'],
+    ['yolov7', 'detection', 'YOLOv7 detection'], ['yolov7x', 'detection', 'YOLOv7x detection'],
+    ['yolov8n', 'detection', 'YOLOv8n detection'], ['yolov8s', 'detection', 'YOLOv8s detection'],
+    ['yolov8l', 'detection', 'YOLOv8l detection'], ['yolov8x', 'detection', 'YOLOv8x detection'],
+    ['nanodet_1x5', 'detection', 'NanoDet 1.0x 1.5x'], ['nanodet_416', 'detection', 'NanoDet 416'],
+    ['libface', 'face', 'YuNet face boxes'], ['centerface', 'face', 'CenterFace boxes'],
+    ['bisenetv2', 'segmentation', 'BiSeNetV2 cityscapes'], ['pphuman_mobile', 'segmentation', 'PP-HumanSeg mobile'],
+    ['pphuman_lite', 'segmentation', 'PP-HumanSeg lite'], ['pphuman_server', 'segmentation', 'PP-HumanSeg server'],
+    ['hrnet', 'segmentation', 'HRNet segmentation'], ['msocrnet', 'segmentation', 'MSOCRNet segmentation'],
+    ['modnet', 'matting', 'MODNet alpha matte'], ['ppmatting_512', 'matting', 'PP-Matting 512'],
+    ['ppmatting_1024', 'matting', 'PP-Matting 1024'], ['ppmatting_resnet34', 'matting', 'PP-Matting resnet34'],
+    ['ppmatting_v2', 'matting', 'PP-Matting v2'],
+    ['enlightengan', 'enhancement', 'EnlightenGAN low light'], ['attentive_gan', 'enhancement', 'AttentiveGAN derain'],
+    ['realesrgan', 'enhancement', 'Real-ESRGAN x4'],
+    ['mobilenetv2', 'classification', 'MobileNetV2'], ['resnet', 'classification', 'ResNet'],
+    ['densenet', 'classification', 'DenseNet'],
+    ['dinov2_vits14', 'embedding', 'DINOv2 ViT-S/14'], ['dinov2_vitb14', 'embedding', 'DINOv2 ViT-B/14'],
+    ['dinov2_vitl14', 'embedding', 'DINOv2 ViT-L/14'],
+    ['depth_vits14', 'depth', 'Depth-Anything ViT-S'], ['depth_vitb14', 'depth', 'Depth-Anything ViT-B'],
+    ['depth_vitl14', 'depth', 'Depth-Anything ViT-L'], ['metric3d_512', 'depth', 'Metric3D 512'],
+    ['metric3d_1088', 'depth', 'Metric3D 1088'],
+    ['superpoint', 'feature', 'SuperPoint keypoints'],
+    ['SAM_AMG', 'sam', 'SAM auto mask generator'],
+    ['DDPM', 'diffusion', 'DDPM sampler'], ['DDIM', 'diffusion', 'DDIM sampler'],
+    ['CLS_COND_DDIM', 'diffusion', 'class-conditional DDIM'], ['LDM', 'diffusion', 'latent diffusion'],
+    ['dbnet', 'ocr', 'DBNet text lines'],
+  ];
+  const FAM_KEYS = Object.keys(FAM);
+  const familyIndex = Object.fromEntries(FAM_KEYS.map((k, i) => [k, i]));
+
+  let stage = 'boot';
+  let fellBack = false;
+  window.addEventListener('error', (ev) => {
+    const f = document.getElementById('fallback');
+    f.hidden = false;
+    f.textContent = 'WebGL init failed at [' + stage + ']: ' + (ev.message || ev.error)
+      + ' — tell the maintainer this line (v5).';
+    if (!fellBack) { fellBack = true; startFallback2D(); }
+  });
+
+  const canvas = document.getElementById('gl');
+  const overlay = document.getElementById('ov');
+  const panel = document.getElementById('info');
+  const gl = canvas.getContext('webgl2', { antialias: true, alpha: false });
+  if (!gl) {
+    canvas.hidden = true;
+    startFallback2D();
+    return;
+  }
+
+  // ---------- layout: phyllotaxis spiral, families kept adjacent ----------
+  let nodes = [];
+  function layout() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const cx = w / 2, cy = h / 2;
+    const R = Math.min(w, h) * 0.44;
+    const N = MODELS.length;
+    const GA = Math.PI * (3 - Math.sqrt(5));
+    nodes = MODELS.map(([id, fam, task], i) => {
+      const t = (i + 0.5) / N;
+      const r = R * Math.sqrt(t);
+      const a = i * GA;
+      return { id, fam, task, x: cx + r * Math.cos(a), y: cy + r * Math.sin(a),
+               color: FAM[fam].color, phase: (i * 0.7) % (Math.PI * 2), size: 11 + (N - i) * 0.06,
+               famIdx: familyIndex[fam] };
+    });
+  }
+
+  const bgVS = `#version 300 es
+  void main(){ vec2 p = vec2((gl_VertexID<<1)&2, gl_VertexID&2); gl_Position = vec4(p*2.0-1.0,0.0,1.0); }`;
+  const bgFS = `#version 300 es
+  precision highp float; uniform vec2 u_res; uniform float u_t; out vec4 outColor;
+  void main(){
+    vec2 p = gl_FragCoord.xy / u_res; vec2 c = p - 0.5; float r = length(c);
+    vec3 col = mix(vec3(0.031,0.039,0.051), vec3(0.078,0.094,0.121), smoothstep(0.0,0.78,r));
+    col += 0.055*vec3(0.54,0.84,1.0)*exp(-7.0*r)*(0.82+0.18*sin(u_t*0.55));
+    outColor = vec4(col,1.0);
+  }`;
+
+  const nodeVS = `#version 300 es
+  layout(location=0) in vec2 a_quad;
+  layout(location=1) in vec2 a_center;
+  layout(location=2) in vec3 a_color;
+  layout(location=3) in vec2 a_meta;   // phase, family
+  uniform vec2 u_res; uniform float u_t; uniform float u_hover; uniform float u_fam;
+  out vec2 v_uv; out vec3 v_color; out float v_boost;
+  void main(){
+    float pulse = 0.86 + 0.14 * sin(u_t * 1.7 + a_meta.x);
+    float hovered = (abs(float(gl_InstanceID) - u_hover) < 0.5) ? 1.0 : 0.0;
+    float dim = (u_fam < -0.5 || abs(a_meta.y - u_fam) < 0.01) ? 1.0 : 0.22;
+    float s = (11.0 + 2.0*sin(u_t*0.9 + a_meta.x)) * pulse * (1.0 + 0.85*hovered) * (0.55 + 0.45*dim);
+    vec2 pos = a_center + a_quad * s;
+    vec2 clip = (pos / u_res) * 2.0 - 1.0;
+    gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+    v_uv = a_quad; v_color = a_color; v_boost = hovered * 1.2 + dim * 0.35;
+  }`;
+  const nodeFS = `#version 300 es
+  precision highp float; in vec2 v_uv; in vec3 v_color; in float v_boost; out vec4 outColor;
+  void main(){
+    float d = length(v_uv);
+    float core = smoothstep(1.0, 0.0, d);
+    float halo = pow(max(0.0, 1.0 - d), 2.2);
+    vec3 col = v_color * (0.62*core + 0.55*halo) * (0.7 + v_boost);
+    float a = clamp(core*0.9 + halo*0.75, 0.0, 1.0);
+    if (a < 0.01) discard;
+    outColor = vec4(col, a);
+  }`;
+
+  const lineVS = `#version 300 es
+  layout(location=0) in vec2 a_pos;
+  layout(location=1) in vec2 a_meta;   // t along line, family
+  uniform vec2 u_res; uniform float u_t; uniform float u_fam;
+  out float v_a; out vec3 v_color;
+  void main(){
+    float dim = (u_fam < -0.5 || abs(a_meta.y - u_fam) < 0.01) ? 1.0 : 0.12;
+    float pulse = fract(u_t * 0.28 - a_meta.x * 0.9);
+    float spark = smoothstep(0.0, 0.06, pulse) * smoothstep(0.22, 0.06, pulse);
+    v_a = (0.05 + 0.55 * spark) * dim;
+    v_color = vec3(0.45, 0.78, 0.98);
+    vec2 clip = (a_pos / u_res) * 2.0 - 1.0;
+    gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+  }`;
+  const lineFS = `#version 300 es
+  precision highp float; in float v_a; in vec3 v_color; out vec4 outColor;
+  void main(){ outColor = vec4(v_color * v_a, v_a); }`;
+
+  function sh(type, src) {
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  function prog(vs, fs) {
+    const p = gl.createProgram();
+    gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    return p;
+  }
+
+  stage = 'shaders';
+  const bgP = prog(bgVS, bgFS), nodeP = prog(nodeVS, nodeFS), lineP = prog(lineVS, lineFS);
+  stage = 'buffers';
+  const quad = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+  const quadBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf); gl.bufferData(gl.ARRAY_BUFFER, quad, gl.STATIC_DRAW);
+
+  const instanceData = gl.createBuffer();   // per node: center.xy, color.rgb, phase, family
+  const lineData = gl.createBuffer();       // per vertex: pos.xy, t, family
+
+  let hover = -1, selected = -1, hoverFam = -1;
+
+  function upload() {
+    stage = 'upload';
+    const inst = new Float32Array(nodes.length * 7);
+    nodes.forEach((n, i) => {
+      inst.set([n.x, n.y, n.color[0], n.color[1], n.color[2], n.phase, n.famIdx], i * 7);
+    });
+    gl.bindBuffer(gl.ARRAY_BUFFER, instanceData);
+    gl.bufferData(gl.ARRAY_BUFFER, inst, gl.DYNAMIC_DRAW);
+
+    const cx = canvas.clientWidth / 2, cy = canvas.clientHeight / 2;
+    // two vertices per line, four floats each (x, y, t-along-line, family)
+    const verts = new Float32Array(nodes.length * 8);
+    nodes.forEach((n, i) => {
+      verts.set([cx, cy, 0, n.famIdx], i * 8);
+      verts.set([n.x, n.y, 1, n.famIdx], i * 8 + 4);
+    });
+    gl.bindBuffer(gl.ARRAY_BUFFER, lineData);
+    gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
+  }
+
+  function resize() {
+    if (canvas.clientWidth < 2 || canvas.clientHeight < 2) {
+      requestAnimationFrame(resize);
+      return;
+    }
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.max(1, Math.round(canvas.clientWidth * dpr));
+    canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    overlay.width = canvas.width; overlay.height = canvas.height;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    layout(); upload();
+  }
+  window.addEventListener('resize', resize);
+
+  function drawText() {
+    const ctx = overlay.getContext('2d');
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, overlay.width / dpr, overlay.height / dpr);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '600 12px ui-monospace,SFMono-Regular,Menlo,monospace';
+    ctx.fillStyle = 'rgba(230,238,255,0.55)';
+    ctx.fillText('44 ids', canvas.clientWidth / 2, canvas.clientHeight / 2 - 4);
+    ctx.font = '11px ui-monospace,Menlo,monospace';
+    ctx.fillStyle = 'rgba(150,163,190,0.75)';
+    ctx.fillText('one process each', canvas.clientWidth / 2, canvas.clientHeight / 2 + 12);
+    if (hover >= 0 || selected >= 0) {
+      const n = nodes[hover >= 0 ? hover : selected];
+      ctx.font = '600 13px ui-monospace,Menlo,monospace';
+      ctx.fillStyle = 'rgba(240,246,255,0.96)';
+      const tx = Math.min(Math.max(n.x, 80), canvas.clientWidth - 80);
+      ctx.fillText(n.id, tx, n.y - 22);
+      ctx.font = '11px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';
+      ctx.fillStyle = 'rgba(160,175,205,0.9)';
+      ctx.fillText(FAM[n.fam].cn, tx, n.y - 8);
+    }
+  }
+
+  function frame(tms) {
+    stage = 'frame';
+    const t = tms / 1000;
+    gl.useProgram(bgP);
+    gl.disable(gl.BLEND);
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(0);
+    gl.uniform2f(gl.getUniformLocation(bgP, 'u_res'), canvas.width, canvas.height);
+    gl.uniform1f(gl.getUniformLocation(bgP, 'u_t'), t);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+
+    gl.useProgram(lineP);
+    gl.bindBuffer(gl.ARRAY_BUFFER, lineData);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0); gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8); gl.enableVertexAttribArray(1);
+    gl.uniform2f(gl.getUniformLocation(lineP, 'u_res'), canvas.width, canvas.height);
+    gl.uniform1f(gl.getUniformLocation(lineP, 'u_t'), t);
+    gl.uniform1f(gl.getUniformLocation(lineP, 'u_fam'), hoverFam >= 0 ? hoverFam : -1);
+    gl.drawArrays(gl.LINES, 0, nodes.length * 2);
+
+    gl.useProgram(nodeP);
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); gl.enableVertexAttribArray(0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, instanceData);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 28, 0); gl.vertexAttribDivisor(1, 1);
+    gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 28, 8); gl.vertexAttribDivisor(2, 1);
+    gl.vertexAttribPointer(3, 2, gl.FLOAT, false, 28, 20); gl.vertexAttribDivisor(3, 1);
+    gl.enableVertexAttribArray(1); gl.enableVertexAttribArray(2); gl.enableVertexAttribArray(3);
+    gl.uniform2f(gl.getUniformLocation(nodeP, 'u_res'), canvas.width, canvas.height);
+    gl.uniform1f(gl.getUniformLocation(nodeP, 'u_t'), t);
+    gl.uniform1f(gl.getUniformLocation(nodeP, 'u_hover'), hover >= 0 ? hover : selected);
+    gl.uniform1f(gl.getUniformLocation(nodeP, 'u_fam'), hoverFam >= 0 ? hoverFam : -1);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, nodes.length);
+    gl.vertexAttribDivisor(1, 0); gl.vertexAttribDivisor(2, 0); gl.vertexAttribDivisor(3, 0);
+
+    drawText();
+    if (!frame.ok) {
+      frame.ok = true;
+      const st = document.getElementById('status');
+      if (st) st.textContent = 'WebGL2 ok · ' + nodes.length + ' nodes · instanced';
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function nearest(mx, my) {
+    let best = -1, bd = 24 * 24;
+    nodes.forEach((n, i) => {
+      const d = (n.x - mx) ** 2 + (n.y - my) ** 2;
+      if (d < bd) { bd = d; best = i; }
+    });
+    return best;
+  }
+  canvas.addEventListener('mousemove', (e) => {
+    const r = canvas.getBoundingClientRect();
+    hover = nearest(e.clientX - r.left, e.clientY - r.top);
+    showInfo(hover >= 0 ? hover : selected);
+    canvas.style.cursor = hover >= 0 ? 'pointer' : 'default';
+  });
+  canvas.addEventListener('mouseleave', () => { hover = -1; showInfo(selected); });
+  canvas.addEventListener('click', (e) => {
+    const r = canvas.getBoundingClientRect();
+    const i = nearest(e.clientX - r.left, e.clientY - r.top);
+    selected = i === selected ? -1 : i;
+    showInfo(selected >= 0 ? selected : hover);
+  });
+  function showInfo(i) {
+    if (i < 0) { panel.innerHTML = '<span class="dim">hover a node</span>'; return; }
+    const n = nodes[i];
+    panel.innerHTML = `<b>${n.id}</b><span class="fam">${FAM[n.fam].cn}</span>`
+      + `<span class="dim">${n.task}</span><span class="route">POST /v1/models/${n.id}/infer</span>`;
+  }
+
+  const legend = document.getElementById('legend');
+  FAM_KEYS.forEach((k, i) => {
+    const n = MODELS.filter(m => m[1] === k).length;
+    const el = document.createElement('button');
+    el.className = 'chip';
+    el.innerHTML = `<i style="background:rgb(${FAM[k].color.map(v => Math.round(v * 255)).join(',')})"></i>${FAM[k].cn}<em>${n}</em>`;
+    el.onmouseenter = () => { hoverFam = i; };
+    el.onmouseleave = () => { hoverFam = -1; };
+    legend.appendChild(el);
+  });
+
+  // ---------- Canvas2D fallback: same constellation, no GPU ----------
+  function startFallback2D() {
+    const f = document.getElementById('fallback');
+    f.hidden = false;
+    f.textContent = 'WebGL2 unavailable or failed — showing the Canvas2D renderer.';
+    canvas.hidden = true;
+    const ctx = overlay.getContext('2d');
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    overlay.width = overlay.clientWidth * dpr;
+    overlay.height = overlay.clientHeight * dpr;
+    layout();
+    const t0 = performance.now();
+    (function loop(nowMs) {
+      const t = (nowMs - t0) / 1000;
+      const w = overlay.clientWidth, h = overlay.clientHeight;
+      const cx = w / 2, cy = h / 2;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(w, h) * 0.7);
+      bg.addColorStop(0, 'rgba(30,44,64,0.9)'); bg.addColorStop(1, 'rgba(8,11,16,1)');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+      for (const n of nodes) {
+        const dim = (hoverFam < 0 || n.famIdx === hoverFam) ? 1 : 0.18;
+        ctx.globalAlpha = 0.16 * dim;
+        ctx.strokeStyle = 'rgb(120,190,240)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(n.x, n.y); ctx.stroke();
+        const pulse = 0.86 + 0.14 * Math.sin(t * 1.7 + n.phase);
+        const hovered = (nodes.indexOf(n) === hover || nodes.indexOf(n) === selected);
+        const r = (hovered ? 17 : 9) * pulse;
+        const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r * 2.2);
+        const c = n.color;
+        g.addColorStop(0, `rgba(${c.map(v => Math.round(v * 255)).join(',')},${0.95 * dim})`);
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(n.x, n.y, r * 2.2, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(230,238,255,0.55)';
+      ctx.font = '600 12px ui-monospace,Menlo,monospace';
+      ctx.fillText('44 ids', cx, cy - 6);
+      drawLabels(ctx, w, h);
+      requestAnimationFrame(loop);
+    })(t0);
+  }
+
+  function drawLabels(ctx, w, h) {
+    if (hover < 0 && selected < 0) return;
+    const n = nodes[hover >= 0 ? hover : selected];
+    ctx.font = '600 13px ui-monospace,Menlo,monospace';
+    ctx.fillStyle = 'rgba(240,246,255,0.96)';
+    ctx.fillText(n.id, Math.min(Math.max(n.x, 80), w - 80), n.y - 22);
+    ctx.font = '11px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';
+    ctx.fillStyle = 'rgba(160,175,205,0.9)';
+    ctx.fillText(FAM[n.fam].cn, Math.min(Math.max(n.x, 80), w - 80), n.y - 8);
+    ctx.textAlign = 'center';
+  }
+
+  resize();
+  showInfo(-1);
+  requestAnimationFrame(frame);
+})();
+
+</script>
+</body>
+</html>
