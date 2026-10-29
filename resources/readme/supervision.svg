@@ -18,14 +18,28 @@
   </g>
   <rect x="56" y="132" width="928" height="50" rx="12" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
   <rect x="56" y="132" width="928" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
-  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="13"><text x="80" y="163" fill="#f4f7fb">yolov8s</text><text x="230" y="163" fill="#98a2b3">:9003</text><text x="936" y="163" fill="#8ad7ff" text-anchor="end">running · 12.9 ms</text></g>
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="13"><text x="80" y="163" fill="#f4f7fb">yolov8s</text>
+    <text x="230" y="163" fill="#98a2b3">:9003</text>
+    <text x="936" y="163" fill="#8ad7ff" text-anchor="end">running · 12.9 ms</text>
+  </g>
   <rect x="56" y="194" width="928" height="50" rx="12" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
   <rect x="56" y="194" width="928" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
-  <rect x="56" y="194" width="928" height="50" rx="12" fill="none" stroke="#8ad7ff"><animate attributeName="stroke" calcMode="discrete" values="#8ad7ff;#8ad7ff;#ff6b6b;#ff6b6b;#ffb877;#ffb877;#8ad7ff" keyTimes="0;0.27;0.3;0.45;0.48;0.7;0.73" dur="11s" repeatCount="indefinite"/></rect>
-  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="13"><text x="80" y="225" fill="#f4f7fb">mobilenetv2</text><text x="230" y="225" fill="#98a2b3">:9004</text><text x="936" y="225" fill="#8ad7ff" text-anchor="end" opacity="0">running · 12.9 ms<animate attributeName="opacity" calcMode="discrete" values="0;1;1;0" keyTimes="0;0.28;0.29;1" dur="11s" repeatCount="indefinite"/></text><text x="936" y="225" fill="#ff6b6b" text-anchor="end" opacity="0">signal 9 · OOM<animate attributeName="opacity" calcMode="discrete" values="0;1;1;0" keyTimes="0;0.45;0.46;1" dur="11s" repeatCount="indefinite"/></text><text x="936" y="225" fill="#ffb877" text-anchor="end" opacity="0">backoff 500 ms · restart 1<animate attributeName="opacity" calcMode="discrete" values="0;1;1;0" keyTimes="0;0.7;0.71;1" dur="11s" repeatCount="indefinite"/></text><text x="936" y="225" fill="#98a2b3" text-anchor="end" opacity="0">spawning · pid 41822<animate attributeName="opacity" calcMode="discrete" values="0;1;1;0" keyTimes="0;0.99;1;1" dur="11s" repeatCount="indefinite"/></text></g>
+  <rect x="56" y="194" width="928" height="50" rx="12" fill="none" stroke="#8ad7ff">
+    <animate attributeName="stroke" calcMode="discrete" values="#8ad7ff;#8ad7ff;#ff6b6b;#ff6b6b;#ffb877;#ffb877;#8ad7ff" keyTimes="0;0.27;0.3;0.45;0.48;0.7;0.73" dur="11s" repeatCount="indefinite"/>
+  </rect>
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="13"><text x="80" y="225" fill="#f4f7fb">mobilenetv2</text>
+    <text x="230" y="225" fill="#98a2b3">:9004</text>
+    <text x="936" y="225" fill="#8ad7ff" text-anchor="end" opacity="0">running · 12.9 ms<animate attributeName="opacity" calcMode="discrete" values="0;1;1;0" keyTimes="0;0.28;0.48;1" dur="11s" repeatCount="indefinite"/></text>
+    <text x="936" y="225" fill="#ff6b6b" text-anchor="end" opacity="0">signal 9 · OOM<animate attributeName="opacity" calcMode="discrete" values="0;1;1;0" keyTimes="0;0.45;0.65;1" dur="11s" repeatCount="indefinite"/></text>
+    <text x="936" y="225" fill="#ffb877" text-anchor="end" opacity="0">backoff 500 ms · restart 1<animate attributeName="opacity" calcMode="discrete" values="0;1;1;0" keyTimes="0;0.70;0.90;1" dur="11s" repeatCount="indefinite"/></text>
+    <text x="936" y="225" fill="#98a2b3" text-anchor="end" opacity="0">spawning · pid 41822<animate attributeName="opacity" calcMode="discrete" values="0;1;1;0" keyTimes="0;0.98;0.99;1" dur="11s" repeatCount="indefinite"/></text>
+  </g>
   <rect x="56" y="256" width="928" height="50" rx="12" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
   <rect x="56" y="256" width="928" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
-  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="13"><text x="80" y="287" fill="#f4f7fb">realesrgan</text><text x="230" y="287" fill="#98a2b3">:9005</text><text x="936" y="287" fill="#8ad7ff" text-anchor="end">running · 166 ms</text></g>
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="13"><text x="80" y="287" fill="#f4f7fb">realesrgan</text>
+    <text x="230" y="287" fill="#98a2b3">:9005</text>
+    <text x="936" y="287" fill="#8ad7ff" text-anchor="end">running · 166 ms</text>
+  </g>
   <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" font-size="11" fill="#98a2b3">
     <text x="56" y="342">EXIT IS REAPED, POLICY DECIDED, PROCESS RESPAWNED — SIBLINGS KEEP SERVING WITH ZERO DOWNTIME</text>
   </g>
