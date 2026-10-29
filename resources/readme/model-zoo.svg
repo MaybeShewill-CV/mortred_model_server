@@ -4,11 +4,9 @@
       <stop offset="0%" stop-color="#0b0d10"/><stop offset="100%" stop-color="#15191f"/>
     </linearGradient>
     <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#8ad7ff" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#8ad7ff" stop-opacity="1"/>
       <stop offset="50%" stop-color="#8ad7ff" stop-opacity="0.55"/>
-      <stop offset="100%" stop-color="#8ad7ff" stop-opacity="0"/>
-      <animate attributeName="x1" values="-0.4;1.1" dur="7s" repeatCount="indefinite"/>
-      <animate attributeName="x2" values="0;1.5" dur="7s" repeatCount="indefinite"/>
+      <stop offset="100%" stop-color="#8ad7ff" stop-opacity="1"/>
     </linearGradient>
   </defs>
   <rect width="1280" height="1010" fill="url(#bg)"/>
@@ -18,9 +16,7 @@
     <text x="1216" y="72" fill="#8ad7ff" font-size="42" font-weight="700" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">44</text>
     <text x="1216" y="100" fill="#98a2b3" font-size="12" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace" letter-spacing="2">HTTP IDS</text>
   </g>
-  <g opacity="0" transform="translate(0,8)">
-    <animate attributeName="opacity" values="0;1" dur="0.6s" begin="0.00s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="0,8;0,0" dur="0.6s" begin="0.00s" fill="freeze"/>
+  <g opacity="1" transform="translate(0,8)">
     <rect x="64" y="150" width="380" height="196" rx="18" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
     <rect x="64" y="150" width="380" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
     <g transform="translate(88,180)" fill="none" stroke="#8ad7ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" color="#8ad7ff">
@@ -34,9 +30,7 @@
       <text x="420" y="192" fill="#8ad7ff" font-size="13" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">10</text>
     </g>
   </g>
-  <g opacity="0" transform="translate(0,8)">
-    <animate attributeName="opacity" values="0;1" dur="0.6s" begin="0.05s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="0,8;0,0" dur="0.6s" begin="0.05s" fill="freeze"/>
+  <g opacity="1" transform="translate(0,8)">
     <rect x="466" y="150" width="380" height="196" rx="18" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
     <rect x="466" y="150" width="380" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
     <g transform="translate(490,180)" fill="none" stroke="#8ad7ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" color="#8ad7ff">
@@ -50,9 +44,7 @@
       <text x="822" y="192" fill="#8ad7ff" font-size="13" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">02</text>
     </g>
   </g>
-  <g opacity="0" transform="translate(0,8)">
-    <animate attributeName="opacity" values="0;1" dur="0.6s" begin="0.10s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="0,8;0,0" dur="0.6s" begin="0.10s" fill="freeze"/>
+  <g opacity="1" transform="translate(0,8)">
     <rect x="868" y="150" width="380" height="196" rx="18" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
     <rect x="868" y="150" width="380" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
     <g transform="translate(892,180)" fill="none" stroke="#8ad7ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" color="#8ad7ff">
@@ -66,9 +58,7 @@
       <text x="1224" y="192" fill="#8ad7ff" font-size="13" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">06</text>
     </g>
   </g>
-  <g opacity="0" transform="translate(0,8)">
-    <animate attributeName="opacity" values="0;1" dur="0.6s" begin="0.15s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="0,8;0,0" dur="0.6s" begin="0.15s" fill="freeze"/>
+  <g opacity="1" transform="translate(0,8)">
     <rect x="64" y="366" width="380" height="196" rx="18" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
     <rect x="64" y="366" width="380" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
     <g transform="translate(88,396)" fill="none" stroke="#8ad7ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" color="#8ad7ff">
@@ -82,9 +72,7 @@
       <text x="420" y="408" fill="#8ad7ff" font-size="13" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">05</text>
     </g>
   </g>
-  <g opacity="0" transform="translate(0,8)">
-    <animate attributeName="opacity" values="0;1" dur="0.6s" begin="0.20s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="0,8;0,0" dur="0.6s" begin="0.20s" fill="freeze"/>
+  <g opacity="1" transform="translate(0,8)">
     <rect x="466" y="366" width="380" height="196" rx="18" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
     <rect x="466" y="366" width="380" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
     <g transform="translate(490,396)" fill="none" stroke="#8ad7ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" color="#8ad7ff">
@@ -98,9 +86,7 @@
       <text x="822" y="408" fill="#8ad7ff" font-size="13" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">03</text>
     </g>
   </g>
-  <g opacity="0" transform="translate(0,8)">
-    <animate attributeName="opacity" values="0;1" dur="0.6s" begin="0.25s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="0,8;0,0" dur="0.6s" begin="0.25s" fill="freeze"/>
+  <g opacity="1" transform="translate(0,8)">
     <rect x="868" y="366" width="380" height="196" rx="18" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
     <rect x="868" y="366" width="380" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
     <g transform="translate(892,396)" fill="none" stroke="#8ad7ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" color="#8ad7ff">
@@ -114,9 +100,7 @@
       <text x="1224" y="408" fill="#8ad7ff" font-size="13" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">05</text>
     </g>
   </g>
-  <g opacity="0" transform="translate(0,8)">
-    <animate attributeName="opacity" values="0;1" dur="0.6s" begin="0.30s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="0,8;0,0" dur="0.6s" begin="0.30s" fill="freeze"/>
+  <g opacity="1" transform="translate(0,8)">
     <rect x="64" y="582" width="380" height="196" rx="18" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
     <rect x="64" y="582" width="380" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
     <g transform="translate(88,612)" fill="none" stroke="#8ad7ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" color="#8ad7ff">
@@ -130,9 +114,7 @@
       <text x="420" y="624" fill="#8ad7ff" font-size="13" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">03</text>
     </g>
   </g>
-  <g opacity="0" transform="translate(0,8)">
-    <animate attributeName="opacity" values="0;1" dur="0.6s" begin="0.35s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="0,8;0,0" dur="0.6s" begin="0.35s" fill="freeze"/>
+  <g opacity="1" transform="translate(0,8)">
     <rect x="466" y="582" width="380" height="196" rx="18" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
     <rect x="466" y="582" width="380" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
     <g transform="translate(490,612)" fill="none" stroke="#8ad7ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" color="#8ad7ff">
@@ -146,9 +128,7 @@
       <text x="822" y="624" fill="#8ad7ff" font-size="13" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">03</text>
     </g>
   </g>
-  <g opacity="0" transform="translate(0,8)">
-    <animate attributeName="opacity" values="0;1" dur="0.6s" begin="0.40s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="0,8;0,0" dur="0.6s" begin="0.40s" fill="freeze"/>
+  <g opacity="1" transform="translate(0,8)">
     <rect x="868" y="582" width="380" height="196" rx="18" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
     <rect x="868" y="582" width="380" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
     <g transform="translate(892,612)" fill="none" stroke="#8ad7ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" color="#8ad7ff">
@@ -162,9 +142,7 @@
       <text x="1224" y="624" fill="#8ad7ff" font-size="13" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">01</text>
     </g>
   </g>
-  <g opacity="0" transform="translate(0,8)">
-    <animate attributeName="opacity" values="0;1" dur="0.6s" begin="0.45s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="0,8;0,0" dur="0.6s" begin="0.45s" fill="freeze"/>
+  <g opacity="1" transform="translate(0,8)">
     <rect x="64" y="798" width="380" height="196" rx="18" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
     <rect x="64" y="798" width="380" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
     <g transform="translate(88,828)" fill="none" stroke="#8ad7ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" color="#8ad7ff">
@@ -178,9 +156,7 @@
       <text x="420" y="840" fill="#8ad7ff" font-size="13" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">01</text>
     </g>
   </g>
-  <g opacity="0" transform="translate(0,8)">
-    <animate attributeName="opacity" values="0;1" dur="0.6s" begin="0.50s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="0,8;0,0" dur="0.6s" begin="0.50s" fill="freeze"/>
+  <g opacity="1" transform="translate(0,8)">
     <rect x="466" y="798" width="380" height="196" rx="18" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
     <rect x="466" y="798" width="380" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
     <g transform="translate(490,828)" fill="none" stroke="#8ad7ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" color="#8ad7ff">
@@ -194,9 +170,7 @@
       <text x="822" y="840" fill="#8ad7ff" font-size="13" text-anchor="end" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace">04</text>
     </g>
   </g>
-  <g opacity="0" transform="translate(0,8)">
-    <animate attributeName="opacity" values="0;1" dur="0.6s" begin="0.55s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="0,8;0,0" dur="0.6s" begin="0.55s" fill="freeze"/>
+  <g opacity="1" transform="translate(0,8)">
     <rect x="868" y="798" width="380" height="196" rx="18" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.12"/>
     <rect x="868" y="798" width="380" height="1" rx="0.5" fill="#ffffff" fill-opacity="0.18"/>
     <g transform="translate(892,828)" fill="none" stroke="#8ad7ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" color="#8ad7ff">

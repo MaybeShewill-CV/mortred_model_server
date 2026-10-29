@@ -99,13 +99,12 @@ How many models fit on one card: [docs/capacity-single-gpu.md](docs/capacity-sin
 
 ## Model zoo
 
-<img src="resources/readme/model-zoo.svg" width="100%" alt="six typical models with their real golden outputs: yolov8s boxes on bus.jpg, dbnet text-line boxes, pphuman per-pixel mask, real-esrgan ×4 output, depth-anything depth map, superpoint keypoints">
+<img src="resources/readme/model-zoo.svg" width="100%" alt="twelve task families with their ids: detection, face, segmentation, matting, enhancement, depth, classification, embedding, SAM, feature points, diffusion, OCR">
 
-Six typical ids, each card driven by that model's **own golden output** from `test/golden/` — the
-boxes are the recorded yolov8s detections, the text lines are dbnet's, the mask is pphuman's
-640×480 map, the keypoints are superpoint's 59 points. The other 38 ids cover the rest of the
-twelve families: face (2), matting (5), classification (3), embedding (3), diffusion (4), SAM (1)
-and four bench-only ids with weights but no HTTP route.
+Twelve task families, one card each, one request envelope. Detection and segmentation return
+per-object or per-pixel geometry; matting and depth return dense maps; enhancement returns an
+image; embedding and feature points return vectors; diffusion returns generated frames. Bench-only
+ids (CLIP, LightGlue, SAM predictor, FastSAM) ship weights and drivers but no HTTP route.
 
 `mortred-model-server.out --list` is the authoritative list (ids match exactly; lowercase for the
 CV families, uppercase for the diffusion rows). Weights are fetched, not committed:
